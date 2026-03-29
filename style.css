@@ -1,0 +1,14 @@
+body { background-color: #f3f4f6; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+.grid-menu { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 5px; }
+.icon-box { background: #ffffff; aspect-ratio: 1/1; border-radius: 18px; display: flex; align-items: center; justify-content: center; margin-bottom: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 2px solid transparent; transition: all 0.2s; overflow: hidden; }
+.op-card.active .icon-box { border-color: #2563eb; background: #eff6ff; transform: scale(1.05); }
+.op-card.active .menu-label { color: #2563eb; font-weight: 900; }
+.icon-box img { width: 65%; height: 65%; object-fit: contain; }
+.menu-label { font-size: 9px; font-weight: 700; color: #6b7280; text-transform: uppercase; line-height: 1.2; text-align: center; }
+.modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+.modal.active { display: flex; }
+.cart-btn { position: fixed; bottom: 20px; right: 20px; background: #2563eb; color: white; padding: 15px 25px; border-radius: 50px; font-weight: 900; box-shadow: 0 10px 20px rgba(0,0,0,0.2); z-index: 50; display: none; align-items: center; gap: 10px; cursor: pointer; border: none; }
+.cart-badge { background: #ef4444; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+.cart-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #eee; padding: 10px 0; font-size: 11px; text-align: left; width: 100%; }
+.btn-hapus { color: #ef4444; font-size: 10px; font-weight: bold; cursor: pointer; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

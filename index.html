@@ -3,210 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KuotaKilat - NK JAYA CELL</title>
+    <title>KUOTAKILAT - NK JAYA CELL</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f3f4f6; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .op-card { transition: all 0.2s; border: 2px solid transparent; cursor: pointer; min-width: 100px; }
-        .op-card.active { border-color: #2563eb; background-color: #eff6ff; transform: scale(1.05); }
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; padding: 15px; backdrop-filter: blur(5px); }
-        .modal.active { display: flex; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="min-h-screen pb-10">
+<body class="pb-20">
 
-    <header class="bg-blue-600 text-white p-6 shadow-lg text-center rounded-b-[2rem]">
-        <h1 class="text-2xl font-black italic tracking-tighter"><i class="fas fa-bolt text-yellow-300"></i> KUOTAKILAT</h1>
+    <header class="bg-blue-600 text-white p-6 shadow-lg text-center rounded-b-[2.5rem]">
+        <h1 class="text-2xl font-black italic"><i class="fas fa-bolt text-yellow-300"></i> KUOTAKILAT</h1>
         <p class="text-[10px] font-bold tracking-widest opacity-90 uppercase">NK JAYA CELL - AGEN BRILINK</p>
     </header>
 
     <main class="max-w-md mx-auto p-4">
-        <div class="bg-white rounded-3xl p-6 shadow-xl mb-6 -mt-8 relative z-10 border border-gray-100">
-            <label class="block text-gray-400 text-[10px] font-black uppercase mb-2 tracking-widest">Nomor HP Tujuan</label>
+        <div class="bg-white rounded-3xl p-6 shadow-xl mb-6 -mt-10 relative z-10 border border-gray-100">
+            <label class="block text-gray-400 text-[9px] font-black uppercase mb-1 tracking-widest">Nomor HP Tujuan</label>
             <input type="tel" id="phone-number" placeholder="08xxxxxxxxxx" oninput="detectOp(this.value)"
-                   class="w-full text-2xl font-black tracking-[0.1em] border-b-4 border-gray-50 focus:border-blue-500 outline-none pb-2 placeholder:text-gray-200 text-gray-700">
+                   class="w-full text-2xl font-black tracking-widest border-b-2 border-gray-50 focus:border-blue-500 outline-none pb-1 text-gray-700">
         </div>
 
-        <div class="flex gap-3 overflow-x-auto pb-4 mb-4 no-scrollbar px-1">
-            <div id="op-Indosat" class="op-card bg-white p-4 rounded-2xl shadow-sm text-center active" onclick="selectOp('Indosat', this)">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/a/a8/Indosat_Ooredoo_Hutchison_logo.svg" class="h-6 mx-auto mb-2">
-                <span class="text-[10px] font-black text-gray-600 uppercase">Indosat</span>
-            </div>
-            <div id="op-XL" class="op-card bg-white p-4 rounded-2xl shadow-sm text-center" onclick="selectOp('XL', this)">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/5/55/XL_logo_2016.svg" class="h-6 mx-auto mb-2">
-                <span class="text-[10px] font-black text-gray-600 uppercase">XL Axiata</span>
-            </div>
-            <div id="op-Telkomsel" class="op-card bg-white p-4 rounded-2xl shadow-sm text-center" onclick="selectOp('Telkomsel', this)">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/b/bc/Telkomsel_2021_logo.svg" class="h-6 mx-auto mb-2">
-                <span class="text-[10px] font-black text-gray-600 uppercase">T-Sel</span>
-            </div>
-            <div id="op-Tri" class="op-card bg-white p-4 rounded-2xl shadow-sm text-center" onclick="selectOp('Tri', this)">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/b/bd/Three_logo.svg" class="h-6 mx-auto mb-2">
-                <span class="text-[10px] font-black text-gray-600 uppercase">Tri</span>
-            </div>
-        </div>
+        <div class="grid-menu" id="menu-container"></div>
 
-        <div id="list-paket" class="space-y-3 px-1">
-            <p class="text-center text-gray-400 text-xs py-10 italic">Mengambil data harga...</p>
+        <div class="mt-8">
+            <h2 id="category-title" class="text-[10px] font-black text-gray-400 uppercase mb-4 tracking-widest ml-2">Pilih Produk</h2>
+            <div id="list-paket" class="space-y-3 px-1"></div>
         </div>
     </main>
 
+    <button id="cart-floating" onclick="bukaModalKeranjang()" class="cart-btn">
+        <i class="fas fa-shopping-cart"></i>
+        <span class="text-xs uppercase">Keranjang</span>
+        <span id="cart-count" class="bg-red-500 text-[10px] px-2 py-0.5 rounded-full">0</span>
+    </button>
+
     <div id="modal-bayar" class="modal">
-        <div class="bg-white w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl overflow-y-auto max-h-[95vh] no-scrollbar">
-            <h3 class="text-center font-black text-xl mb-1 text-gray-800 tracking-tight uppercase italic">Konfirmasi Bayar</h3>
-            <p class="text-center text-blue-600 font-black text-[10px] tracking-[0.2em] mb-6 uppercase">NK JAYA CELL</p>
+        <div class="bg-white w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl">
+            <h3 class="text-center font-black text-xl mb-1 text-blue-600 italic">KONFIRMASI BAYAR</h3>
+            <p class="text-center text-gray-400 font-black text-[9px] tracking-widest mb-6 uppercase">NK JAYA CELL</p>
             
-            <div class="bg-gray-50 p-5 rounded-3xl mb-4 border border-gray-100">
-                <div class="flex justify-between text-[11px] mb-2 font-bold"><span class="text-gray-400">NO TUJUAN:</span><b id="m-phone" class="text-gray-800 tracking-widest"></b></div>
-                <div class="flex justify-between text-[11px] mb-3 font-bold"><span class="text-gray-400 uppercase">Produk:</span><b id="m-pkg" class="text-gray-800 text-right uppercase"></b></div>
-                <div class="flex justify-between items-center border-t border-dashed border-gray-300 pt-4 mt-2">
-                    <div>
-                        <span class="text-[9px] text-gray-400 font-black uppercase">Total Bayar:</span>
-                        <div id="m-price" class="text-blue-600 font-black text-2xl tracking-tighter"></div>
-                    </div>
-                    <button onclick="copyPrice()" id="btn-salin" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-[10px] active:scale-90 transition-all uppercase shadow-md shadow-blue-100">Salin</button>
+            <div class="bg-gray-50 p-5 rounded-3xl mb-5 border border-gray-100">
+                <div id="m-pkg" class="max-h-60 overflow-y-auto no-scrollbar space-y-2 mb-4"></div>
+                <div class="flex justify-between items-center border-t border-dashed pt-3 mt-3">
+                    <span class="text-gray-400 text-[10px] font-black uppercase">Total Bayar:</span>
+                    <span id="m-price" class="text-blue-600 text-xl font-black"></span>
                 </div>
             </div>
 
-            <div class="bg-white p-3 border-2 border-gray-100 rounded-3xl mb-4 text-center shadow-inner">
-                <img src="qris.jpeg" alt="QRIS NK JAYA CELL" class="w-full aspect-square rounded-2xl mb-4 mx-auto">
-                <div class="bg-blue-50 p-4 rounded-2xl text-left border border-blue-100">
-                    <h4 class="text-[10px] font-black text-blue-600 uppercase mb-2 tracking-widest"><i class="fas fa-info-circle mr-1"></i> Cara Bayar:</h4>
-                    <ul class="text-[9px] text-gray-500 font-bold space-y-1.5 leading-relaxed">
-                        <li>1. Klik <b class="text-blue-600 uppercase">Salin</b> nominal di atas.</li>
-                        <li>2. Scan QRIS & masukkan nominal yang sesuai.</li>
-                        <li>3. Klik tombol hijau untuk kirim bukti WA.</li>
-                    </ul>
-                </div>
-            </div>
-
-            <button onclick="kirimWA()" class="w-full py-5 bg-green-500 text-white rounded-2xl font-black shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all text-sm uppercase tracking-widest">
-                <i class="fab fa-whatsapp text-xl"></i> Konfirmasi WA
+            <img src="qris.jpeg" class="w-40 mx-auto mb-6 rounded-2xl shadow-md border-4 border-gray-50">
+            
+            <button onclick="kirimWA()" id="btn-wa" class="w-full py-4 bg-green-500 text-white rounded-2xl font-black shadow-lg flex items-center justify-center gap-2 mb-3">
+                <i class="fab fa-whatsapp text-xl"></i> KONFIRMASI WHATSAPP
             </button>
-            <button onclick="tutupModal()" class="w-full py-2 text-gray-400 text-[10px] font-black uppercase tracking-widest text-center block w-full">Kembali</button>
+            <button onclick="tutupModal()" class="w-full py-2 text-gray-400 text-[10px] font-black uppercase tracking-widest">Kembali</button>
         </div>
     </div>
 
-    <script>
-        const WA_ADMIN = "6285847909692";
-        const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=0&single=true&output=csv";
-
-        let dataPaket = { 'Indosat': [], 'XL': [], 'Telkomsel': [], 'Tri': [] };
-        const prefix = {'Indosat':['0857','0858','0856','0815'],'Telkomsel':['0812','0811','0813','0821','0822','0852','0853'],'XL':['0877','0878','0817','0818','0819','0859'],'Tri':['0896','0895','0897','0898','0899']};
-        
-        let currentOp = 'Indosat';
-        let currentPrice = 0;
-        let currentPkg = '';
-
-        async function fetchSheetData() {
-            try {
-                console.log("Mencoba mengambil data...");
-                const response = await fetch(SHEET_CSV_URL);
-                const csvText = await response.text();
-                
-                // Reset data
-                dataPaket = { 'Indosat': [], 'XL': [], 'Telkomsel': [], 'Tri': [] };
-
-                const rows = csvText.split('\n');
-                rows.forEach((row, index) => {
-                    if (index === 0) return; // Lewati header
-                    const cols = row.split(',');
-                    if (cols.length >= 3) {
-                        const prov = cols[0].trim().replace(/"/g, "");
-                        const nama = cols[1].trim().replace(/"/g, "");
-                        const harga = parseInt(cols[2].replace(/\D/g, ''));
-                        
-                        if (dataPaket[prov]) {
-                            dataPaket[prov].push({ n: nama, p: harga });
-                        }
-                    }
-                });
-
-                console.log("Data berhasil diproses:", dataPaket);
-                render();
-            } catch (error) {
-                console.error("Gagal ambil data:", error);
-                document.getElementById('list-paket').innerHTML = '<p class="text-center text-red-500 text-[10px] font-bold py-10 uppercase">Gagal memuat data. Periksa Internet!</p>';
-            }
-        }
-
-        function render() {
-            const list = document.getElementById('list-paket');
-            if (!list) return;
-            list.innerHTML = '';
-            
-            const items = dataPaket[currentOp] || [];
-            
-            if (items.length === 0) {
-                list.innerHTML = '<p class="text-center text-gray-400 text-[10px] py-10 font-bold uppercase tracking-widest">Produk Kosong/Belum Diupdate</p>';
-                return;
-            }
-
-            items.forEach(item => {
-                list.innerHTML += `
-                    <div onclick="bukaModal('${item.n}', ${item.p})" class="bg-white p-5 rounded-3xl shadow-sm flex justify-between items-center active:scale-95 transition-all border border-gray-50 mb-3">
-                        <div class="pr-2">
-                            <b class="text-sm block font-black text-gray-800 uppercase leading-tight">${item.n}</b>
-                            <span class="text-[9px] text-gray-300 font-black uppercase tracking-widest">Kategori ${currentOp}</span>
-                        </div>
-                        <div class="text-right shrink-0">
-                            <div class="text-blue-600 font-black text-lg tracking-tighter">Rp ${item.p.toLocaleString('id-ID')}</div>
-                            <div class="text-[8px] text-blue-300 font-bold uppercase tracking-widest flex items-center justify-end gap-1">Pilih <i class="fas fa-chevron-right text-[6px]"></i></div>
-                        </div>
-                    </div>`;
-            });
-        }
-
-        function selectOp(op, el) {
-            currentOp = op;
-            document.querySelectorAll('.op-card').forEach(c => c.classList.remove('active'));
-            el.classList.add('active');
-            render();
-        }
-
-        function detectOp(num) {
-            const clean = num.replace(/\D/g, '');
-            if(clean.length >= 4) {
-                const pre = clean.substring(0,4);
-                for(let op in prefix) {
-                    if(prefix[op].includes(pre)) {
-                        const el = document.getElementById('op-'+op);
-                        if(el) selectOp(op, el);
-                        break;
-                    }
-                }
-            }
-        }
-
-        function bukaModal(n, p) {
-            const num = document.getElementById('phone-number').value;
-            if(num.length < 10) return alert("Nomor HP Belum Lengkap!");
-            currentPrice = p; currentPkg = n;
-            document.getElementById('m-phone').innerText = num;
-            document.getElementById('m-pkg').innerText = currentOp + " - " + n;
-            document.getElementById('m-price').innerText = "Rp " + p.toLocaleString('id-ID');
-            document.getElementById('modal-bayar').classList.add('active');
-        }
-
-        function tutupModal() { document.getElementById('modal-bayar').classList.remove('active'); }
-
-        function copyPrice() {
-            navigator.clipboard.writeText(currentPrice.toString());
-            const b = document.getElementById('btn-salin');
-            const txt = b.innerText;
-            b.innerText = "OK!"; b.classList.replace('bg-blue-600', 'bg-green-500');
-            setTimeout(() => { b.innerText = txt; b.classList.replace('bg-green-500', 'bg-blue-600'); }, 2000);
-        }
-
-        function kirimWA() {
-            const num = document.getElementById('phone-number').value;
-            const text = `Halo NK JAYA CELL!\n\n*KONFIRMASI BAYAR*\n---------------------------\n📱 No: ${num}\n📦 Produk: ${currentOp} - ${currentPkg}\n💰 Harga: Rp ${currentPrice.toLocaleString('id-ID')}\n---------------------------\nSudah saya bayar via QRIS. Tolong diproses!`;
-            window.location.href = `https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(text)}`;
-        }
-
-        window.onload = fetchSheetData;
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
