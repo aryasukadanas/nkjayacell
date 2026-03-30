@@ -3,12 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
+
+<div id="install-banner" style="display: none;" class="p-4 bg-blue-600 text-white rounded-3xl m-4 flex justify-between items-center shadow-lg">
+    <div class="flex items-center gap-3">
+        <div class="bg-white p-2 rounded-xl text-blue-600 font-black text-xs">NK</div>
+        <div>
+            <b class="text-xs block uppercase">NK JAYA CELL</b>
+            <p class="text-[9px] opacity-80">Instal aplikasi di HP Anda!</p>
+        </div>
+    </div>
+    <button id="btn-install" class="bg-white text-blue-600 text-[10px] font-black px-4 py-2 rounded-full shadow-sm active:scale-95 transition-all">
+        INSTAL
+    </button>
+</div>
+
     <title>KUOTAKILAT - NK JAYA CELL</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="pb-20">
+<body class="bg-gray-50 pb-24">
 
     <header class="bg-blue-600 text-white p-6 shadow-lg text-center rounded-b-[2.5rem]">
         <h1 class="text-2xl font-black italic"><i class="fas fa-bolt text-yellow-300"></i> KUOTAKILAT</h1>
@@ -22,41 +43,45 @@
                    class="w-full text-2xl font-black tracking-widest border-b-2 border-gray-50 focus:border-blue-500 outline-none pb-1 text-gray-700">
         </div>
 
-        <div class="grid-menu" id="menu-container"></div>
+        <div class="grid grid-cols-4 gap-3 mb-8" id="menu-container"></div>
 
         <div class="mt-8">
             <h2 id="category-title" class="text-[10px] font-black text-gray-400 uppercase mb-4 tracking-widest ml-2">Pilih Produk</h2>
             <div id="list-paket" class="space-y-3 px-1"></div>
         </div>
+        <div id="riwayat-list" class="px-1"></div>
     </main>
 
-    <button id="cart-floating" onclick="bukaModalKeranjang()" class="cart-btn">
-        <i class="fas fa-shopping-cart"></i>
-        <span class="text-xs uppercase">Keranjang</span>
-        <span id="cart-count" class="bg-red-500 text-[10px] px-2 py-0.5 rounded-full">0</span>
-    </button>
+    <div id="cart-floating" onclick="bukaModalKeranjang()" 
+         class="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-2xl flex items-center justify-center cursor-pointer active:scale-90 transition-all z-[9999]" 
+         style="display: none;">
+        <i class="fas fa-shopping-cart text-xl"></i>
+        <span id="cart-count" class="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-full border-2 border-white">0</span>
+    </div>
 
-    <div id="modal-bayar" class="modal">
-        <div class="bg-white w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl">
-            <h3 class="text-center font-black text-xl mb-1 text-blue-600 italic">KONFIRMASI BAYAR</h3>
+    <div id="modal-bayar" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10000] hidden items-end sm:items-center justify-center transition-all opacity-0 [&.active]:flex [&.active]:opacity-100">
+        <div class="bg-white w-full max-w-sm rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 shadow-2xl transform translate-y-10 [.active_&]:translate-y-0 transition-transform duration-300">
+            <h3 class="text-center font-black text-xl mb-1 text-blue-600 italic uppercase">Konfirmasi Bayar</h3>
             <p class="text-center text-gray-400 font-black text-[9px] tracking-widest mb-6 uppercase">NK JAYA CELL</p>
             
-            <div class="bg-gray-50 p-5 rounded-3xl mb-5 border border-gray-100">
-                <div id="m-pkg" class="max-h-60 overflow-y-auto no-scrollbar space-y-2 mb-4"></div>
-                <div class="flex justify-between items-center border-t border-dashed pt-3 mt-3">
-                    <span class="text-gray-400 text-[10px] font-black uppercase">Total Bayar:</span>
-                    <span id="m-price" class="text-blue-600 text-xl font-black"></span>
-                </div>
-            </div>
-
-            <img src="qris.jpeg" class="w-40 mx-auto mb-6 rounded-2xl shadow-md border-4 border-gray-50">
+            <div id="m-pkg" class="max-h-40 overflow-y-auto no-scrollbar space-y-2 mb-2 px-2"></div>
             
-            <button onclick="kirimWA()" id="btn-wa" class="w-full py-4 bg-green-500 text-white rounded-2xl font-black shadow-lg flex items-center justify-center gap-2 mb-3">
+            <div id="m-price"></div>
+
+            <div id="qris-box" class="mb-6 flex justify-center"></div>
+            
+            <button onclick="kirimWA()" id="btn-wa" class="w-full py-4 bg-green-500 text-white rounded-2xl font-black shadow-lg flex items-center justify-center gap-2 mb-3 active:scale-95 transition-all">
                 <i class="fab fa-whatsapp text-xl"></i> KONFIRMASI WHATSAPP
             </button>
             <button onclick="tutupModal()" class="w-full py-2 text-gray-400 text-[10px] font-black uppercase tracking-widest">Kembali</button>
         </div>
     </div>
+
+    <style>
+        .modal.active { display: flex; opacity: 1; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        #modal-bayar { transition: opacity 0.3s ease; }
+    </style>
 
     <script src="script.js"></script>
 </body>
