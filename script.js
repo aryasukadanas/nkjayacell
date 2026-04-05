@@ -1,6 +1,6 @@
 const WA_ADMIN = "6285847909692";
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=0&single=true&output=csv";
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwcqLiMzefrps2UntiAtpckm1mwYai0sAdr39mWsiFCZMINyGwRQGo8gF3N9uBuRu3a/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwh0lE_0ebqn2ScCWvxioXBJYwLl2qT3aGVHk_W0QHTRP21lWb88djzWMCrihY0ZkHj/exec";
 
 const iconMap = {
     'Indosat': 'logo_indosat.png',
@@ -124,14 +124,15 @@ function updateKeranjangUI() {
     if(countEl) countEl.innerText = keranjang.length;
     if(cartBtn) cartBtn.style.display = keranjang.length > 0 ? 'flex' : 'none';
 }
-
+let totalAkhirDenganKode = 0;
 function bukaModalKeranjang() {
     const container = document.getElementById('m-pkg');
-    let total = 0;
+    let subtotal = 0;
     if(!container) return;
     container.innerHTML = '';
+    
     keranjang.forEach((item, i) => {
-        total += item.harga;
+        subtotal += item.harga;
         const noAman = sensorNomor(item.no);
         container.innerHTML += `
             <div class="flex justify-between items-start text-[10px] border-b border-dashed border-gray-200 pb-2 mb-2">
@@ -146,24 +147,36 @@ function bukaModalKeranjang() {
             </div>`;
     });
 
-    const hargaFormat = total.toLocaleString('id-ID');
+    // --- LOGIKA KODE UNIK ---
+    // Membuat angka acak 1-99
+    const kodeUnik = Math.floor(Math.random() * 99) + 1;
+    totalAkhirDenganKode = subtotal + kodeUnik;
+    const hargaFormat = totalAkhirDenganKode.toLocaleString('id-ID');
+
     document.getElementById('m-price').innerHTML = `
         <div class="border-t border-b border-gray-100 bg-gray-50 p-4 rounded-xl my-4 text-center">
-            <b class="text-[12px] text-blue-900 uppercase tracking-widest block mb-2">TOTAL BAYAR:</b>
+            <b class="text-[10px] text-blue-900 uppercase tracking-widest block mb-1">TOTAL BAYAR (+KODE UNIK):</b>
             <div class="flex justify-center items-baseline gap-2">
                 <span class="text-blue-600 font-black text-2xl">Rp</span>
                 <span class="text-blue-700 font-black text-4xl tracking-tighter">${hargaFormat}</span>
-                <button onclick="salinHarga(${total})" class="bg-blue-100 text-blue-700 text-[9px] font-black px-3 py-1.5 rounded-full shadow-sm">
+                <button onclick="salinHarga(${totalAkhirDenganKode})" class="bg-blue-100 text-blue-700 text-[9px] font-black px-3 py-1.5 rounded-full shadow-sm">
                     <i class="far fa-copy mr-1"></i> SALIN
                 </button>
             </div>
-            <p class="text-[10px] text-gray-500 font-bold mt-4 leading-relaxed text-center">
-                <i class="fas fa-camera mr-1"></i> Scan QRIS di bawah ini melalui Aplikasi<br>Bank atau E-Wallet Anda.
+            <p class="text-[10px] text-red-600 font-black mt-3 italic">
+                <i class="fas fa-clock mr-1"></i> TRANSFER SESUAI NOMINAL HINGGA 2 DIGIT TERAKHIR!<br>
+                Pembayaran berlaku selama 24 Jam.
             </p>
         </div>`;
+
+    
+
     document.getElementById('qris-box').innerHTML = `<img src="qris.jpeg" alt="QRIS" class="w-64 h-64 object-contain mx-auto shadow-inner rounded-xl border-4 border-white">`;
     document.getElementById('modal-bayar').classList.add('active');
 }
+    
+    
+
 
 function salinHarga(nominal) {
     navigator.clipboard.writeText(nominal).then(() => {
@@ -183,50 +196,141 @@ function tutupModal() {
 }
 
 async function kirimWA() {
+    // 1. Validasi keranjang
     if (keranjang.length === 0) return;
-    let total = 0; let detailWA = ""; let dataSheet = [];
+    
+    let detailWA = ""; 
+    let dataSheet = [];
+    const waktuSekarang = new Date().toLocaleString('id-ID');
+    
+    // totalAkhirDenganKode diambil dari variabel global yang dihitung di bukaModalKeranjang()
+    const totalFix = typeof totalAkhirDenganKode !== 'undefined' ? totalAkhirDenganKode : 0;
+
+    // 2. Menyusun detail pesanan dan data untuk Spreadsheet
     keranjang.forEach((item, i) => {
-        total += item.harga;
+        // Format teks untuk WhatsApp
         detailWA += `${i+1}. ${item.kategori} ${item.nama}\n   No: ${item.no}\n   Harga: Rp ${item.harga.toLocaleString('id-ID')}\n\n`;
-        dataSheet.push({ nomor: item.no, produk: item.kategori + " " + item.nama, harga: item.harga });
+        
+        // Data objek untuk dikirim ke Google Apps Script
+        dataSheet.push({ 
+            tanggal: waktuSekarang,
+            nomor: item.no, 
+            produk: item.kategori + " " + item.nama, 
+            harga_asli: item.harga,
+            total_transfer: totalFix,
+            status: "Pending" 
+        });
+
+        // Update riwayat transaksi lokal (LocalStorage)
         riwayat.unshift({
-            tgl: new Date().toLocaleString('id-ID'),
+            tgl: waktuSekarang,
             produk: item.kategori + " " + item.nama,
             nomor: item.no,
-            harga: item.harga
+            harga: totalFix,
+            status: "Pending"
         });
     });
-    // Simpan ke memori HP (LocalStorage)
+
+    // Simpan maksimal 10 riwayat terakhir di memori HP
     localStorage.setItem('riwayat_trx', JSON.stringify(riwayat.slice(0, 10)));
+    
+    // 3. Efek visual tombol saat proses simpan
     const btn = document.getElementById('btn-wa');
-    if(btn) { btn.innerText = "Menyimpan..."; btn.disabled = true; }
+    if(btn) { 
+        btn.innerText = "⏳ Menyimpan..."; 
+        btn.disabled = true; 
+    }
+
+    // 4. Proses kirim data ke Google Sheets secara Background
     try {
-        await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(dataSheet) });
-    } catch (e) { console.log("Gagal simpan"); }
-    const msg = `*PESANAN BARU - NK JAYA CELL*\n------------------------------\n*RINCIAN PESANAN:*\n\n${detailWA}------------------------------\n*TOTAL BAYAR: Rp ${total.toLocaleString('id-ID')}*\n------------------------------`;
+        await fetch(SCRIPT_URL, { 
+            method: 'POST', 
+            mode: 'no-cors', // Mode no-cors digunakan untuk Apps Script agar tidak terhalang kebijakan CORS
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataSheet) 
+        });
+    } catch (e) { 
+        console.error("Gagal sinkronisasi ke Spreadsheet:", e); 
+    }
+
+    // 5. Menyusun format pesan akhir untuk WhatsApp
+    const msg = `*PESANAN BARU - NK JAYA CELL*\n` +
+                `------------------------------\n` +
+                `*RINCIAN PESANAN:*\n\n` +
+                `${detailWA}` +
+                `------------------------------\n` +
+                `*TOTAL BAYAR: Rp ${totalFix.toLocaleString('id-ID')}*\n` +
+                `_(Mohon transfer sesuai nominal di atas)_\n` +
+                `------------------------------\n` +
+                `*Status:* Pending (Menunggu Bayar)\n` +
+                `*Batas Waktu:* 24 Jam\n` +
+                `------------------------------\n` +
+                `_Silakan kirim bukti bayar ke chat ini._`;
+
+    // 6. Eksekusi pengalihan ke WhatsApp Admin
     window.location.href = `https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(msg)}`;
-    if(btn) { btn.innerText = "KONFIRMASI WHATSAPP"; btn.disabled = false; }
+    
+    // Reset tombol jika pengguna kembali ke halaman
+    if(btn) { 
+        btn.innerText = "KONFIRMASI WHATSAPP"; 
+        btn.disabled = false; 
+    }
 }
 
-function renderRiwayat() {
+async function renderRiwayat() {
     const container = document.getElementById('riwayat-list');
-    if(!container || riwayat.length === 0) return;
-    container.innerHTML = `<h2 class="text-[10px] font-black text-gray-400 uppercase mb-4 tracking-widest ml-2 mt-8">Transaksi Terakhir</h2>`;
-    riwayat.forEach(trx => {
-        container.innerHTML += `
-            <div class="bg-white p-3 rounded-2xl shadow-sm border border-gray-50 mb-2 flex justify-between items-center opacity-80">
-                <div>
-                    <div class="text-[9px] font-black text-gray-800 uppercase">${trx.produk}</div>
-                    <div class="text-[8px] text-gray-400 font-bold">${sensorNomor(trx.nomor)} • ${trx.tgl}</div>
-                </div>
-                <div class="text-[10px] font-black text-green-600">Rp ${trx.harga.toLocaleString('id-ID')}</div>
-            </div>`;
-    });
-}
+    const num = document.getElementById('phone-number').value;
+    
+    // Hanya cari jika nomor HP sudah diisi minimal 10 digit
+    if(!container || num.length < 10) return;
 
+    container.innerHTML = `<p class="text-[8px] text-center text-gray-400 animate-pulse">Memeriksa status transaksi...</p>`;
+
+    try {
+        // Ambil data terbaru langsung dari Google Sheets
+        const response = await fetch(`${SCRIPT_URL}?nomor=${num}`);
+        const dataTerbaru = await response.json();
+
+        if(dataTerbaru.length === 0) {
+            container.innerHTML = "";
+            return;
+        }
+
+        container.innerHTML = `<h2 class="text-[10px] font-black text-gray-400 uppercase mb-4 tracking-widest ml-2 mt-8">Status Transaksi Anda</h2>`;
+        
+        dataTerbaru.forEach(trx => {
+            // Tentukan warna berdasarkan status
+            let colorClass = "text-yellow-600"; // Default Pending
+            if(trx.status === "Sukses") colorClass = "text-green-600";
+            if(trx.status === "Gagal") colorClass = "text-red-600";
+            if(trx.status === "Refund") colorClass = "text-blue-600";
+
+            container.innerHTML += `
+                <div class="bg-white p-3 rounded-2xl shadow-sm border border-gray-50 mb-2 flex justify-between items-center">
+                    <div>
+                        <div class="text-[9px] font-black text-gray-800 uppercase">${trx.produk}</div>
+                        <div class="text-[8px] text-gray-400 font-bold">${trx.tgl}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] font-black text-gray-900">Rp ${trx.harga.toLocaleString('id-ID')}</div>
+                        <div class="text-[8px] font-black uppercase ${colorClass}">${trx.status}</div>
+                    </div>
+                </div>`;
+        });
+    } catch (e) {
+        container.innerHTML = "";
+        console.log("Belum ada riwayat untuk nomor ini.");
+    }
+}
 window.onload = async () => {
     await init();
     if (typeof renderRiwayat === "function") renderRiwayat(); 
+
+        document.getElementById('phone-number').addEventListener('input', function(e) {
+        if(this.value.length >= 10) {
+        renderRiwayat();
+        }
+    });
 };
 
 // --- LOGIKA INSTAL APLIKASI (PWA) ---
