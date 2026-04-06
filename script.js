@@ -267,6 +267,11 @@ async function kirimWA() {
                 `------------------------------\n` +
                 `_Silakan kirim bukti bayar ke chat ini._`;
 
+                // --- PERBAIKAN: KOSONGKAN KERANJANG DISINI ---
+    keranjang = []; // Hapus data di memori
+    updateKeranjangUI(); // Sembunyikan icon keranjang floating
+    tutupModal(); // Tutup modal konfirmasi pembayaran
+
     // 6. Eksekusi pengalihan ke WhatsApp Admin
     window.location.href = `https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(msg)}`;
     
