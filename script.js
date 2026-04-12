@@ -67,12 +67,20 @@ function renderMenu() {
     container.innerHTML = '';
     Object.keys(db).forEach(cat => {
         if (cat === 'MLBB' || cat === 'FREE FIRE') return;
-        const icon = iconMap[cat] || 'logo_default.png';
-        container.innerHTML += `
-            <div class="menu-item op-card" id="menu-${cat}" onclick="selectCategory('${cat}')">
-                <div class="icon-box"><img src="${icon}"></div>
-                <div class="menu-label">${cat}</div>
-            </div>`;
+             const icon = iconMap[cat] || 'logo_default.png';
+            container.innerHTML += `
+         <div class="menu-item op-card flex flex-col items-center justify-center p-2 rounded-2xl bg-white border border-gray-100 shadow-sm active:scale-90 transition-all w-full h-full" 
+         id="menu-${cat}" 
+         onclick="selectCategory('${cat}')">
+        
+            <div class="w-10 h-10 flex items-center justify-center mb-1">
+            <img src="${icon}" class="max-w-full max-h-full object-contain">
+            </div>
+
+            <div class="text-[9px] font-black text-gray-700 uppercase text-center leading-tight w-full break-words">
+            ${cat}
+            </div>
+        </div>`;
     });
 }
 
