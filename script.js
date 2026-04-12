@@ -142,12 +142,12 @@ function renderListProduk(cat) {
             let part = item.n.split('|'); 
             let namaPaket = part[0].trim();
             let deskripsi = part[1] ? part[1].trim() : "";
-            let htmlHarga = `<div class="text-blue-600 font-black text-[14px]">Rp ${item.p.toLocaleString('id-ID')}</div>`;
+            let htmlHarga = `<div class="text-blue-600 font-black text-[18px]">Rp ${item.p.toLocaleString('id-ID')}</div>`;
             let labelPromo = "";
             
             if (item.old > 0 && item.old > item.p) {
                 htmlHarga = `<div class="text-gray-400 text-[9px] line-through decoration-red-500">Rp ${item.old.toLocaleString('id-ID')}</div>
-                             <div class="text-blue-600 font-black text-[14px]">Rp ${item.p.toLocaleString('id-ID')}</div>`;
+                             <div class="text-blue-600 font-black text-[18px]">Rp ${item.p.toLocaleString('id-ID')}</div>`;
                 labelPromo = `<div class="absolute top-0 right-0 bg-red-600 text-white text-[7px] font-black px-3 py-1 rounded-bl-xl shadow-sm">PROMO</div>`;
             }
 
@@ -156,7 +156,7 @@ function renderListProduk(cat) {
                      class="bg-white p-4 rounded-3xl shadow-sm flex justify-between items-center active:scale-95 transition-all border border-gray-100 mb-3 relative overflow-hidden animate-fade-in">
                     ${labelPromo}
                     <div class="flex-1 pr-3">
-                        <div class="text-[11px] font-black text-gray-800 uppercase leading-tight">${namaPaket}</div>
+                        <div class="text-[18px] font-black text-gray-800 uppercase leading-tight">${namaPaket}</div>
                         <div class="text-[9px] text-gray-500 font-medium mt-1 italic">${deskripsi}</div>
                     </div>
                     <div class="text-right min-w-[100px]">
