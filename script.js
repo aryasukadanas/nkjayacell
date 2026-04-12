@@ -34,7 +34,7 @@ const prefixMap = {
 let db = {};
 let keranjang = [];
 let totalAkhirDenganKode = 0;
-let currentTab = 'PULSA'; 
+let currentTab = 'DATA'; 
 let currentSelectedCat = ''; 
 
 // ==========================================
