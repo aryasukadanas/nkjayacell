@@ -12,3 +12,26 @@ body { background-color: #f3f4f6; font-family: 'Inter', sans-serif; -webkit-tap-
 .cart-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #eee; padding: 10px 0; font-size: 11px; text-align: left; width: 100%; }
 .btn-hapus { color: #ef4444; font-size: 10px; font-weight: bold; cursor: pointer; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+
+
+#modal-game.active {
+    display: block !important;
+    animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+
