@@ -216,66 +216,97 @@ async function ambilKontak() {
 }
 
 
-async function renderRiwayat() {
+
+  async function renderRiwayat() {
     const container = document.getElementById('riwayat-list');
-    const num = document.getElementById('phone-number').value;
-    if(!container || num.length < 10) return;
+    const numInput = document.getElementById('phone-number');
+    const num = numInput ? numInput.value : "";
+    
+    // Jika nomor kosong atau kurang dari 10 digit, jangan jalankan fetch
+    if (!container || num.length < 10) return;
 
     try {
+        // Tampilkan loading sederhana saat memuat data
+        container.innerHTML = `<p class="text-[9px] text-center font-bold text-gray-400 animate-pulse uppercase">Memuat Riwayat...</p>`;
+
         const response = await fetch(`${SCRIPT_URL}?nomor=${num}`);
         const data = await response.json();
-        if(!data || data.length === 0) { container.innerHTML = ""; return; }
 
-        container.innerHTML = `<h2 class="text-[10px] font-black text-gray-400 uppercase mb-4 mt-8 tracking-widest ml-2">Riwayat Anda</h2>`;
+        // Jika data kosong
+        if (!data || data.length === 0) {
+            container.innerHTML = ""; 
+            return;
+        }
+
+        // Header Riwayat
+        container.innerHTML = `<h2 class="text-[10px] font-black text-gray-400 uppercase mb-4 mt-8 tracking-widest ml-2 italic">Riwayat Transaksi</h2>`;
         
+        // Membalik urutan (Data terbaru di paling atas)
         data.reverse().forEach(trx => {
-            // --- BAGIAN PERBAIKAN FORMAT TITIK ---
-            // 1. Ambil teks asli (contoh: "13.04.2026 22.15")
-            let tglAsli = trx.tgl.toString();
-            
-            // 2. Ubah titik menjadi tanda hubung agar dimengerti sistem (13-04-2026)
-            // Namun kita sisakan bagian jam agar tetap bisa diproses
-            let tglStandar = tglAsli.replace(/\./g, '-'); 
-            
-            const tglMentah = new Date(tglStandar);
-            let tglCantik;
+            // --- LOGIKA PEMBERSIH TANGGAL & WAKTU ---
+            let tglAsli = trx.tgl ? trx.tgl.toString() : "";
+            let tglCantik = "";
 
-            // 3. Cek apakah sistem berhasil membaca tanggal tersebut
-            if (!isNaN(tglMentah)) {
-                tglCantik = tglMentah.toLocaleDateString('id-ID', { 
-                    day: '2-digit', 
-                    month: '2-digit', 
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                }).replace(/\//g, ':'); // Mengubah garis miring menjadi TITIK DUA
-            } else {
-                // Jika sistem gagal baca (Invalid Date), kita paksa ubah simbolnya saja
-                tglCantik = tglAsli.replace(/[\.\/-]/g, ':');
+            try {
+                // Bersihkan karakter pengganggu (koma dan titik)
+                // Contoh input: "13/4/2026, 22.24.20"
+                let bersih = tglAsli.replace(",", "")      // Buang koma
+                                    .replace(/\./g, ":")   // Titik jadi Titik Dua
+                                    .replace(/\//g, "-");  // Garis miring jadi Strip
+
+                // Pisahkan tanggal dan jam
+                let bagian = bersih.split(" ");
+                let tglSaja = bagian[0] || ""; // 13-4-2026
+                let jamSaja = bagian[1] || ""; // 22:24:20
+
+                // Pecah bagian tanggal untuk diformat ulang
+                let d = tglSaja.split("-");
+                let hari = (d[0] || "00").padStart(2, '0');
+                let bulan = (d[1] || "00").padStart(2, '0');
+                let tahun = d[2] || "0000";
+
+                // Pecah bagian jam (ambil jam dan menit saja)
+                let w = jamSaja.split(":");
+                let jam = (w[0] || "00").padStart(2, '0');
+                let menit = (w[1] || "00").padStart(2, '0');
+
+                // Hasil akhir format: 13:04:2026 22:24
+                tglCantik = `${hari}:${bulan}:${tahun} ${jam}:${menit}`;
+            } catch (err) {
+                // Jika error saat olah data, tampilkan teks asli dengan simbol titik dua
+                tglCantik = tglAsli.replace(/[\/,\.]/g, ":");
             }
 
-            let color = trx.status === "Sukses" ? "text-green-600" : (trx.status === "Gagal" ? "text-red-600" : "text-yellow-600");
-            
+            // Atur warna berdasarkan status
+            let colorStatus = "text-yellow-600"; // Menunggu/Proses
+            if (trx.status === "Sukses") colorStatus = "text-green-600";
+            if (trx.status === "Gagal") colorStatus = "text-red-600";
+
+            // Render Card Riwayat
             container.innerHTML += `
                 <div class="bg-white p-4 rounded-3xl shadow-sm border border-gray-50 mb-3 flex justify-between items-center animate-fade-in">
-                    <div class="flex-1 pr-2">
+                    <div class="flex-1 pr-3">
                         <div class="text-[10px] font-black text-gray-800 uppercase leading-tight">${trx.produk}</div>
-                        <div class="text-[8px] text-gray-400 font-bold mt-1 uppercase tracking-tighter">
-                            <i class="far fa-clock mr-1"></i> ${tglCantik} WITA
+                        <div class="flex items-center gap-1 mt-1 text-[8px] text-gray-400 font-bold uppercase tracking-tighter">
+                            <i class="far fa-clock"></i>
+                            <span>${tglCantik} WITA</span>
                         </div>
                     </div>
-                    <div class="text-right">
+                    <div class="text-right min-w-[80px]">
                         <div class="text-[11px] font-black text-blue-600">Rp ${parseInt(trx.harga).toLocaleString('id-ID')}</div>
-                        <div class="text-[8px] font-black uppercase mt-1 px-2 py-0.5 rounded-full bg-gray-50 inline-block ${color}">
+                        <div class="mt-1 px-2 py-0.5 rounded-full bg-gray-50 inline-block text-[8px] font-black uppercase ${colorStatus}">
                             ${trx.status}
                         </div>
                     </div>
                 </div>`;
         });
-    } catch (e) { 
-        console.log("Riwayat tidak ditemukan atau koneksi lambat"); 
+    } catch (error) {
+        console.error("Gagal Render Riwayat:", error);
+        container.innerHTML = `<p class="text-[8px] text-center text-red-400 font-bold uppercase">Gagal memuat data riwayat</p>`;
     }
 }
+  
+
 
 
 // ==========================================
