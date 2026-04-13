@@ -27,8 +27,62 @@ body { background-color: #f3f4f6; font-family: 'Inter', sans-serif; -webkit-tap-
     overflow-y: auto;
 }
 
-#modal-bayar .bg-blue-50 {
-    animation: pulse-subtle 2s infinite;
+
+/* Container Modal (Latar Hitam) */
+#modal-bayar {
+    display: none; 
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    justify-content: center;
+    align-items: flex-end; /* Memunculkan modal dari bawah di HP */
+}
+
+#modal-bayar.active {
+    display: flex;
+}
+
+/* Kotak Putih Modal (Isinya) */
+#modal-bayar > div {
+    width: 100%;
+    max-width: 450px; /* Lebar maksimal biar gak aneh di PC */
+    background: white;
+    border-radius: 30px 30px 0 0; /* Lengkung atas saja ala aplikasi modern */
+    padding: 24px;
+    
+    /* KUNCI GESER DI HP */
+    max-height: 85vh; /* Tinggi maksimal 85% layar */
+    overflow-y: auto; /* Aktifkan scroll internal */
+    overflow-x: hidden;
+    
+    /* Biar scroll halus di iPhone */
+    -webkit-overflow-scrolling: touch;
+    
+    /* Animasi muncul dari bawah */
+    animation: slideUp 0.3s ease-out;
+}
+
+/* Sembunyikan scrollbar tapi tetap bisa digeser */
+#modal-bayar > div::-webkit-scrollbar {
+    display: none;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+/* Khusus untuk tampilan PC (biar modalnya di tengah) */
+@media (min-width: 640px) {
+    #modal-bayar {
+        align-items: center;
+    }
+    #modal-bayar > div {
+        border-radius: 30px;
+        max-height: 90vh;
+    }
 }
 
 @keyframes pulse-subtle {
