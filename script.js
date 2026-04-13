@@ -146,7 +146,7 @@ function renderListProduk(cat) {
             let labelPromo = "";
             
             if (item.old > 0 && item.old > item.p) {
-                htmlHarga = `<div class="text-gray-400 text-[9px] line-through decoration-red-500">Rp ${item.old.toLocaleString('id-ID')}</div>
+                htmlHarga = `<div class="text-gray-400 text-[15px] line-through decoration-red-500">Rp ${item.old.toLocaleString('id-ID')}</div>
                              <div class="text-blue-600 font-black text-[18px]">Rp ${item.p.toLocaleString('id-ID')}</div>`;
                 labelPromo = `<div class="absolute top-0 right-0 bg-red-600 text-white text-[7px] font-black px-3 py-1 rounded-bl-xl shadow-sm">PROMO</div>`;
             }
@@ -161,7 +161,7 @@ function renderListProduk(cat) {
                     </div>
                     <div class="text-right min-w-[100px]">
                         ${htmlHarga}
-                        <div class="text-[8px] text-blue-400 font-bold uppercase mt-1">🛒 Pilih</div>
+                        <div class="text-[12px] text-blue-400 font-bold uppercase mt-1">🛒 Pilih</div>
                     </div>
                 </div>`;
         });
@@ -267,19 +267,42 @@ async function renderRiwayat() {
 // TRANSAKSI & WHATSAPP
 // ==========================================
 function tambahKeKeranjang(n, p, cat) {
-    const num = document.getElementById('phone-number').value;
-    const idGame = document.getElementById('game-id') ? document.getElementById('game-id').value : "";
-    if(num.length < 10) return alert("Masukkan Nomor WhatsApp Anda!");
+    const numInput = document.getElementById('phone-number');
+    const num = numInput ? numInput.value : "";
+    const idGameInput = document.getElementById('game-id');
+    const idGame = idGameInput ? idGameInput.value : "";
+
+    // VALIDASI: Nomor HP tetap wajib diisi
+    if (num.length < 10) {
+        alert("Silakan masukkan Nomor WhatsApp Tujuan di atas!");
+        if(numInput) numInput.focus();
+        return;
+    }
+
     let identitasTujuan = num;
     if (cat === 'MLBB' || cat === 'FREE FIRE') {
-        if (!idGame) return alert("Harap isi ID Game Anda!");
+        if (!idGame) {
+            alert("Harap isi ID Game Anda!");
+            if(idGameInput) idGameInput.focus();
+            return;
+        }
         identitasTujuan = `ID: ${idGame} (WA: ${num})`;
     }
-    keranjang = [{ no: identitasTujuan, nama: n, harga: p, kategori: cat }];
-    updateKeranjangUI();
-    bukaModalKeranjang();
-}
 
+    // PERUBAHAN DISINI: Menggunakan .push agar bisa tambah banyak
+    keranjang.push({ 
+        no: identitasTujuan, 
+        nama: n, 
+        harga: p, 
+        kategori: cat 
+    });
+    
+    // Update UI (Angka di ikon keranjang akan bertambah)
+    updateKeranjangUI();
+    
+    // Opsional: Berikan notifikasi kecil agar pelanggan tahu barang masuk keranjang
+    alert("Produk berhasil ditambah ke keranjang!");
+}
 function updateKeranjangUI() {
     const cartBtn = document.getElementById('cart-floating');
     const countEl = document.getElementById('cart-count');
@@ -289,19 +312,58 @@ function updateKeranjangUI() {
 
 function bukaModalKeranjang() {
     const container = document.getElementById('m-pkg');
-    if(!container) return; container.innerHTML = '';
+    if(!container) return; 
+    container.innerHTML = '';
+    
     let subtotal = 0;
     keranjang.forEach((item, i) => {
         subtotal += item.harga;
-        container.innerHTML += `<div class="flex justify-between items-start text-[10px] border-b border-dashed border-gray-200 pb-2 mb-2"><div class="pr-2 text-left"><b class="uppercase text-gray-800">${item.kategori} - ${item.nama}</b><br><span class="font-bold text-gray-600 italic">Tujuan: ${item.no}</span></div><div class="text-right min-w-[70px]"><b class="text-gray-900">Rp ${item.harga.toLocaleString('id-ID')}</b><br><span class="text-red-500 font-bold cursor-pointer" onclick="hapusItem(${i})">Hapus</span></div></div>`;
+        container.innerHTML += `
+            <div class="flex justify-between items-start text-[10px] border-b border-dashed border-gray-200 pb-2 mb-2">
+                <div class="pr-2 text-left">
+                    <b class="uppercase text-gray-800">${item.kategori} - ${item.nama}</b><br>
+                    <span class="font-bold text-gray-600 italic">Tujuan: ${item.no}</span>
+                </div>
+                <div class="text-right min-w-[70px]">
+                    <b class="text-gray-900">Rp ${item.harga.toLocaleString('id-ID')}</b><br>
+                    <span class="text-red-500 font-bold cursor-pointer uppercase text-[8px]" onclick="hapusItem(${i})">[ Hapus ]</span>
+                </div>
+            </div>`;
     });
+
     const kodeUnik = Math.floor(Math.random() * 99) + 1;
     totalAkhirDenganKode = subtotal + kodeUnik;
-    document.getElementById('m-price').innerHTML = `<div class="border-t border-b border-gray-100 bg-gray-50 p-4 rounded-xl my-4 text-center"><b class="text-[10px] text-blue-900 uppercase tracking-widest block mb-1">TOTAL BAYAR:</b><div class="flex justify-center items-baseline gap-2"><span class="text-blue-700 font-black text-4xl tracking-tighter">${totalAkhirDenganKode.toLocaleString('id-ID')}</span><button onclick="salinHarga(${totalAkhirDenganKode})" class="bg-blue-100 text-blue-700 text-[9px] font-black px-3 py-1.5 rounded-full">SALIN</button></div><p class="text-[8px] text-red-600 font-black mt-3 italic uppercase leading-relaxed">PENTING: Transfer tepat sampai 2 angka terakhir!</p></div>`;
-    document.getElementById('qris-box').innerHTML = `<img src="qris.jpeg" alt="QRIS" class="w-64 h-64 mx-auto rounded-xl border-4 border-white shadow-sm">`;
+
+    // Bagian Keterangan Pembayaran
+    document.getElementById('m-price').innerHTML = `
+        <div class="bg-blue-50 p-4 rounded-2xl my-4 border border-blue-100">
+            <b class="text-[10px] text-blue-900 uppercase tracking-widest block text-center mb-2">Total yang Harus Dibayar:</b>
+            <div class="flex justify-center items-center gap-3">
+                <span class="text-blue-700 font-black text-4xl tracking-tighter">${totalAkhirDenganKode.toLocaleString('id-ID')}</span>
+                <button onclick="salinHarga(${totalAkhirDenganKode})" class="bg-blue-600 text-white text-[10px] font-black px-4 py-2 rounded-full shadow-sm active:scale-90">SALIN</button>
+            </div>
+            
+            <div class="mt-4 pt-3 border-t border-blue-200">
+                <p class="text-[9px] text-gray-600 font-bold uppercase mb-2"><i class="fas fa-info-circle mr-1"></i> Cara Pembayaran:</p>
+                <ul class="text-[8px] text-gray-500 space-y-1 font-bold uppercase italic">
+                    <li>1. Scan QRIS di bawah ini dengan aplikasi Bank/E-Wallet</li>
+                    <li>2. Masukkan nominal <span class="text-red-600">PRESISI</span> hingga angka terakhir</li>
+                    <li>3. Screenshot bukti bayar & klik tombol WhatsApp</li>
+                </ul>
+            </div>
+        </div>`;
+    
+    // Bagian QRIS dengan Label Nama Toko
+    document.getElementById('qris-box').innerHTML = `
+        <div class="text-center">
+            <div class="inline-block p-2 bg-white border-2 border-gray-100 rounded-3xl shadow-inner">
+                <img src="qris.jpeg" alt="QRIS NK JAYA CELL" class="w-64 h-64 mx-auto rounded-xl">
+            </div>
+            <p class="mt-2 text-[10px] font-black text-gray-800 uppercase italic">NM: NK JAYA CELL / AGEN BRILINK</p>
+        </div>`;
+    
     document.getElementById('modal-bayar').classList.add('active');
 }
-
 async function kirimWA() {
     if (keranjang.length === 0) return;
     const btn = document.getElementById('btn-wa');

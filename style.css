@@ -22,7 +22,20 @@ body { background-color: #f3f4f6; font-family: 'Inter', sans-serif; -webkit-tap-
     to { opacity: 1; transform: translateY(0); }
 }
 
+#m-pkg {
+    max-height: 200px; /* Batasi tinggi jika barang belanjaan banyak agar tidak menutupi QRIS */
+    overflow-y: auto;
+}
 
+#modal-bayar .bg-blue-50 {
+    animation: pulse-subtle 2s infinite;
+}
+
+@keyframes pulse-subtle {
+    0% { background-color: #eff6ff; }
+    50% { background-color: #dbeafe; }
+    100% { background-color: #eff6ff; }
+}
 
 #modal-game.active {
     display: block !important;
