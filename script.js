@@ -319,14 +319,14 @@ function bukaModalKeranjang() {
     keranjang.forEach((item, i) => {
         subtotal += item.harga;
         container.innerHTML += `
-            <div class="flex justify-between items-start text-[10px] border-b border-dashed border-gray-200 pb-2 mb-2">
-                <div class="pr-2 text-left">
-                    <b class="uppercase text-gray-800">${item.kategori} - ${item.nama}</b><br>
-                    <span class="font-bold text-gray-600 italic">Tujuan: ${item.no}</span>
+            <div class="flex justify-between items-center bg-white p-3 rounded-xl mb-2 shadow-sm border border-gray-50">
+                <div class="flex-1 pr-2">
+                    <div class="text-[10px] font-black text-gray-800 uppercase leading-tight">${item.nama}</div>
+                    <div class="text-[8px] text-gray-400 font-bold mt-1 uppercase italic">Tujuan: ${item.no}</div>
                 </div>
-                <div class="text-right min-w-[70px]">
-                    <b class="text-gray-900">Rp ${item.harga.toLocaleString('id-ID')}</b><br>
-                    <span class="text-red-500 font-bold cursor-pointer uppercase text-[8px]" onclick="hapusItem(${i})">[ Hapus ]</span>
+                <div class="text-right">
+                    <div class="text-[10px] font-black text-blue-600">Rp ${item.harga.toLocaleString('id-ID')}</div>
+                    <div class="text-[8px] text-red-500 font-black uppercase mt-1 cursor-pointer" onclick="hapusItem(${i})">Hapus</div>
                 </div>
             </div>`;
     });
