@@ -363,7 +363,13 @@ function bukaModalKeranjang() {
         </div>`;
     
     document.getElementById('modal-bayar').classList.add('active');
+
+    document.getElementById('modal-bayar').classList.add('active');
+    
+    // Kunci scroll layar utama
+    document.body.style.overflow = 'hidden'; 
 }
+
 async function kirimWA() {
     if (keranjang.length === 0) return;
     const btn = document.getElementById('btn-wa');
@@ -390,7 +396,15 @@ function detectOp(num) {
 }
 function salinHarga(nominal) { navigator.clipboard.writeText(nominal).then(() => alert("Nominal disalin!")); }
 function hapusItem(i) { keranjang.splice(i, 1); updateKeranjangUI(); if(keranjang.length === 0) tutupModal(); else bukaModalKeranjang(); }
-function tutupModal() { document.getElementById('modal-bayar').classList.remove('active'); }
+function tutupModal() { document.getElementById('modal-bayar').classList.remove('active'); 
+    document.getElementById('modal-bayar').classList.remove('active');
+    
+    // Kembalikan scroll layar utama
+    document.body.style.overflow = 'auto';
+}
+
+
+
 
 window.onload = async () => {
     await init();
