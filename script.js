@@ -224,21 +224,35 @@ async function renderRiwayat() {
     try {
         const response = await fetch(`${SCRIPT_URL}?nomor=${num}`);
         const data = await response.json();
-        if(data.length === 0) { container.innerHTML = ""; return; }
+        if(!data || data.length === 0) { container.innerHTML = ""; return; }
 
         container.innerHTML = `<h2 class="text-[10px] font-black text-gray-400 uppercase mb-4 mt-8 tracking-widest ml-2">Riwayat Anda</h2>`;
         
-        // Membalik urutan agar transaksi terbaru muncul paling atas
         data.reverse().forEach(trx => {
-            // Perbaikan Format Tanggal (Dari 2026-04-05T... jadi 05/04/2026)
-            const tglMentah = new Date(trx.tgl);
-            const tglCantik = tglMentah.toLocaleDateString('id-ID', { 
-                day: '2-digit', 
-                month: '2-digit', 
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            }).replace(/\//g, '-');
+            // --- BAGIAN PERBAIKAN FORMAT TITIK ---
+            // 1. Ambil teks asli (contoh: "13.04.2026 22.15")
+            let tglAsli = trx.tgl.toString();
+            
+            // 2. Ubah titik menjadi tanda hubung agar dimengerti sistem (13-04-2026)
+            // Namun kita sisakan bagian jam agar tetap bisa diproses
+            let tglStandar = tglAsli.replace(/\./g, '-'); 
+            
+            const tglMentah = new Date(tglStandar);
+            let tglCantik;
+
+            // 3. Cek apakah sistem berhasil membaca tanggal tersebut
+            if (!isNaN(tglMentah)) {
+                tglCantik = tglMentah.toLocaleDateString('id-ID', { 
+                    day: '2-digit', 
+                    month: '2-digit', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }).replace(/\//g, ':'); // Mengubah garis miring menjadi TITIK DUA
+            } else {
+                // Jika sistem gagal baca (Invalid Date), kita paksa ubah simbolnya saja
+                tglCantik = tglAsli.replace(/[\.\/-]/g, ':');
+            }
 
             let color = trx.status === "Sukses" ? "text-green-600" : (trx.status === "Gagal" ? "text-red-600" : "text-yellow-600");
             
@@ -262,6 +276,7 @@ async function renderRiwayat() {
         console.log("Riwayat tidak ditemukan atau koneksi lambat"); 
     }
 }
+
 
 // ==========================================
 // TRANSAKSI & WHATSAPP
