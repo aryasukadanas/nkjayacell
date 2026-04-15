@@ -134,8 +134,6 @@
             <p class="text-gray-400 font-bold text-[10px] tracking-widest uppercase italic">NK JAYA CELL - Verifikasi Pesanan</p>
         </div>
 
-        <div id="m-pkg" class="space-y-3 mb-4 px-2"></div>
-
         <div id="m-price" class="mb-6"></div>
 
         <div class="bg-yellow-50 border-2 border-dashed border-yellow-200 rounded-3xl p-5 mb-6">
@@ -146,6 +144,18 @@
                 <li class="flex gap-2"><span>3.</span> <span>Pesanan diproses otomatis setelah verifikasi admin.</span></li>
             </ul>
         </div>
+
+
+        <div id="m-pkg" class="space-y-3 mb-4 px-2"></div>
+        <div id="qris-box" class="flex flex-col items-center mb-6 hidden animate-fade-in">
+    <p class="text-[9px] font-black text-gray-400 uppercase mb-2 tracking-widest italic text-center">Scan QRIS untuk Bayar</p>
+    <div class="bg-white p-3 rounded-3xl shadow-inner border-2 border-dashed border-gray-100">
+        <img src="qris.jpeg" id="qris-image" class="w-48 h-auto rounded-xl">
+    </div>
+    <p class="text-[8px] text-red-500 font-bold mt-2 uppercase italic text-center">*Screenshot QRIS ini & upload ke Qris pembayaran *</p>
+</div>
+
+        
 
         <div class="space-y-3">
             <button onclick="kirimWA()" id="btn-wa" class="w-full py-5 bg-green-500 hover:bg-green-600 text-white rounded-2xl font-black shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-all text-sm uppercase">

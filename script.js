@@ -5,8 +5,6 @@ const WA_ADMIN = "6285847909692";
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=0&single=true&output=csv";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwh0lE_0ebqn2ScCWvxioXBJYwLl2qT3aGVHk_W0QHTRP21lWb88djzWMCrihY0ZkHj/exec";
 
-
-
 const iconMap = {
     'Pulsa': 'PULSA.png', 'Indosat': 'logo_indosat.png', 'XL': 'logo_xl.png', 'Telkomsel': 'logo_telkomsel.png',
     'Axis': 'logo_axis.png', 'Tri': 'logo_tri.png', 'Smartfren': 'logo_smartfren.png', 'By.U': 'logo_byu.png',
@@ -239,7 +237,8 @@ function updateKeranjangUI() {
 }
 
 function bukaModalKeranjang() {
-    const container = document.getElementById('m-pkg');
+   const container = document.getElementById('m-pkg');
+    const qrisBox = document.getElementById('qris-box'); // Ambil elemen QRIS
     container.innerHTML = ''; 
     let subtotal = 0;
 
@@ -264,6 +263,9 @@ function bukaModalKeranjang() {
 
     const kodeUnik = Math.floor(Math.random() * 99) + 1;
     totalAkhirDenganKode = subtotal + kodeUnik;
+
+    // TAMPILKAN QRIS
+    if (qrisBox) qrisBox.classList.remove('hidden');
 
     document.getElementById('m-price').innerHTML = `
         <div class="bg-blue-600 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden">
