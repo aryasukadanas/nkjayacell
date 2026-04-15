@@ -140,6 +140,8 @@ body { background-color: #f3f4f6; font-family: 'Inter', sans-serif; -webkit-tap-
 }
 
 
+
+
 /* Animasi Berdenyut untuk Tombol Utama */
 .animate-button-pulse {
     animation: buttonPulse 2s infinite;
