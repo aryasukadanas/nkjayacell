@@ -10,16 +10,42 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
     <style>
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .animate-fade-in { animation: fadeIn 0.3s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        
-        /* Animasi Halaman Game */
-        #modal-game.active {
-            display: block !important;
-            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    /* Hilangkan Scrollbar tapi fungsi scroll tetap ada */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Animasi Dasar */
+    .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Animasi Berkedip Halus untuk Flash Sale */
+    .animate-pulse-soft {
+        animation: pulseSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulseSoft {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.85; transform: scale(1.03); }
+    }
+
+    /* Style untuk Menu Kategori yang Aktif */
+    .op-card.active {
+        border-color: #2563eb; /* Blue 600 */
+        background-color: #eff6ff; /* Blue 50 */
+        transform: scale(1.05);
+        box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.1), 0 4px 6px -2px rgba(37, 99, 235, 0.05);
+    }
+
+    /* Style Khusus untuk Badge Flash Sale */
+    .badge-flash {
+        background: linear-gradient(45deg, #ef4444, #f97316); /* Red 500 to Orange 500 */
+        color: white;
+        font-size: 8px;
+        font-weight: 900;
+        padding: 4px 10px;
+        border-bottom-left-radius: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+</style>
     </style>
 </head>
 <body class="bg-gray-50 pb-24">
@@ -101,21 +127,36 @@
     </div>
 
     <div id="modal-bayar" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10000] hidden items-end sm:items-center justify-center transition-all opacity-0 [&.active]:flex [&.active]:opacity-100">
-        <div class="bg-white w-full max-w-sm rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 shadow-2xl transform translate-y-10 [.active_&]:translate-y-0 transition-transform duration-300">
-            <h3 class="text-center font-black text-xl mb-1 text-blue-600 italic uppercase">Konfirmasi Bayar</h3>
-            <p class="text-center text-gray-400 font-black text-[9px] tracking-widest mb-6 uppercase italic">NK JAYA CELL</p>
-            <div id="m-pkg" class="max-h-40 overflow-y-auto no-scrollbar space-y-2 mb-2 px-2 border-b border-dashed border-gray-100"></div>
-            <div id="m-price"></div>
-            <div id="qris-box" class="mb-6 flex justify-center"></div>
-            <button onclick="kirimWA()" id="btn-wa" class="w-full py-4 bg-green-500 text-white rounded-2xl font-black shadow-lg flex items-center justify-center gap-2 mb-3 active:scale-95 transition-all text-xs uppercase">
-                <i class="fab fa-whatsapp text-xl"></i> Konfirmasi WhatsApp
-            </button>
-            <button onclick="tutupModal()" class="w-full py-2 text-gray-400 text-[10px] font-black uppercase tracking-widest">Kembali</button>
-    </button>
-</div>
+    <div class="bg-white w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 shadow-2xl transform translate-y-10 [.active_&]:translate-y-0 transition-transform duration-300 overflow-y-auto no-scrollbar max-h-[90vh]">
+        
+        <div class="text-center mb-6">
+            <h3 class="font-black text-2xl text-blue-600 italic uppercase">Konfirmasi Bayar</h3>
+            <p class="text-gray-400 font-bold text-[10px] tracking-widest uppercase italic">NK JAYA CELL - Verifikasi Pesanan</p>
+        </div>
 
+        <div id="m-pkg" class="space-y-3 mb-4 px-2"></div>
+
+        <div id="m-price" class="mb-6"></div>
+
+        <div class="bg-yellow-50 border-2 border-dashed border-yellow-200 rounded-3xl p-5 mb-6">
+            <h4 class="text-[10px] font-black text-yellow-800 uppercase mb-3 tracking-widest"><i class="fas fa-info-circle mr-1"></i> Instruksi Pembayaran:</h4>
+            <ul class="text-[11px] text-yellow-900 font-bold space-y-2 italic">
+                <li class="flex gap-2"><span>1.</span> <span>Transfer sesuai nominal **TOTAL BAYAR** (hingga digit terakhir).</span></li>
+                <li class="flex gap-2"><span>2.</span> <span>Klik tombol WhatsApp di bawah untuk kirim bukti transfer.</span></li>
+                <li class="flex gap-2"><span>3.</span> <span>Pesanan diproses otomatis setelah verifikasi admin.</span></li>
+            </ul>
+        </div>
+
+        <div class="space-y-3">
+            <button onclick="kirimWA()" id="btn-wa" class="w-full py-5 bg-green-500 hover:bg-green-600 text-white rounded-2xl font-black shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-all text-sm uppercase">
+                <i class="fab fa-whatsapp text-2xl"></i> Kirim Bukti & Konfirmasi
+            </button>
+            <button onclick="tutupModal()" class="w-full py-2 text-gray-400 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition-colors">
+                Batal & Tambah Produk Lagi
+            </button>
         </div>
     </div>
+</div>
 
     <div id="modal-game" class="fixed inset-0 z-[60] hidden bg-gray-50 overflow-y-auto">
         <div class="sticky top-0 bg-white p-4 flex items-center justify-between shadow-sm border-b border-gray-100 z-10">

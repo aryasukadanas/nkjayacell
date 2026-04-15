@@ -107,3 +107,34 @@ body { background-color: #f3f4f6; font-family: 'Inter', sans-serif; -webkit-tap-
     #modal-bayar { align-items: center; }
     #modal-bayar > div { border-radius: 30px; margin: 20px; }
 }
+
+/*salin harga*/
+#copy-notif {
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+
+/*harga flashsale*/
+.badge-flash {
+    background: linear-gradient(45deg, #ff0000, #ff8c00);
+    color: white;
+    font-size: 8px;
+    font-weight: 900;
+    padding: 2px 8px;
+    border-radius: 50px;
+    text-transform: uppercase;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.countdown-timer {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: bold;
+    color: #ff0000;
+    font-size: 9px;
+}
