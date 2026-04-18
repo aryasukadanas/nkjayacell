@@ -395,3 +395,63 @@ window.onload = async () => {
         });
     }
 };
+
+let deferredPrompt;
+const installBanner = document.getElementById('install-banner');
+const btnInstallNow = document.getElementById('btn-install-now');
+
+// Mendeteksi permintaan instalasi dari Android/Chrome
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Mencegah Chrome memunculkan prompt otomatis yang membosankan
+    e.preventDefault();
+    // Simpan event agar bisa dipicu nanti
+    deferredPrompt = e;
+    
+    // Tampilkan banner kustom kita
+    if (installBanner) {
+        installBanner.classList.remove('hidden');
+        installBanner.classList.add('flex');
+    }
+});
+
+// Aksi saat tombol Instal diklik
+if (btnInstallNow) {
+    btnInstallNow.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        
+        // Munculkan prompt asli Chrome
+        deferredPrompt.prompt();
+        
+        // Tunggu jawaban user
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to the install prompt: ${outcome}`);
+        
+        // Sembunyikan banner kita setelah user memilih
+        deferredPrompt = null;
+        installBanner.classList.add('hidden');
+    });
+}
+
+// Sembunyikan banner jika aplikasi sudah terinstal (standalone mode)
+window.addEventListener('appinstalled', () => {
+    if (installBanner) installBanner.classList.add('hidden');
+    deferredPrompt = null;
+    alert("Terima kasih! Aplikasi KUOTAKILAT berhasil dipasang.");
+});
+
+// Cek jika sudah dalam mode aplikasi, jangan munculkan banner
+if (window.matchMedia('(display-mode: standalone)').matches) {
+    if (installBanner) installBanner.classList.add('hidden');
+}
+
+
+
+// Di bawah ini script.js untuk game.html
+if (window.location.pathname.includes('game.html')) {
+    // Jalankan kode khusus game jika halaman yang dibuka adalah game.html
+    loadGameProducts(); 
+}
+
+async function loadGameProducts() {
+    // ... kode fetch data spreadsheet untuk game ...
+}
