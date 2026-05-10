@@ -364,31 +364,32 @@ Terima Kasih 🙏`;
     window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(msg)}`, '_blank');
 
    // --- LOGIKA RESET KERANJANG ---
+   // 2. Kosongkan Data
     keranjang = []; 
     
-    // 1. Reset Tampilan Angka & Tombol Keranjang
+    // 3. Reset UI Keranjang
     const cartCount = document.getElementById('cart-count');
     if (cartCount) cartCount.innerText = '0';
     
     const cartFloating = document.getElementById('cart-floating');
     if (cartFloating) cartFloating.style.display = 'none';
 
-    // 2. Tutup Modal (PENTING: Pastikan class active hilang agar layar tidak macet)
-    const modalBayar = document.getElementById('modal-bayar');
-    if (modalBayar) {
-        modalBayar.classList.remove('active');
-        // Tambahkan ini jika modal kamu menggunakan style hidden manual
-        modalBayar.style.display = 'none'; 
-    }
+    // 4. Tutup Modal & Kembalikan Scroll Body
+    tutupModal(); // Gunakan fungsi tutupModal() yang sudah kamu buat agar overflow: auto kembali normal
 
-    // 3. Pastikan kolom nomor tetap ada (Jangan di-hide, cukup kosongkan isinya)
+    // 5. Kosongkan Input Nomor
     const inputPhone = document.getElementById('phone-number');
     if (inputPhone) {
-        inputPhone.value = ''; // Mengosongkan nomor HP agar bisa diisi ulang
-        inputPhone.focus();    // Memudahkan user untuk langsung isi nomor lagi
+        inputPhone.value = '';
+    }
+
+    // 6. PENTING: Render Ulang Menu/Produk agar daftar harga muncul kembali
+    if (currentSelectedCat) {
+        renderListProduk(currentSelectedCat); // Munculkan kembali daftar produk yang tadi dipilih
+    } else {
+        renderMenu(); // Jika tidak ada kategori terpilih, kembalikan ke menu utama
     }
 }
-
 
 
 
