@@ -339,6 +339,7 @@ async function kirimWA() {
         });
     });
 
+
     // Kirim data ke Google Sheets (Database)
     try { 
         await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(dataSheet) }); 
@@ -359,23 +360,34 @@ ${detailWA}--------------------------------------------
 
 Terima Kasih 🙏`;
 
-// 1. Eksekusi Pengiriman WA (Buka di tab baru agar script tetap jalan)
+//  Eksekusi Pengiriman WA (Buka di tab baru agar script tetap jalan)
     window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(msg)}`, '_blank');
 
-    // 2. TAMBAHKAN LOGIKA RESET DI SINI
-    keranjang = []; // Kosongkan variabel array keranjang
+   // --- LOGIKA RESET KERANJANG ---
+    keranjang = []; 
     
-    // Update tampilan UI agar sinkron dengan keranjang kosong
-    document.getElementById('cart-count').innerText = '0';
-    document.getElementById('cart-floating').style.display = 'none';
-    document.getElementById('modal-bayar').classList.remove('active');
+    // 1. Reset Tampilan Angka & Tombol Keranjang
+    const cartCount = document.getElementById('cart-count');
+    if (cartCount) cartCount.innerText = '0';
     
-    // Opsional: kosongkan input nomor jika ingin benar-benar bersih
-    // document.getElementById('phone-number').value = '';
+    const cartFloating = document.getElementById('cart-floating');
+    if (cartFloating) cartFloating.style.display = 'none';
 
-    console.log("Pesanan dikirim & keranjang dikosongkan.");
+    // 2. Tutup Modal (PENTING: Pastikan class active hilang agar layar tidak macet)
+    const modalBayar = document.getElementById('modal-bayar');
+    if (modalBayar) {
+        modalBayar.classList.remove('active');
+        // Tambahkan ini jika modal kamu menggunakan style hidden manual
+        modalBayar.style.display = 'none'; 
+    }
+
+    // 3. Pastikan kolom nomor tetap ada (Jangan di-hide, cukup kosongkan isinya)
+    const inputPhone = document.getElementById('phone-number');
+    if (inputPhone) {
+        inputPhone.value = ''; // Mengosongkan nomor HP agar bisa diisi ulang
+        inputPhone.focus();    // Memudahkan user untuk langsung isi nomor lagi
+    }
 }
-
 
 
 
