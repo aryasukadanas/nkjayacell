@@ -359,8 +359,26 @@ ${detailWA}--------------------------------------------
 
 Terima Kasih 🙏`;
 
-    window.location.href = `https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(msg)}`;
+// 1. Eksekusi Pengiriman WA (Buka di tab baru agar script tetap jalan)
+    window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(msg)}`, '_blank');
+
+    // 2. TAMBAHKAN LOGIKA RESET DI SINI
+    keranjang = []; // Kosongkan variabel array keranjang
+    
+    // Update tampilan UI agar sinkron dengan keranjang kosong
+    document.getElementById('cart-count').innerText = '0';
+    document.getElementById('cart-floating').style.display = 'none';
+    document.getElementById('modal-bayar').classList.remove('active');
+    
+    // Opsional: kosongkan input nomor jika ingin benar-benar bersih
+    // document.getElementById('phone-number').value = '';
+
+    console.log("Pesanan dikirim & keranjang dikosongkan.");
 }
+
+
+
+
 
 // ==========================================
 // UTILS & TIMER
