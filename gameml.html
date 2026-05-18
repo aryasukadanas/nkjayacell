@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NK JAYA GAME - Top Up Diamond</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
+        
+        .diamond-card.active {
+            border-color: #2563eb !important;
+            background-color: #eff6ff !important;
+            transform: scale(1.03);
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.1);
+        }
+
+        .shimmer { position: relative; overflow: hidden; }
+        .shimmer::after {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.3), transparent);
+            transform: rotate(45deg); animation: shimmerEffect 3s infinite;
+        }
+        @keyframes shimmerEffect {
+            0% { transform: translateX(-150%) rotate(45deg); }
+            100% { transform: translateX(150%) rotate(45deg); }
+        }
+    </style>
+</head>
+<body class="pb-32">
+
+    <header class="bg-blue-600 text-white p-6 rounded-b-[2.5rem] shadow-lg mb-6">
+        <div class="flex items-center gap-4">
+            <a href="index.html" class="bg-white/20 p-2 rounded-xl active:scale-90 transition-all">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <div>
+                <h1 class="text-xl font-extrabold italic uppercase" id="game-title">NK JAYA GAME</h1>
+                <p class="text-[10px] font-bold opacity-80 tracking-widest uppercase">Top Up Otomatis & Terpercaya</p>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto px-4 space-y-6">
+        <section class="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-black">1</div>
+                <h2 class="font-black text-gray-800 text-sm uppercase italic">Data Akun Game</h2>
+            </div>
+            <div class="grid grid-cols-3 gap-2" id="input-group">
+                <input type="number" id="game_id" placeholder="User ID" class="col-span-2 bg-gray-50 border-none rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                <input type="number" id="zone_id" placeholder="(Zone)" class="bg-gray-50 border-none rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <p class="text-[9px] text-gray-400 mt-3 italic font-medium px-1">Pastikan ID Game Anda sudah benar.</p>
+        </section>
+
+        <section class="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-black">2</div>
+                <h2 class="font-black text-gray-800 text-sm uppercase italic">Pilih Nominal</h2>
+            </div>
+            <div class="grid grid-cols-2 gap-3" id="diamond-grid">
+                </div>
+        </section>
+
+        <div class="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 max-w-md mx-auto z-50">
+            <button onclick="bayarGame()" class="w-full py-4 bg-green-500 text-white rounded-2xl font-extrabold shadow-lg flex items-center justify-center gap-3 shimmer active:scale-95 transition-all">
+                <i class="fab fa-whatsapp text-xl"></i>
+                KONFIRMASI VIA WA
+            </button>
+        </div>
+    </main>
+
+    <script src="config.js"></script>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const gameType = urlParams.get('type') || 'MLBB'; 
+        let selectedDiamond = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Judul Header
+            const headerTitle = document.getElementById('game-title');
+            headerTitle.innerText = gameType === 'FF' ? "TOP UP FREE FIRE" : "TOP UP MOBILE LEGENDS";
+
+            // Sembunyikan Zone ID jika FF
+            if (gameType === 'FF') {
+                const zoneInput = document.getElementById('zone_id');
+                const idInput = document.getElementById('game_id');
+                if(zoneInput) zoneInput.remove();
+                if(idInput) {
+                    idInput.classList.remove('col-span-2');
+                    idInput.parentElement.classList.remove('grid-cols-3');
+                    idInput.parentElement.classList.add('grid-cols-1');
+                    idInput.placeholder = "Masukkan Player ID Free Fire";
+                }
+            }
+            
+            loadGameProducts();
+        });
+
+        async function loadGameProducts() {
+            const grid = document.getElementById('diamond-grid');
+            grid.innerHTML = '<div class="col-span-2 text-center py-10 text-xs font-bold text-gray-400 italic">Mencari Produk...</div>';
+
+            try {
+                const response = await fetch(CSV_URL); 
+                const data = await response.text();
+                const rows = data.split('\n').slice(1); 
+
+                grid.innerHTML = ''; 
+
+                rows.forEach(row => {
+                    const cols = row.split(',');
+                    if (cols.length < 3) return;
+
+                    const kategori = cols[0].trim();
+                    const namaProduk = cols[1].trim();
+                    const harga = parseInt(cols[2]);
+
+                    if (kategori === gameType) {
+                        const card = document.createElement('div');
+                        card.className = "diamond-card border-2 border-gray-50 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer shadow-sm transition-all active:scale-95";
+                        card.onclick = () => selectDiamond(card, namaProduk, harga);
+                        card.innerHTML = `
+                            <i class="fas fa-gem ${gameType === 'FF' ? 'text-orange-500' : 'text-blue-500'} mb-2 text-xl"></i>
+                            <div class="text-[10px] font-black text-gray-800 uppercase leading-tight">${namaProduk}</div>
+                            <div class="text-[11px] font-bold text-blue-600 mt-2">Rp ${harga.toLocaleString('id-ID')}</div>
+                        `;
+                        grid.appendChild(card);
+                    }
+                });
+            } catch (error) {
+                grid.innerHTML = '<div class="col-span-2 text-red-500 text-center text-xs font-bold">Produk gagal dimuat. Periksa CSV_URL!</div>';
+            }
+        }
+
+        function selectDiamond(el, name, price) {
+            document.querySelectorAll('.diamond-card').forEach(c => {
+                c.classList.remove('active');
+            });
+            el.classList.add('active');
+            selectedDiamond = { name, price };
+        }
+
+        function bayarGame() {
+            const gameId = document.getElementById('game_id').value;
+            const zoneId = document.getElementById('zone_id') ? document.getElementById('zone_id').value : '';
+
+            if (!gameId) return alert("Masukkan ID Game!");
+            if (gameType === 'MLBB' && !zoneId) return alert("Masukkan Zone ID!");
+            if (!selectedDiamond) return alert("Pilih Nominal Diamond!");
+
+            const pesan = `Halo NK JAYA GAME, saya mau Top Up:\n\n` +
+                          `🎮 Game: ${gameType === 'FF' ? 'Free Fire' : 'Mobile Legends'}\n` +
+                          `🆔 ID: ${gameId} ${zoneId ? '('+zoneId+')' : ''}\n` +
+                          `💎 Produk: ${selectedDiamond.name}\n` +
+                          `💰 Harga: Rp ${selectedDiamond.price.toLocaleString('id-ID')}\n\n` +
+                          `Mohon diproses segera, Terima kasih!`;
+
+            const linkWA = `https://wa.me/${NOMOR_WA}?text=${encodeURIComponent(pesan)}`;
+            window.open(linkWA, '_blank');
+        }
+    </script>
+</body>
+</html>

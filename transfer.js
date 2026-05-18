@@ -1,0 +1,497 @@
+// ==========================================
+// LOGIKA TRANSFER BANK - NK JAYA CELL (V3.1 LIVE DATABASES)
+// ==========================================
+
+let databaseAdminBank = [];
+let databasePelangganSheet = []; // Menampung data nama pemilik rekening dari spreadsheet
+
+// Variabel Global untuk menampung URL Web App Google Apps Script Anda
+const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbwQKdBfsrmlEBlKlVZiY02jx8HeIW2AtTQrE4_tcXThibDH6X9py965fHMRj--QBiH-/exec";
+
+/**
+ * Fungsi pembantu untuk memecah baris CSV dengan aman meskipun ada tanda koma di dalam nama/teks
+ */
+function parseCSVRow(row) {
+    let insideQuote = false;
+    let entries = [];
+    let entry = '';
+    
+    for (let i = 0; i < row.length; i++) {
+        let char = row[i];
+        if (char === '"') {
+            insideQuote = !insideQuote;
+        } else if (char === ',' && !insideQuote) {
+            entries.push(entry.trim());
+            entry = '';
+        } else {
+            entry += char;
+        }
+    }
+    entries.push(entry.trim());
+    return entries;
+}
+
+/**
+ * Mengambil data tarif admin dan data riwayat/pelanggan dari Google Sheets
+ */
+async function fetchTarifAdminBank() {
+    try {
+        // 1. Ambil Data Aturan Bank (Dari ADMIN_BANK_URL)
+        const res = await fetch(ADMIN_BANK_URL);
+        const text = await res.text();
+        const rows = text.split(/\r?\n/).slice(1);
+        
+        databaseAdminBank = rows.map(row => {
+            if (!row.trim()) return null;
+            const cols = parseCSVRow(row); 
+            return { 
+                bank: cols[0]?.toUpperCase(), 
+                min: parseInt(cols[1]) || 0, 
+                max: parseInt(cols[2]) || 0, 
+                fee: parseInt(cols[3]) || 0 
+            };
+        }).filter(item => item !== null && item.bank !== "" && item.bank !== undefined);
+
+        renderDaftarBank();
+
+        // 2. Ambil Data Riwayat Pelanggan (Dari SHEET_REKENING_URL atau RIWAYAT_SALES_URL)
+        const urlRekeningLive = typeof SHEET_REKENING_URL !== 'undefined' ? SHEET_REKENING_URL : (typeof RIWAYAT_SALES_URL !== 'undefined' ? RIWAYAT_SALES_URL : null);
+        
+        if (urlRekeningLive) {
+            const resPelanggan = await fetch(urlRekeningLive);
+            const textPelanggan = await resPelanggan.text();
+            const rowsPelanggan = textPelanggan.split(/\r?\n/).slice(1);
+            
+            databasePelangganSheet = rowsPelanggan.map(row => {
+                if (!row.trim()) return null;
+                const cols = parseCSVRow(row);
+                return {
+                    // Kolom A (cols[0]) = Nomor Rekening, Kolom B (cols[1]) = Nama Pemilik
+                    norek: cols[0]?.replace(/\D/g, '').trim(), 
+                    nama: cols[1]?.replace(/"/g, "").trim().toUpperCase()
+                };
+            }).filter(item => item !== null && item.norek && item.nama);
+            
+            console.log("Database Nama Rekening Berhasil Dimuat! Total:", databasePelangganSheet.length);
+        } else {
+            console.warn("URL database rekening (SHEET_REKENING_URL) belum dikonfigurasi di config.js");
+        }
+
+    } catch (e) { 
+        console.error("Gagal sinkron database bank/pelanggan:", e); 
+    }
+}
+
+/**
+ * Menampilkan daftar bank ke dalam dropdown select
+ */
+function renderDaftarBank() {
+    const selectBank = document.getElementById('bank-tujuan');
+    if (!selectBank) return;
+
+    const listBankUnik = [...new Set(databaseAdminBank.map(item => item.bank))];
+
+    if (listBankUnik.length === 0) {
+        selectBank.innerHTML = '<option value="">Gagal memuat daftar bank</option>';
+        return;
+    }
+
+    selectBank.innerHTML = '<option value="">-- PILIH BANK --</option>' + 
+        listBankUnik.map(nama => `<option value="${nama}">${nama}</option>`).join('');
+    
+    hitungTotal();
+}
+
+/**
+ * Format Nomor Rekening otomatis memberikan spasi setiap 4 digit
+ */
+function formatSpasiRekening(value) {
+    let v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    let matches = v.match(/\d{4,16}/g);
+    let match = matches && matches[0] || '';
+    let parts = [];
+
+    for (let i = 0, len = match.length; i < len; i += 4) {
+        parts.push(match.substring(i, i + 4));
+    }
+
+    if (parts.length > 0) {
+        return parts.join(' ');
+    } else {
+        return v;
+    }
+}
+
+/**
+ * Membaca buku kontak bawaan Handphone (Android / iOS terupdate)
+ */
+async function pilihDariKontak() {
+    const norekEl = document.getElementById('no-rekening');
+    
+    if ('contacts' in navigator && 'select' in navigator.contacts) {
+        try {
+            const props = ['name', 'tel'];
+            const opts = { multiple: false };
+            const contacts = await navigator.contacts.select(props, opts);
+            
+            if (contacts.length > 0 && contacts[0].tel && contacts[0].tel.length > 0) {
+                let nomorMentah = contacts[0].tel[0].replace(/\D/g, '');
+                if(norekEl) {
+                    norekEl.value = formatSpasiRekening(nomorMentah);
+                    cekNamaPemilikRekening(nomorMentah);
+                }
+            }
+        } catch (err) {
+            console.error("Gagal membuka buku kontak:", err);
+            alert("Gagal memuat kontak atau izin ditolak.");
+        }
+    } else {
+        alert("Fitur ambil kontak tidak didukung oleh browser/perangkat ini. Silakan ketik manual.");
+    }
+}
+
+/**
+ * SINKRONISASI UTAMA: Mencocokkan nomor rekening otomatis dengan database Live Spreadsheet
+ * Menampilkan teks nama tepat di bawah input nomor rekening tujuan
+ */
+function cekNamaPemilikRekening(nomorMentah) {
+    const validArea = document.getElementById('rekening-valid');
+    const namaLabel = document.getElementById('nama-pemilik-terdeteksi');
+    const rincianTujuan = document.getElementById('rincian-tujuan');
+
+    const bank = document.getElementById('bank-tujuan')?.value || "";
+    const cleanNorek = nomorMentah.replace(/\s+/g, '').replace(/\D/g, '');
+
+    // Cari jika nomor rekening sudah diketik minimal 5 digit
+    if (cleanNorek.length < 5) {
+        if (validArea) validArea.classList.add('hidden');
+        if (rincianTujuan) rincianTujuan.innerText = "-";
+        return;
+    }
+
+    // Jalankan pencarian ke database live hasil download spreadsheet
+    const dataKetemu = databasePelangganSheet.find(p => p.norek === cleanNorek);
+
+    if (dataKetemu) {
+        if (validArea && namaLabel) {
+            namaLabel.innerText = dataKetemu.nama;
+            validArea.classList.remove('hidden');
+        }
+        if (rincianTujuan) rincianTujuan.innerText = `${bank} - ${dataKetemu.nama}`;
+    } else {
+        if (validArea && namaLabel) {
+            namaLabel.innerText = "PELANGGAN BARU";
+            validArea.classList.remove('hidden');
+        }
+        if (rincianTujuan) rincianTujuan.innerText = `${bank} (${formatSpasiRekening(cleanNorek)})`;
+    }
+}
+
+/**
+ * Format Angka menjadi Pemisah Titik (Ribuan)
+ */
+function formatRibuan(angka) {
+    let number_string = angka.replace(/[^,\d]/g, '').toString(),
+        split = number_string.split(','),
+        sisa = split[0].length % 3,
+        rupiah = split[0].substr(0, sisa),
+        ribuan = split[0].substr(sisa).match(/\d{3}/gi);
+
+    if (ribuan) {
+        let separator = sisa ? '.' : '';
+        rupiah += separator + ribuan.join('.');
+    }
+    return split[1] != undefined ? rupiah + ',' + split[1] : rupiah;
+}
+
+/**
+ * Menghitung biaya admin secara otomatis berdasarkan Bank & Nominal
+ */
+function hitungAdminSpesifik() {
+    const bankDipilih = document.getElementById('bank-tujuan')?.value.toUpperCase();
+    const inputNominal = document.getElementById('nominal-transfer');
+    
+    const nominalRaw = inputNominal?.value.replace(/\./g, '') || "0";
+    const nominal = parseInt(nominalRaw) || 0;
+
+    const tarif = databaseAdminBank.find(t => 
+        t.bank === bankDipilih && 
+        nominal >= t.min && 
+        nominal <= t.max
+    );
+
+    return tarif ? tarif.fee : 2500;
+}
+
+/**
+ * Menghitung Total dan Menyinkronkan Tampilan Rincian ke Bawah
+ */
+function hitungTotal() {
+    const inputNominal = document.getElementById('nominal-transfer')?.value || "0";
+    const nominalRaw = inputNominal.replace(/\./g, '');
+    const nominal = parseInt(nominalRaw) || 0;
+    
+    const admin = hitungAdminSpesifik();
+    const total = nominal + admin;
+
+    const elRincianNominal = document.getElementById('rincian-nominal');
+    const elRincianAdmin = document.getElementById('rincian-admin');
+    const elRincianTotal = document.getElementById('rincian-total');
+
+    if (elRincianNominal) elRincianNominal.innerText = 'Rp ' + nominal.toLocaleString('id-ID');
+    if (elRincianAdmin) elRincianAdmin.innerText = 'Rp ' + admin.toLocaleString('id-ID');
+    if (elRincianTotal) elRincianTotal.innerText = 'Rp ' + total.toLocaleString('id-ID');
+
+    const norekValue = document.getElementById('no-rekening')?.value || "";
+    cekNamaPemilikRekening(norekValue);
+}
+
+/**
+ * Menyimpan transaksi sukses ke riwayat lokal browser
+ */
+function simpanKeRiwayat(bank, norek, nominal, admin) {
+    let riwayat = JSON.parse(localStorage.getItem('nk_transfer_history')) || [];
+    
+    const waktuHariIni = new Date();
+    const jamFormat = waktuHariIni.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WITA';
+
+    const transaksiBaru = {
+        bank: bank,
+        norek: norek,
+        nominal: nominal,
+        admin: admin,
+        waktu: jamFormat
+    };
+
+    riwayat.unshift(transaksiBaru);
+    localStorage.setItem('nk_transfer_history', JSON.stringify(riwayat));
+    renderRiwayatUI();
+}
+
+/**
+ * Merender daftar riwayat ke HTML
+ */
+function renderRiwayatUI() {
+    const sectionRiwayat = document.getElementById('section-riwayat');
+    const containerDaftar = document.getElementById('daftar-riwayat');
+    if (!containerDaftar || !sectionRiwayat) return;
+
+    const riwayat = JSON.parse(localStorage.getItem('nk_transfer_history')) || [];
+
+    if (riwayat.length === 0) {
+        sectionRiwayat.classList.add('hidden');
+        return;
+    }
+
+    sectionRiwayat.classList.remove('hidden');
+    containerDaftar.innerHTML = riwayat.map(item => `
+        <div class="bg-slate-950 p-4 rounded-2xl flex justify-between items-center shadow-md relative border-l-4 border-green-500">
+            <div>
+                <span class="block text-[8px] font-black text-green-400 uppercase tracking-widest">${item.waktu} - SUCCESS</span>
+                <span class="text-white font-black text-xs uppercase">${item.bank}</span>
+                <span class="text-gray-400 font-bold text-[10px] block tracking-wider">${item.norek}</span>
+            </div>
+            <div class="text-right">
+                <span class="block text-white font-black text-sm">Rp ${item.nominal.toLocaleString('id-ID')}</span>
+                <span class="text-gray-400 font-bold text-[9px]">Admin: Rp ${item.admin.toLocaleString('id-ID')}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+/**
+ * Menghapus seluruh isi riwayat
+ */
+function bersihkanRiwayat() {
+    if (confirm("Apakah Anda yakin ingin menghapus semua riwayat transfer?")) {
+        localStorage.removeItem('nk_transfer_history');
+        renderRiwayatUI();
+    }
+}
+
+/**
+ * Memproses transaksi dan mengirimkan data akhir ke WhatsApp Admin
+ */
+function prosesTransfer() {
+    const bankEl = document.getElementById('bank-tujuan');
+    const norekEl = document.getElementById('no-rekening');
+    const nominalEl = document.getElementById('nominal-transfer');
+    const namaPemilik = document.getElementById('nama-pemilik-terdeteksi')?.innerText || "PELANGGAN BARU";
+
+    const bank = bankEl ? bankEl.value : "";
+    const norekDenganSpasi = norekEl ? norekEl.value : "";
+    const norekTanpaSpasi = norekDenganSpasi.replace(/\s+/g, '');
+    
+    const nominalRaw = nominalEl ? nominalEl.value.replace(/\./g, '') : "0";
+    const nominal = parseInt(nominalRaw) || 0;
+    const admin = hitungAdminSpesifik();
+    const total = nominal + admin;
+
+    if (!bank || norekTanpaSpasi.length < 5 || nominal < 10000) {
+        alert("⚠️ Data tidak lengkap! Pastikan Bank dipilih, No. Rekening diisi minimal 5 digit, and nominal minimal Rp 10.000");
+        return;
+    }
+
+    let pesan = `Halo Admin NK JAYA CELL, saya ingin melakukan kirim uang:\n\n`;
+    pesan += `*KATEGORI: KIRIM UANG*\n`;
+    pesan += `Bank Tujuan: ${bank}\n`;
+    pesan += `No. Rekening: ${norekTanpaSpasi}\n`; 
+    pesan += `Nama Pemilik: ${namaPemilik}\n`;
+    pesan += `Nominal Transfer: Rp ${nominal.toLocaleString('id-ID')}\n`;
+    pesan += `Biaya Admin: Rp ${admin.toLocaleString('id-ID')}\n`;
+    pesan += `---------------------------------------\n`;
+    pesan += `*TOTAL BAYAR: Rp ${total.toLocaleString('id-ID')}*\n\n`;
+    pesan += `Mohon segera diproses ya, terima kasih.`;
+
+    simpanKeRiwayat(bank, norekDenganSpasi, nominal, admin);
+    simpanKeSpreadsheet();
+
+    const url = `https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(pesan)}`;
+    window.open(url, '_blank');
+    
+    if(norekEl) norekEl.value = "";
+    if(nominalEl) nominalEl.value = "";
+    hitungTotal();
+}
+
+/**
+ * Fungsi Rekam Data Transaksi ke Google Sheets
+ */
+function simpanKeSpreadsheet() {
+    const bankEl = document.getElementById('bank-tujuan');
+    const norekEl = document.getElementById('no-rekening');
+    const nominalEl = document.getElementById('nominal-transfer');
+    const namaPemilikEl = document.getElementById('nama-pemilik-terdeteksi');
+
+    const bank = bankEl ? bankEl.value : "";
+    const norekMentah = norekEl ? norekEl.value : "";
+    const nominalRaw = nominalEl ? nominalEl.value.replace(/\./g, '') : "0";
+
+    const norekBersih = norekMentah.replace(/\s+/g, ''); 
+    const nominal = parseInt(nominalRaw) || 0;
+    const admin = hitungAdminSpesifik();
+    const totalBayar = nominal + admin;
+    const namaPemilik = namaPemilikEl ? namaPemilikEl.innerText : "PELANGGAN BARU";
+
+    if (!bank || norekBersih.length < 5 || nominal < 10000) return; 
+
+    const formData = new FormData();
+    formData.append('tanggal', new Date().toLocaleString('id-ID'));
+    formData.append('kategori', 'KIRIM UANG');
+    formData.append('bank', bank);
+    formData.append('rekening', norekBersih); 
+    formData.append('nama_pemilik', namaPemilik);
+    formData.append('nominal', nominal);
+    formData.append('admin', admin);
+    formData.append('total', totalBayar);
+
+    fetch(URL_APPS_SCRIPT, {
+        method: 'POST',
+        body: formData,
+        mode: 'no-cors'
+    })
+    .then(() => console.log("✅ Berhasil terekam di Google Sheets."))
+    .catch((error) => console.error("❌ Gagal ke Google Sheets:", error));
+}
+
+/**
+ * Inisialisasi utama saat seluruh komponen halaman siap
+ */
+window.addEventListener('load', () => {
+    const elBank = document.getElementById('bank-tujuan');
+    const elNorek = document.getElementById('no-rekening');
+    const elNominal = document.getElementById('nominal-transfer');
+
+    renderRiwayatUI();
+
+    if (elBank) {
+        fetchTarifAdminBank();
+        elBank.addEventListener('change', hitungTotal);
+    }
+
+    if (elNorek) {
+        elNorek.addEventListener('input', function() {
+            let cleanVal = this.value.replace(/[^0-9]/g, '');
+            this.value = formatSpasiRekening(cleanVal);
+            cekNamaPemilikRekening(this.value);
+        });
+    }
+
+    if (elNominal) {
+        elNominal.setAttribute('type', 'text');
+        elNominal.setAttribute('inputmode', 'numeric');
+        
+        elNominal.addEventListener('input', function() {
+            this.value = formatRibuan(this.value);
+            hitungTotal();
+        });
+    }
+});
+
+async function prosesTransferKeSheet() {
+  // 1. Ambil nilai data dari elemen-elemen input form Anda
+  const bankInput = document.getElementById('bank-select')?.value || 'BRI'; // Contoh id dropdown bank
+  const rekeningInput = document.getElementById('account-number')?.value || '';
+  const namaInput = document.getElementById('nama-penerima-text')?.innerText || 'PELANGGAN BARU';
+  const nominalInput = parseInt(document.getElementById('transfer-amount')?.value) || 0;
+  
+  // Validasi data minimal sebelum dikirim
+  if (!rekeningInput || nominalInput <= 0) {
+      alert("Mohon isi nomor rekening dan nominal transfer dengan benar!");
+      return;
+  }
+
+  // 计算 (Hitung rincian pembayaran)
+  const biayaAdmin = 5000; 
+  const totalBayar = nominalInput + biayaAdmin;
+  const waktuWita = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }); // Jam WITA NK Jaya Cell
+
+  // 2. Susun data menjadi format JSON paket objek
+  const dataTransfer = {
+      tanggal: waktuWita,
+      bank: bankInput,
+      rekening: "'" + rekeningInput, // Tambah tanda petik (') agar angka 0 di depan tidak hilang di Excel/Sheets
+      nama: namaInput,
+      nominal: nominalInput,
+      admin: biayaAdmin,
+      total: totalBayar,
+      status: "Pending" // Status awal sebelum dikonfirmasi admin
+  };
+
+  try {
+      // 3. Kirim data ke Google Sheets menggunakan Fetch API
+      await fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors', // Penting untuk menghindari eror CORS lintas domain
+          headers: {
+              'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(dataTransfer)
+      });
+
+      alert("Data transaksi transfer berhasil dicatat ke Sheets!");
+      
+      // Setelah data masuk ke sheet, lanjut pemicu buka WhatsApp jika diperlukan
+      bukaWhatsAppTransfer(dataTransfer);
+
+  } catch (error) {
+      console.error("Gagal mengirim data ke spreadsheet:", error);
+      alert("Gagal mencatat transaksi, tapi proses tetap dilanjutkan.");
+  }
+}
+
+// Fungsi tambahan untuk integrasi kirim struk ke WA Admin
+function bukaWhatsAppTransfer(data) {
+    const msg = `💸 *TRANSFER BARU - NK JAYA CELL* 💸\n` +
+                `--------------------------------------------\n` +
+                `🏛️ Bank: ${data.bank}\n` +
+                `💳 Rekening: *${data.rekening.replace("'", "")}*\n` +
+                `👤 Nama: *${data.nama}*\n` +
+                `💰 Nominal: Rp ${data.nominal.toLocaleString('id-ID')}\n` +
+                `⚡ Admin: Rp ${data.admin.toLocaleString('id-ID')}\n` +
+                `💵 Total: *Rp ${data.total.toLocaleString('id-ID')}*\n` +
+                `--------------------------------------------\n` +
+                `Mohon segera diproses! 🙏`;
+                
+    window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(msg)}`, '_blank');
+}

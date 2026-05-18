@@ -118,7 +118,7 @@
         <div class="mt-4 mb-8">
             <h2 class="text-[10px] font-black text-gray-400 uppercase mb-4 tracking-widest ml-2">Layanan Game</h2>
             <div class="px-2">
-                <button onclick="bukaHalamanGame()" class="w-full bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between active:scale-95 transition-all">
+                <button onclick="window.location.href='gameml.html'" class="w-full bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between active:scale-95 transition-all">
                     <div class="flex items-center gap-4">
                         <div class="bg-blue-100 p-3 rounded-2xl text-blue-600"><i class="fas fa-gamepad text-xl"></i></div>
                         <div class="text-left">
@@ -144,12 +144,7 @@
         <div id="riwayat-list" class="px-1 mt-8"></div>
     </main>
 
-    <div id="cart-floating" onclick="bukaModalKeranjang()" 
-         class="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-2xl flex items-center justify-center cursor-pointer active:scale-90 transition-all z-[9999]" 
-         style="display: none;">
-        <i class="fas fa-shopping-cart text-xl"></i>
-        <span id="cart-count" class="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-full border-2 border-white">0</span>
-    </div>
+   
 
     <div id="modal-bayar" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10000] hidden items-end sm:items-center justify-center transition-all opacity-0 [&.active]:flex [&.active]:opacity-100">
     <div class="bg-white w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 shadow-2xl transform translate-y-10 [.active_&]:translate-y-0 transition-transform duration-300 overflow-y-auto no-scrollbar max-h-[90vh]">
@@ -215,6 +210,24 @@
             </div>
         </div>
     </div>
+
+<nav class="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-md bg-white/90 backdrop-blur-xl p-2 rounded-[2.5rem] shadow-2xl flex justify-between items-center z-[9999] border border-white/20">
+        <a href="index.html" class="flex-1 flex flex-col items-center gap-1 text-blue-600 py-2 bg-blue-50 rounded-full transition-all">
+            <i class="fas fa-store text-xl"></i>
+            <span class="text-[8px] font-black uppercase tracking-tighter">Produk</span>
+        </a>
+        <a href="index2.html" class="flex-1 flex flex-col items-center gap-1 text-gray-400 py-2">
+            <i class="fas fa-exchange-alt text-xl"></i>
+            <span class="text-[8px] font-black uppercase">Transfer</span>
+        </a>
+        <button onclick="bukaModalKeranjang()" class="flex-1 flex flex-col items-center gap-1 text-gray-400 py-2 relative">
+            <i class="fas fa-shopping-basket text-xl"></i>
+            <span id="cart-count" class="absolute top-1 right-1/2 translate-x-4 bg-red-500 text-white text-[9px] w-5 h-5 rounded-full flex items-center justify-center font-black border-2 border-white shadow-sm">0</span>
+            <span class="text-[8px] font-black uppercase">Keranjang</span>
+        </button>
+    </nav>
+
+
 
     <script src="script.js"></script>
 
