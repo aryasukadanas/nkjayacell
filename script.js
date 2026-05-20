@@ -1,488 +1,827 @@
-// ==========================================
-// KONFIGURASI NK JAYA CELL
-// ==========================================
+// ==========================================================
+// CORE ENGINE SYSTEM APPS V3.6 - NK JAYA CELL
+// ==========================================================
 const WA_ADMIN = "6285847909692";
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=0&single=true&output=csv";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwh0lE_0ebqn2ScCWvxioXBJYwLl2qT3aGVHk_W0QHTRP21lWb88djzWMCrihY0ZkHj/exec";
 
 const iconMap = {
-    'Pulsa': 'PULSA.png', 'Indosat': 'logo_indosat.png', 'XL': 'logo_xl.png', 'Telkomsel': 'logo_telkomsel.png',
-    'Axis': 'logo_axis.png', 'Tri': 'logo_tri.png', 'Smartfren': 'logo_smartfren.png', 'By.U': 'logo_byu.png',
-    'ShopeePay': 'logo_shopeepay.png', 'Gopay': 'logo_gopay.jpeg', 'Dana': 'logo_Dana.jpeg',
-    'MLBB': 'Logo_MLBB.jpeg', 'FREE FIRE': 'Logo_Free_Fire.jpeg'
+    'PULSA': 'PULSA.png', 'INDOSAT': 'logo_indosat.png', 'XL': 'logo_xl.png', 'TELKOMSEL': 'logo_telkomsel.png',
+    'AXIS': 'logo_axis.png', 'TRI': 'logo_tri.png', 'SMARTFREN': 'logo_smartfren.png', 'BY.U': 'logo_byu.png',
+    'SHOPEEPAY': 'logo_shopeepay.png', 'GOPAY': 'logo_gopay.jpeg', 'DANA': 'logo_Dana.jpeg', 
+    'PLN': 'logo_pln.png', 'TOKEN PLN': 'logo_pln.png', 'LAINNYA': 'PULSA.png'
 };
 
-const prefixMap = {
-    'Indosat': ['0814','0815','0816','0855','0856','0857','0858'],
-    'Telkomsel': ['0811','0812','0813','0821','0822','0823','0851','0852','0853'],
-    'XL': ['0817','0818','0819','0859','0877','0878'],
-    'Axis': ['0831','0832','0833','0838'],
-    'Tri': ['0895','0896','0897','0898','0899'],
-    'Smartfren': ['0881','0882','0883','0884','0885','0886','0887','0888','0889'],
-    'By.U': ['0851']
-};
+// ==========================================================
+// CONFIG TAMBAHAN UNTUK QRIS DINAMIS
+// ==========================================================
+const MASTER_TEXT_QRIS = "00020101021126570011ID.DANA.WWW011893600915307833630202090783363020303UMI51440014ID.CO.QRIS.WWW0215ID10200446107530303UMI5204549953033605802ID5912NK JAYA CELL6013Kab. Jembrana61058225263045BED"; 
 
-let db = {};
-let keranjang = [];
-let totalAkhirDenganKode = 0;
-let currentTab = 'DATA'; 
-let currentSelectedCat = ''; 
+// Fungsi untuk generate CRC16 (Wajib untuk standardisasi QRIS EMVCo)
+function kelolaCRC16(str) {
+    let crc = 0xFFFF;
+    for (let c = 0; c < str.length; c++) {
+        let cls = str.charCodeAt(c);
+        crc ^= cls << 8;
+        for (let i = 0; i < 8; i++) {
+            if (crc & 0x8000) {
+                crc = (crc << 1) ^ 0x1021;
+            } else {
+                crc = crc << 1;
+            }
+        }
+    }
+    crc &= 0xFFFF;
+    let hasilCrc = crc.toString(16).toUpperCase();
+    return hasilCrc.padStart(4, '0');
+}
 
-// ==========================================
-// INISIALISASI DATA (3 LEVEL HARGA)
-// ==========================================
-async function init() {
+// Fungsi mengubah QRIS Statis menjadi Dinamis dengan Nominal + Kode Unik
+function buatTeksQrisDinamis(nominal) {
+    let qrisAwal = MASTER_TEXT_QRIS.substring(0, MASTER_TEXT_QRIS.indexOf("5802ID"));
+    let nominalString = nominal.toString();
+    let formatNominal = "54" + nominalString.length.toString().padStart(2, '0') + nominalString;
+    let qrisSisa = MASTER_TEXT_QRIS.substring(MASTER_TEXT_QRIS.indexOf("5802ID"));
+    
+    // Potong string bawaan CRC lama di bagian paling akhir (4 karakter terakhir)
+    qrisSisa = qrisSisa.substring(0, qrisSisa.length - 4);
+    
+    let gabunganTeks = qrisAwal + formatNominal + qrisSisa;
+    let crcBaru = kelolaCRC16(gabunganTeks);
+    
+    return gabunganTeks + crcBaru;
+}
+
+let rawDatabaseRows = [];
+let masterPulsaGroup = {};
+let masterKuotaGroup = {};
+let masterTokenGroup = {}; 
+
+let tabUtamaAktif = "KUOTA";
+let operatorAktif = "";     
+let keranjangBelanja = null; 
+let intervalMainTimer = null;
+let listCacheRiwayat = []; 
+
+document.addEventListener('DOMContentLoaded', () => {
+    muatDataDanPisahKategori();
+});
+
+/**
+ * 1. AMBIL KONTAK HP NATIVE (CONTACT PICKER API)
+ */
+async function bukaDaftarKontakHP() {
+    const props = ['tel'];
+    const opts = { multiple: false };
+
+    if ('contacts' in navigator && 'ContactsManager' in window) {
+        try {
+            const contact = await navigator.contacts.select(props, opts);
+            if (contact && contact.length > 0 && contact[0].tel && contact[0].tel.length > 0) {
+                let nomorBersih = contact[0].tel[0].replace(/\s+/g, '').replace(/-/g, '').replace(/^\+62/, '0');
+                const inputUtama = document.getElementById('search-phone-input');
+                if(inputUtama) {
+                    inputUtama.value = nomorBersih;
+                    fiturDeteksiOtomatisDanCariProvider(nomorBersih);
+                }
+            }
+        } catch (err) {
+            console.log("Akses kontak ditolak atau dibatalkan.", err);
+        }
+    } else {
+        alert("Browser Anda tidak mendukung Contact Picker. Silakan ketik nomor secara manual.");
+    }
+}
+
+/**
+ * 2. LOAD DATA SPREADSHEET REAL-TIME
+ */
+async function muatDataDanPisahKategori() {
     try {
-        const res = await fetch(SHEET_CSV_URL);
-        const text = await res.text();
-        const rows = text.split(/\r?\n/).slice(1);
-        db = {};
-        rows.forEach(row => {
-            let cols = row.split(',');
-            if (cols.length >= 3) {
-                const cat = cols[0].trim().replace(/"/g, "");
-                const name = cols[1].trim().replace(/"/g, "");
-                const normalPrice = parseInt(cols[2].replace(/\D/g, '')) || 0;
-                const diskonPrice = cols[3] ? parseInt(cols[3].replace(/\D/g, '')) : 0;
-                const flashPrice = cols[4] ? parseInt(cols[4].replace(/\D/g, '')) : 0;
-                const flashEnd = cols[5] ? cols[5].trim().replace(/"/g, "") : "";
+        const response = await fetch(SHEET_CSV_URL);
+        const text = await response.text();
+        rawDatabaseRows = text.split(/\r?\n/).slice(1);
 
-                if (!db[cat]) db[cat] = [];
-                db[cat].push({ 
-                    n: name, p: normalPrice, disc: diskonPrice, 
-                    fls: flashPrice, flsEnd: flashEnd 
-                });
+        masterPulsaGroup = {};
+        masterKuotaGroup = {};
+        masterTokenGroup = {};
+
+        rawDatabaseRows.forEach(row => {
+            if (!row.trim()) return;
+            const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+            if (cols.length < 3) return;
+
+            const kategoriAsli = cols[0].trim().replace(/"/g, "");
+            const namaProduk = cols[1].trim().replace(/"/g, "");
+            const hargaNormal = parseInt(cols[2]?.replace(/\D/g, '')) || 0;
+            const hargaPromo = parseInt(cols[3]?.replace(/\D/g, '')) || 0;
+            const hargaFlash = parseInt(cols[4]?.replace(/\D/g, '')) || 0;
+            const waktuMundur = cols[5]?.trim().replace(/"/g, "") || "";
+
+            const upperKat = kategoriAsli.toUpperCase();
+            const upperNama = namaProduk.toUpperCase();
+
+            const itemObject = {
+                nama: namaProduk, kategoriAsli: kategoriAsli,
+                priceNormal: hargaNormal, pricePromo: hargaPromo, priceFlash: hargaFlash,
+                endTimer: waktuMundur
+            };
+
+            if (upperKat.includes("PLN") || upperKat.includes("TOKEN") || upperNama.includes("PLN") || upperNama.includes("TOKEN")) {
+                let opKey = "TOKEN PLN";
+                if (!masterTokenGroup[opKey]) masterTokenGroup[opKey] = [];
+                masterTokenGroup[opKey].push(itemObject);
+            } 
+            else if (upperKat.includes("PULSA") || upperNama.includes("PULSA")) {
+                let operatorKey = dapatkanOperatorKey(upperKat, upperNama);
+                if (operatorKey === "LAINNYA") operatorKey = "PULSA";
+                if (!masterPulsaGroup[operatorKey]) masterPulsaGroup[operatorKey] = [];
+                masterPulsaGroup[operatorKey].push(itemObject);
+            } 
+            else {
+                let operatorKey = dapatkanOperatorKey(upperKat, upperNama);
+                if (!masterKuotaGroup[operatorKey]) masterKuotaGroup[operatorKey] = [];
+                masterKuotaGroup[operatorKey].push(itemObject);
             }
         });
-        renderMenu();
-    } catch (e) { console.error("Gagal sinkron data produk"); }
+
+        gantiTabUtama("KUOTA");
+    } catch (error) {
+        console.error("Gagal memuat database spreadsheet:", error);
+    }
 }
 
-function renderMenu() {
-    const container = document.getElementById('menu-container');
-    if(!container) return;
-    container.innerHTML = '';
-    Object.keys(db).forEach(cat => {
-        if (cat === 'MLBB' || cat === 'FREE FIRE') return;
-        const icon = iconMap[cat] || 'logo_default.png';
-        container.innerHTML += `
-            <div class="menu-item op-card flex flex-col items-center justify-center p-2 rounded-2xl bg-white border border-gray-100 shadow-sm active:scale-90 transition-all w-full h-full" id="menu-${cat}" onclick="selectCategory('${cat}')">
-                <div class="w-10 h-10 flex items-center justify-center mb-1"><img src="${icon}" class="max-w-full max-h-full object-contain"></div>
-                <div class="text-[9px] font-black text-gray-700 uppercase text-center leading-tight w-full break-words">${cat}</div>
-            </div>`;
-    });
+function dapatkanOperatorKey(upperKat, upperNama) {
+    if (upperKat.includes("TELKOMSEL") || upperNama.includes("TELKOMSEL")) return "TELKOMSEL";
+    if (upperKat.includes("INDOSAT") || upperKat.includes("ISAT") || upperNama.includes("INDOSAT") || upperNama.includes("ISAT")) return "INDOSAT";
+    if (upperKat.includes("XL") || upperNama.includes("XL")) return "XL";
+    if (upperKat.includes("AXIS") || upperNama.includes("AXIS")) return "AXIS";
+    if (upperKat.includes("TRI") || upperKat.includes("THREE") || upperKat.includes("3") || upperNama.includes("TRI")) return "TRI";
+    if (upperKat.includes("SMARTFREN") || upperNama.includes("SMARTFREN")) return "SMARTFREN";
+    if (upperKat.includes("BY.U") || upperKat.includes("BYU") || upperNama.includes("BY.U")) return "BY.U";
+    if (upperKat.includes("DANA")) return "DANA";
+    if (upperKat.includes("GOPAY")) return "GOPAY";
+    if (upperKat.includes("SHOPEE")) return "SHOPEEPAY";
+    return "LAINNYA";
 }
 
-// ==========================================
-// LOGIKA PRODUK & 3 LEVEL HARGA
-// ==========================================
-function switchTab(type) {
-    currentTab = type;
-    const btnPulsa = document.getElementById('tab-pulsa');
-    const btnData = document.getElementById('tab-data');
-    btnPulsa.className = type === 'PULSA' ? "tab-btn flex-1 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all bg-white text-blue-600 shadow-sm" : "tab-btn flex-1 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all text-gray-500";
-    btnData.className = type === 'DATA' ? "tab-btn flex-1 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all bg-white text-blue-600 shadow-sm" : "tab-btn flex-1 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all text-gray-500";
-    if (currentSelectedCat) renderListProduk(currentSelectedCat);
-}
+/**
+ * 3. ENGINE DETEKSI PROVIDER NOMOR HP (SUDAH DIPERBAIKI)
+ */
+function fiturDeteksiOtomatisDanCariProvider(noHp) {
+    if (tabUtamaAktif === "TOKEN") return; 
+    const helper = document.getElementById('helper-deteksi-operator');
+    if (!noHp || noHp.length < 4) {
+        if(helper) helper.classList.add('hidden');
+        return;
+    }
 
-function selectCategory(cat) {
-    currentSelectedCat = cat;
-    document.querySelectorAll('.op-card').forEach(el => el.classList.remove('active'));
-    const activeMenu = document.getElementById(`menu-${cat}`);
-    if(activeMenu) activeMenu.classList.add('active');
-    document.getElementById('category-title').innerText = (cat === 'MLBB' || cat === 'FREE FIRE') ? "PRODUK " + cat : `${currentTab} ${cat}`;
-    renderListProduk(cat);
-}
+    let providerDitemukan = "";
+    if (/^(0851)/.test(noHp)) {
+        providerDitemukan = "BY.U";
+    }
+    else if (/^(0811|0812|0813|0821|0822|0823)/.test(noHp)) {
+        providerDitemukan = "TELKOMSEL";
+    }
+    else if (/^(0814|0815|0816|0855|0856|0857|0858)/.test(noHp)) providerDitemukan = "INDOSAT";
+    else if (/^(0817|0818|0819|0859|0877|0878)/.test(noHp)) providerDitemukan = "XL";
+    else if (/^(0831|0832|0833|0838)/.test(noHp)) providerDitemukan = "AXIS";
+    else if (/^(0895|0896|0897|0898|0899)/.test(noHp)) providerDitemukan = "TRI";
+    else if (/^(0881|0882|0883|0884|0885|0886|0887|0888|0889)/.test(noHp)) providerDitemukan = "SMARTFREN";
 
-function renderListProduk(cat) {
-    const list = document.getElementById('list-paket');
-    list.innerHTML = '';
-    if (!db[cat]) return;
-
-    const filteredProduk = db[cat].filter(item => {
-        if (cat === 'MLBB' || cat === 'FREE FIRE') return true;
-        const nama = item.n.toUpperCase();
-        return currentTab === 'PULSA' ? nama.includes('PULSA') : !nama.includes('PULSA');
-    });
-
-    filteredProduk.forEach(item => {
-        let hargaFinal = item.p;
-        let labelHargaCoret = "";
-        let badgeTopRight = "";
-        let timerHTML = "";
-        
-        const sekarang = new Date().getTime();
-        // Memastikan format tanggal universal
-        const tglFormat = item.flsEnd ? item.flsEnd.replace(/[./]/g, '-') : "";
-        const flashEnd = tglFormat ? new Date(tglFormat).getTime() : 0;
-
-        // PRIORITAS 1: FLASH SALE (Lebih Menarik)
-        if (item.fls > 0 && flashEnd > sekarang) {
-            hargaFinal = item.fls;
-            labelHargaCoret = `<span class="text-gray-400 text-xs line-through mr-2">Rp ${item.p.toLocaleString('id-ID')}</span>`;
-            
-            const tId = "timer-" + Math.random().toString(36).substr(2, 9);
-            
-            badgeTopRight = `<div class="absolute top-0 right-0 badge-flash animate-pulse-soft"><i class="fas fa-bolt mr-1"></i> FLASH SALE</div>`;
-            
-            timerHTML = `
-                <div class="flex items-center gap-1.5 mt-2 bg-red-50 p-1.5 rounded-lg border border-red-100">
-                    <i class="fas fa-clock text-red-600 text-xs"></i>
-                    <div class="text-[10px] font-black text-red-700" id="${tId}">00:00:00</div>
-                </div>`;
-                
-            setTimeout(() => startCountdown(tglFormat, tId), 100);
-        } 
-        // PRIORITAS 2: PROMO (Lebih Elegan)
-        else if (item.disc > 0) {
-            hargaFinal = item.disc;
-            labelHargaCoret = `<span class="text-gray-400 text-xs line-through mr-2">Rp ${item.p.toLocaleString('id-ID')}</span>`;
-            badgeTopRight = `<div class="absolute top-0 right-0 bg-blue-600 text-white text-[8px] font-black px-3 py-1 rounded-bl-xl shadow-sm"><i class="fas fa-tags mr-1"></i> PROMO</div>`;
+    if (providerDitemukan) {
+        if(helper) {
+            helper.classList.remove('hidden');
+            helper.innerHTML = `<i class="fas fa-robot text-emerald-600"></i> Terdeteksi: <span class="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black text-[9px]">${providerDitemukan}</span>`;
         }
 
-        // Split nama produk untuk memisahkan Deskripsi
-        let part = item.n.split('|');
-        const namaUtama = part[0].trim();
-        const deskripsi = part[1] ? part[1].trim() : "";
+        // PERBAIKAN LOGIKA DISINI (PULSA ke masterPulsaGroup, KUOTA ke masterKuotaGroup)
+        const databaseTarget = (tabUtamaAktif === "PULSA") ? masterPulsaGroup : masterKuotaGroup;
+        if (databaseTarget[providerDitemukan]) {
+            operatorAktif = providerDitemukan;
+            function renderPilihanTombolSliderAktif() {
+    const container = document.getElementById('category-container');
+    if(!container) return;
+    container.innerHTML = "";
 
-        list.innerHTML += `
-            <div onclick="tambahKeKeranjang('${item.n}', ${hargaFinal}, '${cat}')" 
-                 class="bg-white p-5 rounded-3xl shadow-sm hover:shadow-md flex justify-between items-center active:scale-95 transition-all border border-gray-100 mb-4 relative overflow-hidden animate-fade-in group">
-                
-                ${badgeTopRight}
-                
-                <div class="flex-1 pr-4">
-                    <div class="text-base font-black text-gray-900 uppercase leading-tight group-hover:text-blue-700 transition-colors">
-                        ${namaUtama}
-                    </div>
-                    ${deskripsi ? `<div class="text-[10px] text-gray-500 font-medium mt-1.5 italic bg-gray-50 px-2 py-0.5 rounded-md inline-block">${deskripsi}</div>` : ""}
-                    ${timerHTML}
-                </div>
-                
-                <div class="text-right flex flex-col items-end shrink-0">
-                    ${labelHargaCoret}
-                    <div class="text-blue-600 font-black text-xl tracking-tight">
-                        Rp ${hargaFinal.toLocaleString('id-ID')}
-                    </div>
-                    <div class="text-[9px] text-white font-black uppercase mt-2 px-3 py-1 rounded-full bg-blue-600 shadow-sm group-hover:bg-blue-700 transition-colors">
-                        🛒 Pilih
-                    </div>
-                </div>
-            </div>`;
+    // MEMAKSA KONTAINER AGAR BISA DIGESER SECARA HORIZONTAL VIA TAILWIND
+    container.className = "flex flex-row overflow-x-auto snap-x snap-mandatory whitespace-nowrap gap-2 py-2 w-full max-w-full";
+
+    let databaseTarget = {};
+    if (tabUtamaAktif === "PULSA") databaseTarget = masterPulsaGroup;
+    else if (tabUtamaAktif === "KUOTA") databaseTarget = masterKuotaGroup;
+    else if (tabUtamaAktif === "TOKEN") databaseTarget = masterTokenGroup;
+
+    const listOperatorTerdeteksi = Object.keys(databaseTarget);
+
+    listOperatorTerdeteksi.forEach(op => {
+        const btn = document.createElement('button');
+        // shrink-0 sangat penting agar tombol tidak gepeng/mengecil dan bisa meluber ke kanan agar bisa digeser
+        btn.className = `operator-slider-btn shrink-0 font-black text-xs px-4 py-2.5 rounded-xl transition-all border flex items-center gap-2 snap-center ${
+            op === operatorAktif ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-gray-700 border-gray-200 shadow-sm'
+        }`;
+
+        const fileIcon = iconMap[op] || "PULSA.png";
+        btn.innerHTML = `<img src="${fileIcon}" class="w-4 h-4 object-contain rounded" onerror="this.src='PULSA.png'"> <span>${op}</span>`;
+        btn.onclick = () => {
+            operatorAktif = op;
+            renderPilihanTombolSliderAktif();
+            renderCardsProduk();
+        };
+        container.appendChild(btn);
     });
 }
-
-// ==========================================
-// RIWAYAT TRANSAKSI (SORT TERBARU)
-// ==========================================
-async function renderRiwayat() {
-    const container = document.getElementById('riwayat-list');
-    const num = document.getElementById('phone-number').value;
-    if(!container || num.length < 10) return;
-
-    try {
-        const response = await fetch(`${SCRIPT_URL}?nomor=${num}`);
-        const data = await response.json();
-        if(!data || data.length === 0) { container.innerHTML = ""; return; }
-
-        container.innerHTML = `<h2 class="text-[10px] font-black text-gray-400 uppercase mb-4 mt-8 tracking-widest ml-2 italic">Riwayat Transaksi</h2>`;
-        
-        // SORT TERBARU KE LAMA
-        data.sort((a, b) => {
-            let tglA = new Date(a.tgl.toString().replace(",", "").replace(/\./g, "-").replace(/\//g, "-"));
-            let tglB = new Date(b.tgl.toString().replace(",", "").replace(/\./g, "-").replace(/\//g, "-"));
-            return tglB - tglA;
-        });
-
-        data.forEach(trx => {
-            let tglAsli = trx.tgl ? trx.tgl.toString() : "";
-            let bersih = tglAsli.replace(",", "").replace(/\./g, ":").replace(/\//g, "-");
-            let bagian = bersih.split(" ");
-            let tglSaja = bagian[0] || ""; let jamSaja = bagian[1] || "";
-            let d = tglSaja.split("-");
-            let tglCantik = `${(d[0]||"00").padStart(2,'0')}:${(d[1]||"00").padStart(2,'0')}:${d[2]||"0000"} ${(jamSaja.split(":")[0]||"00").padStart(2,'0')}:${(jamSaja.split(":")[1]||"00").padStart(2,'0')}`;
-
-            let color = trx.status === "Sukses" ? "text-green-600" : (trx.status === "Gagal" ? "text-red-600" : "text-yellow-600");
-            container.innerHTML += `
-                <div class="bg-white p-4 rounded-3xl shadow-sm border border-gray-50 mb-3 flex justify-between items-center">
-                    <div class="flex-1 pr-2">
-                        <div class="text-[10px] font-black text-gray-800 uppercase leading-tight">${trx.produk}</div>
-                        <div class="text-[8px] text-gray-400 font-bold mt-1 uppercase tracking-tighter"><i class="far fa-clock mr-1"></i> ${tglCantik} WITA</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-[11px] font-black text-blue-600">Rp ${parseInt(trx.harga).toLocaleString('id-ID')}</div>
-                        <div class="text-[8px] font-black uppercase mt-1 px-2 py-0.5 rounded-full bg-gray-50 inline-block ${color}">${trx.status}</div>
-                    </div>
-                </div>`;
-        });
-    } catch (e) { console.log("Gagal memuat riwayat"); }
-}
-
-// ==========================================
-// KERANJANG & WHATSAPP
-// ==========================================
-function tambahKeKeranjang(n, p, cat) {
-    const num = document.getElementById('phone-number').value;
-    if (num.length < 10) { alert("Masukkan Nomor WhatsApp Tujuan!"); return; }
-    keranjang.push({ no: num, nama: n, harga: p, kategori: cat });
-    updateKeranjangUI();
-    alert("Produk berhasil ditambah ke keranjang!");
-}
-
-function updateKeranjangUI() {
-    const cartBtn = document.getElementById('cart-floating');
-    const countEl = document.getElementById('cart-count');
-    if(countEl) countEl.innerText = keranjang.length;
-    if(cartBtn) cartBtn.style.display = keranjang.length > 0 ? 'flex' : 'none';
-}
-
-function bukaModalKeranjang() {
-   const container = document.getElementById('m-pkg');
-    const qrisBox = document.getElementById('qris-box'); // Ambil elemen QRIS
-    container.innerHTML = ''; 
-    let subtotal = 0;
-
-    keranjang.forEach((item, i) => {
-        subtotal += item.harga;
-        container.innerHTML += `
-            <div class="flex justify-between items-center bg-gray-50 p-4 rounded-2xl border border-gray-100 animate-fade-in">
-                <div class="flex-1 pr-3">
-                    <div class="text-xs font-black text-gray-800 uppercase leading-tight">${item.nama}</div>
-                    <div class="text-[9px] text-blue-600 font-bold mt-1 uppercase italic tracking-tighter">
-                        <i class="fas fa-phone-alt mr-1"></i> ${item.no}
-                    </div>
-                </div>
-                <div class="text-right">
-                    <div class="text-xs font-black text-gray-900 font-mono">Rp ${item.harga.toLocaleString('id-ID')}</div>
-                    <div class="text-[9px] text-red-500 font-black uppercase mt-1 cursor-pointer hover:underline" onclick="hapusItem(${i})">
-                        <i class="fas fa-trash"></i> Hapus
-                    </div>
-                </div>
-            </div>`;
-    });
-
-    const kodeUnik = Math.floor(Math.random() * 99) + 1;
-    totalAkhirDenganKode = subtotal + kodeUnik;
-
-    // TAMPILKAN QRIS
-    if (qrisBox) qrisBox.classList.remove('hidden');
-
-    document.getElementById('m-price').innerHTML = `
-        <div class="bg-blue-600 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden">
-            <div class="relative z-10 text-center">
-                <div class="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Total Bayar</div>
-                
-                <div onclick="salinTotal(${totalAkhirDenganKode})" class="cursor-pointer group relative inline-block">
-                    <div class="text-4xl font-black mb-1 tracking-tighter flex items-center justify-center gap-2">
-                        <span>Rp ${totalAkhirDenganKode.toLocaleString('id-ID')}</span>
-                        <i class="fas fa-copy text-sm opacity-50 group-hover:opacity-100 transition-opacity"></i>
-                    </div>
-                    <div id="copy-notif" class="text-[9px] font-black uppercase bg-white text-blue-600 px-2 py-1 rounded-full absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 transition-all">Tersalin!</div>
-                </div>
-
-                <div class="text-[9px] font-bold italic opacity-90 mt-1">Termasuk kode unik: +Rp ${kodeUnik}</div>
-                <p class="text-[8px] mt-3 font-black uppercase tracking-widest opacity-60">*Klik angka untuk salin nominal*</p>
-            </div>
-            <i class="fas fa-wallet absolute -bottom-4 -right-4 text-7xl opacity-10 rotate-12"></i>
-        </div>`;
-    document.getElementById('modal-bayar').classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
-
-function salinTotal(nominal) {
-    // Proses Salin
-    navigator.clipboard.writeText(nominal).then(() => {
-        const notif = document.getElementById('copy-notif');
-        
-        // Animasi Notifikasi Tersalin
-        notif.classList.remove('opacity-0', '-top-8');
-        notif.classList.add('opacity-100', '-top-10');
-        
-        // Kembalikan ke semula setelah 2 detik
-        setTimeout(() => {
-            notif.classList.remove('opacity-100', '-top-10');
-            notif.classList.add('opacity-0', '-top-8');
-        }, 2000);
-        
-        // Getaran ringan (vibrate) jika HP mendukung
-        if (navigator.vibrate) navigator.vibrate(50);
-    }).catch(err => {
-        console.error('Gagal menyalin: ', err);
-    });
-}
-
-
-
-async function kirimWA() {
-    if (keranjang.length === 0) return;
-
-    let detailWA = ""; 
-    let dataSheet = []; 
-    const waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }); // Format WITA
-
-    keranjang.forEach((item, i) => {
-        // Format untuk teks WhatsApp
-        detailWA += `📦 *PRODUK ${i + 1}*\n`;
-        detailWA += `🔹 Layanan: ${item.kategori}\n`;
-        detailWA += `🔹 Produk: ${item.nama}\n`;
-        detailWA += `🔹 No. Tujuan: *${item.no}*\n`;
-        detailWA += `🔹 Harga: Rp ${item.harga.toLocaleString('id-ID')}\n\n`;
-
-        // Data untuk Google Sheets
-        dataSheet.push({ 
-            tanggal: waktu, 
-            nomor: "'" + item.no, 
-            produk: item.kategori + " " + item.nama, 
-            harga_asli: item.harga, 
-            total_transfer: totalAkhirDenganKode, 
-            status: "Pending" 
-        });
-    });
-
-
-    // Kirim data ke Google Sheets (Database)
-    try { 
-        await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(dataSheet) }); 
-    } catch (e) { console.error("Gagal simpan ke database"); }
-
-    // Susun Pesan WhatsApp Akhir
-    const msg = 
-`⚡ *PESANAN BARU - KUOTAKILAT* ⚡
-_NK JAYA CELL - Agen BRILink_
---------------------------------------------
-${detailWA}--------------------------------------------
-💰 *TOTAL TRANSFER: Rp ${totalAkhirDenganKode.toLocaleString('id-ID')}*
---------------------------------------------
-📌 *PENTING:*
-1. Mohon transfer *TIDAK DIBULATKAN* (sesuai nominal di atas).
-2. Lampirkan bukti transfer di bawah ini.
-3. Pesanan akan segera diproses.
-
-Terima Kasih 🙏`;
-
-//  Eksekusi Pengiriman WA (Buka di tab baru agar script tetap jalan)
-    window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(msg)}`, '_blank');
-
-   // --- LOGIKA RESET KERANJANG ---
-   // 2. Kosongkan Data
-    keranjang = []; 
-    
-    // 3. Reset UI Keranjang
-    const cartCount = document.getElementById('cart-count');
-    if (cartCount) cartCount.innerText = '0';
-    
-    const cartFloating = document.getElementById('cart-floating');
-    if (cartFloating) cartFloating.style.display = 'none';
-
-    // 4. Tutup Modal & Kembalikan Scroll Body
-    tutupModal(); // Gunakan fungsi tutupModal() yang sudah kamu buat agar overflow: auto kembali normal
-
-    // 5. Kosongkan Input Nomor
-    const inputPhone = document.getElementById('phone-number');
-    if (inputPhone) {
-        inputPhone.value = '';
-    }
-
-    // 6. PENTING: Render Ulang Menu/Produk agar daftar harga muncul kembali
-    if (currentSelectedCat) {
-        renderListProduk(currentSelectedCat); // Munculkan kembali daftar produk yang tadi dipilih
+            renderCardsProduk();
+        }
     } else {
-        renderMenu(); // Jika tidak ada kategori terpilih, kembalikan ke menu utama
+        if(helper) helper.classList.add('hidden');
     }
 }
 
+/**
+ * 4. KONTROL MULTI-TAB SEAMLESS
+ */
+function gantiTabUtama(jenisTab) {
+    tabUtamaAktif = jenisTab;
+    
+    const tabs = ['PULSA', 'KUOTA', 'TOKEN'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`tab-${t.toLowerCase()}`);
+        if(btn) {
+            if (t === jenisTab) {
+                btn.className = "py-3 text-[9px] font-black uppercase rounded-xl transition-all bg-blue-600 text-white shadow-sm flex flex-col items-center justify-center gap-1";
+            } else {
+                btn.className = "py-3 text-[9px] font-black uppercase rounded-xl transition-all text-gray-500 flex flex-col items-center justify-center gap-1";
+            }
+        }
+    });
 
+    const currentPhone = document.getElementById('search-phone-input')?.value || "";
+    renderAutoOperatorSliders();
+    if(currentPhone && jenisTab !== "TOKEN") fiturDeteksiOtomatisDanCariProvider(currentPhone);
+}
 
-// ==========================================
-// UTILS & TIMER
-// ==========================================
-function startCountdown(endTime, elementId) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
-    const interval = setInterval(() => {
-        const distance = new Date(endTime.replace(/\./g, '-')).getTime() - new Date().getTime();
-        if (distance < 0) { clearInterval(interval); el.innerHTML = "PROMO BERAKHIR"; return; }
-        const h = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-        const s = Math.floor((distance % (1000 * 60)) / 1000);
-        el.innerHTML = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+function renderAutoOperatorSliders() {
+    const container = document.getElementById('category-container');
+    if (!container) return;
+    container.innerHTML = "";
+
+    let databaseTarget = {};
+    if (tabUtamaAktif === "PULSA") databaseTarget = masterPulsaGroup;
+    else if (tabUtamaAktif === "KUOTA") databaseTarget = masterKuotaGroup;
+    else if (tabUtamaAktif === "TOKEN") databaseTarget = masterTokenGroup;
+
+    const listOperatorTerdeteksi = Object.keys(databaseTarget);
+
+    if (listOperatorTerdeteksi.length > 0) {
+        operatorAktif = listOperatorTerdeteksi[0];
+        renderPilihanTombolSliderAktif();
+        renderCardsProduk();
+    } else {
+        container.innerHTML = `<div class="text-[11px] font-bold text-gray-400 italic px-1 py-2">Tidak ada data penawaran.</div>`;
+        document.getElementById('product-grid').innerHTML = "";
+    }
+}
+
+function renderPilihanTombolSliderAktif() {
+    const container = document.getElementById('category-container');
+    if(!container) return;
+    container.innerHTML = "";
+
+    let databaseTarget = {};
+    if (tabUtamaAktif === "PULSA") databaseTarget = masterPulsaGroup;
+    else if (tabUtamaAktif === "KUOTA") databaseTarget = masterKuotaGroup;
+    else if (tabUtamaAktif === "TOKEN") databaseTarget = masterTokenGroup;
+
+    const listOperatorTerdeteksi = Object.keys(databaseTarget);
+
+    listOperatorTerdeteksi.forEach(op => {
+        const btn = document.createElement('button');
+        btn.className = `operator-slider-btn shrink-0 font-black text-xs px-4 py-2.5 rounded-xl transition-all border flex items-center gap-2 snap-center ${
+            op === operatorAktif ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-gray-700 border-gray-200 shadow-sm'
+        }`;
+
+        const fileIcon = iconMap[op] || "PULSA.png";
+        btn.innerHTML = `<img src="${fileIcon}" class="w-4 h-4 object-contain rounded" onerror="this.src='PULSA.png'"> <span>${op}</span>`;
+        btn.onclick = () => {
+            operatorAktif = op;
+            renderPilihanTombolSliderAktif();
+            renderCardsProduk();
+        };
+        container.appendChild(btn);
+    });
+}
+
+function renderCardsProduk() {
+    if (intervalMainTimer) clearInterval(intervalMainTimer);
+
+    const gridRegular = document.getElementById('product-grid');
+    const gridFlash = document.getElementById('main-flash-grid');
+    const sectionFlash = document.getElementById('main-flash-section');
+    const badgeCount = document.getElementById('badge-count-produk');
+
+    if (!gridRegular) return;
+    gridRegular.innerHTML = "";
+    if (gridFlash) gridFlash.innerHTML = "";
+
+    let databaseTarget = {};
+    if (tabUtamaAktif === "PULSA") databaseTarget = masterPulsaGroup;
+    else if (tabUtamaAktif === "KUOTA") databaseTarget = masterKuotaGroup;
+    else if (tabUtamaAktif === "TOKEN") databaseTarget = masterTokenGroup;
+
+    const items = databaseTarget[operatorAktif] || [];
+    if (badgeCount) badgeCount.innerText = `${items.length} Item`;
+
+    let adaFlashSale = false;
+    let targetTimeFlashGlobal = "";
+
+    items.forEach(item => {
+        const fileIcon = iconMap[operatorAktif] || "PULSA.png";
+
+        if (item.priceFlash > 0) {
+            adaFlashSale = true;
+            if (item.endTimer) targetTimeFlashGlobal = item.endTimer;
+            const diskon = Math.round(((item.priceNormal - item.priceFlash) / item.priceNormal) * 100);
+
+            const card = document.createElement('div');
+            card.className = "flash-card border-2 border-red-200 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer";
+            card.onclick = () => tambahKeKeranjang(item.nama, item.priceFlash, `FLASH SALE (-${diskon}%)`);
+            card.innerHTML = `
+                <div class="absolute top-0 right-0 bg-red-600 text-white font-black text-[8px] px-2 py-0.5 rounded-bl-xl uppercase">-${diskon}%</div>
+                <img src="${fileIcon}" class="w-7 h-7 object-contain mb-1.5 rounded-lg" onerror="this.src='PULSA.png'">
+                <div class="text-[10px] font-black text-gray-700 uppercase leading-tight">${item.nama}</div>
+                <div class="text-[9px] font-bold text-gray-400 line-through mt-1">Rp ${item.priceNormal.toLocaleString('id-ID')}</div>
+                <div class="text-[12px] font-black text-red-600">Rp ${item.priceFlash.toLocaleString('id-ID')}</div>
+            `;
+            if (gridFlash) gridFlash.appendChild(card);
+        } 
+        else if (item.pricePromo > 0) {
+            const diskonPromo = Math.round(((item.priceNormal - item.pricePromo) / item.priceNormal) * 100);
+
+            const card = document.createElement('div');
+            card.className = "product-card border border-orange-300 bg-orange-50/20 p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden shadow-sm";
+            card.onclick = () => tambahKeKeranjang(item.nama, item.pricePromo, `PROMO (-${diskonPromo}%)`);
+            card.innerHTML = `
+                <div class="absolute top-0 right-0 bg-orange-500 text-white font-black text-[7px] px-1.5 py-0.5 rounded-bl-lg">PROMO -${diskonPromo}%</div>
+                <img src="${fileIcon}" class="w-7 h-7 object-contain mb-1.5 rounded-lg" onerror="this.src='PULSA.png'">
+                <div class="text-[10px] font-black text-gray-700 uppercase leading-tight">${item.nama}</div>
+                <div class="text-[9px] font-bold text-gray-400 line-through mt-1">Rp ${item.priceNormal.toLocaleString('id-ID')}</div>
+                <div class="text-[11px] font-black text-orange-600">Rp ${item.pricePromo.toLocaleString('id-ID')}</div>
+            `;
+            gridRegular.appendChild(card);
+        } 
+        else {
+            const card = document.createElement('div');
+            card.className = "product-card border border-gray-200 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer shadow-sm";
+            card.onclick = () => tambahKeKeranjang(item.nama, item.priceNormal, "REGULAR");
+            card.innerHTML = `
+                <img src="${fileIcon}" class="w-7 h-7 object-contain mb-2 rounded-lg" onerror="this.src='PULSA.png'">
+                <div class="text-[10px] font-black text-gray-700 uppercase leading-tight">${item.nama}</div>
+                <div class="text-[11px] font-black text-blue-600 mt-2">Rp ${item.priceNormal.toLocaleString('id-ID')}</div>
+            `;
+            gridRegular.appendChild(card);
+        }
+    });
+
+    if (sectionFlash) {
+        if (adaFlashSale) {
+            sectionFlash.classList.remove('hidden');
+            jalankanTimerMundurDinamis(targetTimeFlashGlobal);
+        } else {
+            sectionFlash.classList.add('hidden');
+        }
+    }
+}
+
+function jalankanTimerMundurDinamis(targetString) {
+    let targetDate = null;
+    if (targetString) {
+        targetDate = new Date(targetString.replace(/-/g, "/"));
+    } else {
+        const skrg = new Date();
+        targetDate = new Date(skrg.getFullYear(), skrg.getMonth(), skrg.getDate(), 23, 59, 59);
+    }
+
+    intervalMainTimer = setInterval(() => {
+        const kini = new Date();
+        const selisih = targetDate - kini;
+
+        if (selisih <= 0) {
+            document.getElementById('timer-hour').innerText = "00";
+            document.getElementById('timer-min').innerText = "00";
+            document.getElementById('timer-sec').innerText = "00";
+            clearInterval(intervalMainTimer);
+            return;
+        }
+
+        const h = Math.floor(selisih / (1000 * 60 * 60));
+        const m = Math.floor((selisih / (1000 * 60)) % 60);
+        const s = Math.floor((selisih / 1000) % 60);
+
+        document.getElementById('timer-hour').innerText = h < 10 ? '0' + h : h;
+        document.getElementById('timer-min').innerText = m < 10 ? '0' + m : m;
+        document.getElementById('timer-sec').innerText = s < 10 ? '0' + s : s;
     }, 1000);
 }
 
-function detectOp(num) {
-    const pre = num.substring(0,4);
-    for(let op in prefixMap) { if(prefixMap[op].includes(pre)) { selectCategory(op); break; } }
-}
-function hapusItem(i) { keranjang.splice(i, 1); updateKeranjangUI(); if(keranjang.length === 0) tutupModal(); else bukaModalKeranjang(); }
-function tutupModal() { document.getElementById('modal-bayar').classList.remove('active'); document.body.style.overflow = 'auto'; }
+/**
+ * 5. PENGELOLAAN KERANJANG/DRAF TRANSAKSI
+ */
+function tambahKeKeranjang(nama, harga, label) {
+    const nomorHpDariPencarian = document.getElementById('search-phone-input').value.trim();
 
-window.onload = async () => {
-    await init();
-    const phoneInput = document.getElementById('phone-number');
-    if (phoneInput) {
-        phoneInput.addEventListener('input', function() {
-            this.value = this.value.replace(/[^0-9]/g, ''); 
-            if(this.value.length >= 10) { detectOp(this.value); renderRiwayat(); }
-        });
+    keranjangBelanja = {
+        kategori: `${tabUtamaAktif} - ${operatorAktif}`,
+        produk: nama,
+        harga: harga,
+        labelType: label
+    };
+    document.getElementById('cart-count').innerText = "1";
+
+    bukaModalKeranjang();
+
+    if (nomorHpDariPencarian) {
+        const inputModalPhone = document.getElementById('customer-phone');
+        if(inputModalPhone) {
+            inputModalPhone.value = nomorHpDariPencarian;
+            inputModalPhone.readOnly = true; 
+        }
     }
-};
+}
 
-let deferredPrompt;
-const installBanner = document.getElementById('install-banner');
-const btnInstallNow = document.getElementById('btn-install-now');
-
-// Mendeteksi permintaan instalasi dari Android/Chrome
-window.addEventListener('beforeinstallprompt', (e) => {
-    // Mencegah Chrome memunculkan prompt otomatis yang membosankan
-    e.preventDefault();
-    // Simpan event agar bisa dipicu nanti
-    deferredPrompt = e;
+function bukaModalKeranjang() {
+    const modal = document.getElementById('cart-modal');
+    const titleModal = document.getElementById('modal-title-dynamic');
+    const listContainer = document.getElementById('cart-items-list');
+    const totalPriceEl = document.getElementById('cart-total-price');
     
-    // Tampilkan banner kustom kita
-    if (installBanner) {
-        installBanner.classList.remove('hidden');
-        installBanner.classList.add('flex');
+    const checkoutSection = document.getElementById('checkout-payment-section');
+    const historySection = document.getElementById('history-view-section');
+
+    if (!modal) return;
+    
+    if (checkoutSection) checkoutSection.classList.remove('hidden');
+    if (historySection) historySection.classList.add('hidden');
+
+    if (titleModal) titleModal.innerHTML = `<i class="fas fa-shopping-basket text-blue-600"></i> Rincian Pembelian`;
+
+    if (!keranjangBelanja) {
+        if (listContainer) {
+            listContainer.innerHTML = `
+                <div class="text-center py-6 text-gray-400 italic text-xs">
+                    <i class="fas fa-shopping-basket text-3xl mb-2 text-gray-300 block"></i>
+                    Keranjang draf kosong.<br>Silakan tentukan produk Anda!
+                </div>
+            `;
+        }
+        if (totalPriceEl) totalPriceEl.innerText = "Rp 0";
+    } else {
+        if (listContainer) {
+            listContainer.innerHTML = `
+                <div class="flex justify-between items-center bg-gray-50 p-3.5 rounded-2xl border border-gray-100 text-xs font-bold text-gray-700">
+                    <div>
+                        <span class="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded mr-1 uppercase font-black">${keranjangBelanja.kategori}</span>
+                        <div class="text-gray-900 font-black mt-1 text-sm leading-tight">${keranjangBelanja.produk}</div>
+                        <span class="text-[9px] text-gray-400 font-medium">${keranjangBelanja.labelType}</span>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <div class="text-blue-600 font-black text-right">Rp ${keranjangBelanja.harga.toLocaleString('id-ID')}</div>
+                        <button onclick="hapusItemKeranjang()" class="text-red-400 hover:text-red-600 p-2 text-base transition-colors active:scale-90">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        if (totalPriceEl) totalPriceEl.innerText = `Rp ${keranjangBelanja.harga.toLocaleString('id-ID')}`;
     }
-});
 
-// Aksi saat tombol Instal diklik
-if (btnInstallNow) {
-    btnInstallNow.addEventListener('click', async () => {
-        if (!deferredPrompt) return;
-        
-        // Munculkan prompt asli Chrome
-        deferredPrompt.prompt();
-        
-        // Tunggu jawaban user
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
-        
-        // Sembunyikan banner kita setelah user memilih
-        deferredPrompt = null;
-        installBanner.classList.add('hidden');
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('div').classList.remove('translate-y-full');
+    }, 10);
+}
+
+/**
+ * 6. LOG HISTORI RIWAYAT
+ */
+/**
+ * 6. MENAMPILKAN TRANSAKSI DARI LOCALSTORAGE (INSTANT & AKURAT)
+ */
+function bukaModalRiwayatLangsung() {
+    const modal = document.getElementById('cart-modal');
+    const titleModal = document.getElementById('modal-title-dynamic');
+    const checkoutSection = document.getElementById('checkout-payment-section');
+    const historySection = document.getElementById('history-view-section');
+
+    if (!modal) return;
+
+    // Switch View Section
+    if (checkoutSection) checkoutSection.classList.add('hidden');
+    if (historySection) historySection.classList.remove('hidden');
+
+    if (titleModal) titleModal.innerHTML = `<i class="fas fa-history text-indigo-600"></i> Log Histori Toko`;
+    
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('div').classList.remove('translate-y-full');
+    }, 10);
+
+    // Langsung ambil data dari LocalStorage
+    listCacheRiwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
+
+    // Jalankan render list dengan filter default 'SEMUA'
+    filterRiwayatStatus('SEMUA');
+}
+
+function filterRiwayatStatus(filterType) {
+    const itemsContainer = document.getElementById('history-items-container');
+    if (!itemsContainer) return;
+
+    // Atur Aktif Tombol Filter Tab UI
+    const filterButtons = {
+        'SEMUA': 'btn-fltr-all', 'SUKSES': 'btn-fltr-sukses', 'PROSES': 'btn-fltr-proses', 'GAGAL': 'btn-fltr-gagal'
+    };
+    
+    Object.keys(filterButtons).forEach(key => {
+        const btn = document.getElementById(filterButtons[key]);
+        if (btn) {
+            if (key === filterType) {
+                btn.className = "shrink-0 text-[10px] font-black px-3 py-1.5 rounded-full bg-blue-600 text-white shadow-sm transition-all";
+            } else {
+                btn.className = "shrink-0 text-[10px] font-black px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 transition-all hover:bg-gray-200";
+            }
+        }
     });
+
+    // Ambil ulang dari cache
+    let dataTerfilter = listCacheRiwayat;
+    if (filterType !== 'SEMUA') {
+        dataTerfilter = listCacheRiwayat.filter(item => item.status === filterType);
+    }
+
+    // Batasi maks 20 riwayat teranyar
+    const dataFinal = dataTerfilter.slice(0, 20);
+
+    if (dataFinal.length === 0) {
+        itemsContainer.innerHTML = `
+            <div class="text-center py-10 text-gray-400 italic text-xs bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                <i class="fas fa-folder-open text-3xl mb-2 text-gray-300 block"></i>
+                Belum ada transaksi <br>dengan status <b>${filterType.toLowerCase()}</b>.
+            </div>
+        `;
+        return;
+    }
+
+    let htmlOutput = "";
+    dataFinal.forEach(item => {
+        let badgeStyle = "";
+        let iconStyle = "";
+        
+        if (item.status === "SUKSES") {
+            badgeStyle = "bg-emerald-50 text-emerald-700 border border-emerald-100";
+            iconStyle = "fa-check-circle text-emerald-500";
+        } else if (item.status === "GAGAL") {
+            badgeStyle = "bg-rose-50 text-rose-700 border border-rose-100";
+            iconStyle = "fa-times-circle text-rose-500";
+        } else {
+            badgeStyle = "bg-amber-50 text-amber-700 border border-amber-100 animate-pulse";
+            iconStyle = "fa-spinner animate-spin text-amber-500";
+        }
+
+        // Sensor nomor HP bagian tengah demi kenyamanan pelanggan (0858****9692)
+        let formatTarget = item.target;
+        if (formatTarget.length > 8) {
+            formatTarget = formatTarget.substring(0, 4) + "****" + formatTarget.substring(formatTarget.length - 4);
+        }
+
+        htmlOutput += `
+            <div class="p-3.5 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-2.5 text-left relative overflow-hidden">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-1.5 text-[9px] text-gray-400 font-bold">
+                        <i class="far fa-clock text-indigo-500"></i>
+                        <span>${item.tanggal}</span>
+                    </div>
+                    <span class="${badgeStyle} px-2 py-0.5 rounded-lg font-black text-[9px] tracking-wide flex items-center gap-1 uppercase">
+                        <i class="fas ${iconStyle}"></i> ${item.status}
+                    </span>
+                </div>
+                
+                <div class="font-extrabold text-gray-900 text-xs tracking-tight leading-snug uppercase">
+                    ${item.produk}
+                </div>
+                
+                <div class="flex justify-between items-end pt-1 border-t border-gray-50">
+                    <div class="text-[10px] text-gray-400 font-semibold">
+                        ID/No Target: <span class="text-gray-700 font-black tracking-wider">${formatTarget}</span>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[8px] uppercase text-gray-400 font-bold tracking-wider leading-none">Total Bayar</p>
+                        <p class="text-xs font-black text-blue-600 mt-0.5">Rp ${item.biaya.toLocaleString('id-ID')}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    // Berikan tombol tambahan untuk menghapus log riwayat di bagian paling bawah
+    itemsContainer.innerHTML = `
+        <div class="space-y-2.5">${htmlOutput}</div>
+        <div class="pt-2">
+            <button onclick="bersihkanRiwayatProduk()" class="w-full py-2 bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-600 text-[10px] font-bold rounded-xl transition-colors border border-dashed">
+                <i class="fas fa-trash-alt mr-1"></i> Bersihkan Semua Histori Produk
+            </button>
+        </div>
+    `;
 }
 
-// Sembunyikan banner jika aplikasi sudah terinstal (standalone mode)
-window.addEventListener('appinstalled', () => {
-    if (installBanner) installBanner.classList.add('hidden');
-    deferredPrompt = null;
-    alert("Terima kasih! Aplikasi KUOTAKILAT berhasil dipasang.");
-});
-
-// Cek jika sudah dalam mode aplikasi, jangan munculkan banner
-if (window.matchMedia('(display-mode: standalone)').matches) {
-    if (installBanner) installBanner.classList.add('hidden');
+// Fungsi pelengkap untuk menghapus riwayat jika memori penuh
+function bersihkanRiwayatProduk() {
+    if (confirm("Hapus permanen semua histori transaksi produk di perangkat ini?")) {
+        localStorage.removeItem('nk_produk_history');
+        bukaModalRiwayatLangsung();
+    }
 }
 
-
-
-// Di bawah ini script.js untuk game.html
-if (window.location.pathname.includes('game.html')) {
-    // Jalankan kode khusus game jika halaman yang dibuka adalah game.html
-    loadGameProducts(); 
+function hapusItemKeranjang() {
+    if (confirm("Hapus draf transaksi saat ini?")) {
+        keranjangBelanja = null;
+        document.getElementById('cart-count').innerText = "0";
+        tutupModalKeranjang();
+    }
 }
 
-async function loadGameProducts() {
-    // ... kode fetch data spreadsheet untuk game ...
+function tutupModalKeranjang() {
+    const modal = document.getElementById('cart-modal');
+    if (!modal) return;
+    modal.classList.add('opacity-0');
+    modal.querySelector('div').classList.add('translate-y-full');
+    setTimeout(() => modal.classList.add('hidden'), 300);
+}
+
+function toggleMetodePembayaranUI(metode) {
+    const lblWa = document.getElementById('label-pay-wa');
+    const lblQris = document.getElementById('label-pay-qris');
+    const btnCheckout = document.getElementById('btn-checkout');
+
+    if (metode === 'WA') {
+        if(lblWa) lblWa.className = "border-2 border-blue-600 bg-blue-50/50 p-3 rounded-xl flex items-center gap-2.5 cursor-pointer";
+        if(lblQris) lblQris.className = "border border-gray-200 p-3 rounded-xl flex items-center gap-2.5 cursor-pointer";
+        if(btnCheckout) {
+            btnCheckout.innerHTML = `<i class="fab fa-whatsapp text-lg"></i> Beli Lewat WhatsApp`;
+            btnCheckout.className = "w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-sm py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95";
+        }
+    } else {
+        if(lblQris) lblQris.className = "border-2 border-blue-600 bg-blue-50/50 p-3 rounded-xl flex items-center gap-2.5 cursor-pointer";
+        if(lblWa) lblWa.className = "border border-gray-200 p-3 rounded-xl flex items-center gap-2.5 cursor-pointer";
+        if(btnCheckout) {
+            btnCheckout.innerHTML = `<i class="fas fa-qrcode text-lg"></i> Tampilkan QRIS Pembayaran`;
+            btnCheckout.className = "w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-sm py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95";
+        }
+    }
+}
+
+/**
+ * 7. PROSES CHECKOUT AKHIR (SUDAH DIOPTIMALKAN & AMAN)
+ */
+function prosesCheckoutAkhir() {
+    const inputHp = document.getElementById('customer-phone');
+    const noHp = inputHp ? inputHp.value.trim() : "";
+
+    if (!noHp) return alert("Masukkan Nomor HP / ID Pelanggan!");
+    if (!keranjangBelanja) return alert("Draf Transaksi Kosong!");
+
+    const radioTerpilih = document.querySelector('input[name="payment-method"]:checked');
+    const metodePilihan = radioTerpilih ? radioTerpilih.value : "WA";
+
+    if (metodePilihan === 'WA') {
+        kirimTransaksiKeSheetDanWA(noHp, "Pending (WA)");
+    } else {
+        // Pembuatan Kode Unik Acak 11-99 Rupiah
+        const kodeUnik = Math.floor(Math.random() * 89) + 11; 
+        const hargaAsli = keranjangBelanja.harga;
+        const totalDenganKodeUnik = hargaAsli + kodeUnik;
+        
+        keranjangBelanja.hargaDenganKodeUnik = totalDenganKodeUnik;
+        keranjangBelanja.kodeUnikTerpakai = kodeUnik;
+
+        // Tampilkan teks rincian nominal pembayaran
+        const txtPriceContainer = document.getElementById('qris-price-text');
+        if (txtPriceContainer) {
+            txtPriceContainer.innerHTML = `
+                <div class="text-gray-600 text-xs">Harga Produk: Rp ${hargaAsli.toLocaleString('id-ID')}</div>
+                <div class="text-amber-600 text-xs font-bold">Kode Unik: +Rp ${kodeUnik}</div>
+                <div class="text-blue-600 font-black text-sm mt-1">TOTAL WAJIB TRANSFER:<br>Rp ${totalDenganKodeUnik.toLocaleString('id-ID')}</div>
+                <p class="text-[9px] text-red-500 mt-1 leading-tight">*Mohon transfer sesuai nominal di atas agar sistem mendeteksi otomatis.</p>
+            `;
+        }
+
+        // Generate QRIS Dinamis melalui API gratis goqr/qrserver
+        const stringQrisFinal = buatTeksQrisDinamis(totalDenganKodeUnik);
+        const qrImageElement = document.getElementById('qris-image-target'); 
+        if (qrImageElement) {
+            qrImageElement.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(stringQrisFinal)}`;
+        }
+
+        tutupModalKeranjang();
+        const modalQris = document.getElementById('qris-modal');
+        if(modalQris) {
+            modalQris.classList.remove('hidden');
+            setTimeout(() => modalQris.classList.remove('opacity-0'), 50);
+        }
+    }
+}
+
+async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
+    const btn = document.getElementById('btn-checkout');
+    const txtAsli = btn ? btn.innerHTML : "";
+    if(btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fas fa-spinner animate-spin"></i> Memproses Nota...`;
+    }
+
+    const waktuMks = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA';
+    const fullProdukLabel = `[${keranjangBelanja.kategori}] ${keranjangBelanja.produk} (${keranjangBelanja.labelType})`;
+
+    // Ambil harga final (jika ada kode unik dari sistem QRIS sebelumnya)
+    const hargaFinal = keranjangBelanja.hargaDenganKodeUnik ? keranjangBelanja.hargaDenganKodeUnik : keranjangBelanja.harga;
+
+    const dataSimpan = [{
+        tanggal: waktuMks, nomor: "'" + noHp, produk: fullProdukLabel,
+        harga_asli: keranjangBelanja.harga, total_transfer: hargaFinal, status: statusLabel
+    }];
+
+    // --- 1. SIMPAN KE RIWAYAT LOKAL (SAMA SEPERTI TRANSAKSI TRANSFER) ---
+    simpanRiwayatProdukLokal(waktuMks, noHp, fullProdukLabel, hargaFinal, statusLabel);
+
+    try {
+        await fetch(SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataSimpan)
+        });
+    } catch (e) { console.error(e); }
+
+    const textWA = `⚡ *TRANSAKSI BARU - NK JAYA CELL* ⚡\n` +
+                   `--------------------------------------------\n` +
+                   `📱 Kategori: *${keranjangBelanja.kategori}*\n` +
+                   `🎯 No HP/ID Target: \`${noHp}\`\n` +
+                   `📦 Produk: ${keranjangBelanja.produk}\n` +
+                   `🏷️ Jenis: *${keranjangBelanja.labelType}*\n` +
+                   `💳 Pembayaran: *${statusLabel}*\n` +
+                   `💰 Total Bayar: *Rp ${hargaFinal.toLocaleString('id-ID')}*\n` +
+                   `--------------------------------------------\n` +
+                   `Mohon segera diproses ya, Terima kasih! 🙏`;
+
+    window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(textWA)}`, '_blank');
+
+    const inputPencarian = document.getElementById('search-phone-input');
+    if(inputPencarian) inputPencarian.value = "";
+    document.getElementById('customer-phone').value = "";
+    document.getElementById('customer-phone').readOnly = false;
+    keranjangBelanja = null;
+    document.getElementById('cart-count').innerText = "0";
+    if(btn) {
+        btn.disabled = false;
+        btn.innerHTML = txtAsli;
+    }
+    tutupModalKeranjang();
+}
+
+// Fungsi internal baru untuk mendata ke LocalStorage
+function simpanRiwayatProdukLokal(waktu, noHp, produk, total, status) {
+    let riwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
+    
+    const transaksiBaru = {
+        tanggal: waktu,
+        target: noHp,
+        produk: produk,
+        biaya: total,
+        status: status.toUpperCase().includes("LUNAS") ? "SUKSES" : "PROSES"
+    };
+
+    riwayat.unshift(transaksiBaru); // Masukkan ke urutan paling atas
+    localStorage.setItem('nk_produk_history', JSON.stringify(riwayat));
+}
+
+function tutupModalQris() {
+    const modal = document.getElementById('qris-modal');
+    if(modal) {
+        modal.classList.add('opacity-0');
+        setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+}
+
+function konfirmasiSudahBayarQris() {
+    const inputHp = document.getElementById('customer-phone');
+    const noHp = inputHp ? inputHp.value.trim() : "";
+    tutupModalQris();
+    
+    if(keranjangBelanja && keranjangBelanja.hargaDenganKodeUnik) {
+        keranjangBelanja.harga = keranjangBelanja.hargaDenganKodeUnik; 
+    }
+    
+    kirimTransaksiKeSheetDanWA(noHp, "Lunas (Scan QRIS Dinamis)");
 }

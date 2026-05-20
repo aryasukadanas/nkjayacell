@@ -310,13 +310,14 @@ function bersihkanRiwayat() {
 }
 
 /**
- * Memproses transaksi dan mengirimkan data akhir ke WhatsApp Admin
+ * Memproses transaksi dan mengirimkan data akhir ke WhatsApp Admin (ANTI DOUBLE-CLICK + ANIMASI)
  */
 function prosesTransfer() {
     const bankEl = document.getElementById('bank-tujuan');
     const norekEl = document.getElementById('no-rekening');
     const nominalEl = document.getElementById('nominal-transfer');
-    const namaPemilik = document.getElementById('nama-pemilik-terdeteksi')?.innerText || "PELANGGAN BARU";
+    const namaPelangganEl = document.getElementById('nama-pemilik-terdeteksi');
+    const namaPemilik = namaPelangganEl ? namaPelangganEl.innerText : "PELANGGAN BARU";
 
     const bank = bankEl ? bankEl.value : "";
     const norekDenganSpasi = norekEl ? norekEl.value : "";
@@ -332,6 +333,16 @@ function prosesTransfer() {
         return;
     }
 
+    // --- MULAI KUNCI TOMBOL & ANIMASI ---
+    const btnTransfer = document.getElementById('btn-proses-transfer') || document.querySelector('button[onclick="prosesTransfer()"]');
+    if (btnTransfer) {
+        btnTransfer.disabled = true;
+        btnTransfer.innerHTML = `<i class="fas fa-spinner animate-spin mr-2"></i> Memproses Transfer...`;
+        btnTransfer.style.opacity = "0.6";
+        btnTransfer.style.cursor = "not-allowed";
+    }
+    // ------------------------------------
+
     let pesan = `Halo Admin NK JAYA CELL, saya ingin melakukan kirim uang:\n\n`;
     pesan += `*KATEGORI: KIRIM UANG*\n`;
     pesan += `Bank Tujuan: ${bank}\n`;
@@ -344,14 +355,31 @@ function prosesTransfer() {
     pesan += `Mohon segera diproses ya, terima kasih.`;
 
     simpanKeRiwayat(bank, norekDenganSpasi, nominal, admin);
+    
+    // PENTING: Jalankan penyimpanan spreadsheet. 
+    // Kita biarkan fungsi simpanKeSpreadsheet berjalan di latar belakang
     simpanKeSpreadsheet();
 
     const url = `https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(pesan)}`;
     window.open(url, '_blank');
     
+    // Reset Form Input
     if(norekEl) norekEl.value = "";
     if(nominalEl) nominalEl.value = "";
+    if(namaPelangganEl) namaPelangganEl.innerText = "-";
+    
+    // Hitung ulang total agar form di bagian bawah kembali ke nol/bersih
     hitungTotal();
+
+    // --- KEMBALIKAN TOMBOL KE SEMULA ---
+    setTimeout(() => {
+        if (btnTransfer) {
+            btnTransfer.disabled = false;
+            btnTransfer.innerHTML = `Kirim Uang Sekarang`; // Kembalikan teks asli tombol
+            btnTransfer.style.opacity = "1";
+            btnTransfer.style.cursor = "pointer";
+        }
+    }, 2000);
 }
 
 /**
