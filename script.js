@@ -749,7 +749,7 @@ function prosesCheckoutAkhir() {
         const stringQrisFinal = buatTeksQrisDinamis(totalDenganKodeUnik);
         const qrImageElement = document.getElementById('qris-image-target'); 
         if (qrImageElement) {
-            qrImageElement.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(stringQrisFinal)}`;
+            qrImageElement.src = `https://quickchart.io/qr?size=250&text=${encodeURIComponent(stringQrisFinal)}`;
         }
 
         tutupModalKeranjang();
