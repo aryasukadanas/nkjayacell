@@ -94,62 +94,89 @@ async function bukaDaftarKontakHP() {
 }
 
 /**
- * 2. LOAD DATA SPREADSHEET REAL-TIME
+ * 2. LOAD DATA SPREADSHEET REAL-TIME (GANTI BLOK INI DENGAN YANG BARU)
  */
 async function muatDataDanPisahKategori() {
+    console.log("Memulai penataan pangkalan data...");
+
+    // 1. AMBIL DARI MEMORI INTERNAL HP TERLEBIH DAHULU (INSTAN < 1 DETIK)
+    const cacheLokalProduk = localStorage.getItem('nk_cache_produk_csv');
+    if (cacheLokalProduk) {
+        console.log("Memuat daftar harga dari cache lokal HP...");
+        uraiDanProsesTeksCSV(cacheLokalProduk);
+        gantiTabUtama("KUOTA");
+    }
+
+    // 2. TETAP SINKRONISASI DATA TERBARU DARI GOOGLE SHEET DI LATAR BELAKANG
     try {
         const response = await fetch(SHEET_CSV_URL);
-        const text = await response.text();
-        rawDatabaseRows = text.split(/\r?\n/).slice(1);
+        if (!response.ok) throw new Error("Gagal mengambil respon dari Google");
+        
+        const textDataTerbaru = await response.text();
 
-        masterPulsaGroup = {};
-        masterKuotaGroup = {};
-        masterTokenGroup = {};
-
-        rawDatabaseRows.forEach(row => {
-            if (!row.trim()) return;
-            const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-            if (cols.length < 3) return;
-
-            const kategoriAsli = cols[0].trim().replace(/"/g, "");
-            const namaProduk = cols[1].trim().replace(/"/g, "");
-            const hargaNormal = parseInt(cols[2]?.replace(/\D/g, '')) || 0;
-            const hargaPromo = parseInt(cols[3]?.replace(/\D/g, '')) || 0;
-            const hargaFlash = parseInt(cols[4]?.replace(/\D/g, '')) || 0;
-            const waktuMundur = cols[5]?.trim().replace(/"/g, "") || "";
-
-            const upperKat = kategoriAsli.toUpperCase();
-            const upperNama = namaProduk.toUpperCase();
-
-            const itemObject = {
-                nama: namaProduk, kategoriAsli: kategoriAsli,
-                priceNormal: hargaNormal, pricePromo: hargaPromo, priceFlash: hargaFlash,
-                endTimer: waktuMundur
-            };
-
-            if (upperKat.includes("PLN") || upperKat.includes("TOKEN") || upperNama.includes("PLN") || upperNama.includes("TOKEN")) {
-                let opKey = "TOKEN PLN";
-                if (!masterTokenGroup[opKey]) masterTokenGroup[opKey] = [];
-                masterTokenGroup[opKey].push(itemObject);
-            } 
-            else if (upperKat.includes("PULSA") || upperNama.includes("PULSA")) {
-                let operatorKey = dapatkanOperatorKey(upperKat, upperNama);
-                if (operatorKey === "LAINNYA") operatorKey = "PULSA";
-                if (!masterPulsaGroup[operatorKey]) masterPulsaGroup[operatorKey] = [];
-                masterPulsaGroup[operatorKey].push(itemObject);
-            } 
-            else {
-                let operatorKey = dapatkanOperatorKey(upperKat, upperNama);
-                if (!masterKuotaGroup[operatorKey]) masterKuotaGroup[operatorKey] = [];
-                masterKuotaGroup[operatorKey].push(itemObject);
-            }
-        });
-
-        gantiTabUtama("KUOTA");
+        // Jika ada perubahan harga di Google Sheets, perbarui memori HP
+        if (textDataTerbaru !== cacheLokalProduk) {
+            localStorage.setItem('nk_cache_produk_csv', textDataTerbaru);
+            console.log("Daftar harga terbaru berhasil diperbarui dari awan Google Sheets!");
+            
+            uraiDanProsesTeksCSV(textDataTerbaru);
+            gantiTabUtama(tabUtamaAktif); 
+        }
     } catch (error) {
-        console.error("Gagal memuat database spreadsheet:", error);
+        console.warn("Koneksi lambat/offline. Menggunakan pangkalan data internal HP:", error);
     }
 }
+
+/**
+ * FUNGSI BANTUAN UNTUK MEMPROSES STRUKTUR DATA BARIS CSV (KODE BARU)
+ */
+function uraiDanProsesTeksCSV(teksMentah) {
+    rawDatabaseRows = teksMentah.split(/\r?\n/).slice(1);
+
+    masterPulsaGroup = {};
+    masterKuotaGroup = {};
+    masterTokenGroup = {};
+
+    rawDatabaseRows.forEach(row => {
+        if (!row.trim()) return;
+        const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        if (cols.length < 3) return;
+
+        const kategoriAsli = cols[0].trim().replace(/"/g, "");
+        const namaProduk = cols[1].trim().replace(/"/g, "");
+        const hargaNormal = parseInt(cols[2]?.replace(/\D/g, '')) || 0;
+        const hargaPromo = parseInt(cols[3]?.replace(/\D/g, '')) || 0;
+        const hargaFlash = parseInt(cols[4]?.replace(/\D/g, '')) || 0;
+        const waktuMundur = cols[5]?.trim().replace(/"/g, "") || "";
+
+        const upperKat = kategoriAsli.toUpperCase();
+        const upperNama = namaProduk.toUpperCase();
+
+        const itemObject = {
+            nama: namaProduk, kategoriAsli: kategoriAsli,
+            priceNormal: hargaNormal, pricePromo: hargaPromo, priceFlash: hargaFlash,
+            endTimer: waktuMundur
+        };
+
+        if (upperKat.includes("PLN") || upperKat.includes("TOKEN") || upperNama.includes("PLN") || upperNama.includes("TOKEN")) {
+            let opKey = "TOKEN PLN";
+            if (!masterTokenGroup[opKey]) masterTokenGroup[opKey] = [];
+            masterTokenGroup[opKey].push(itemObject);
+        } 
+        else if (upperKat.includes("PULSA") || upperNama.includes("PULSA")) {
+            let operatorKey = dapatkanOperatorKey(upperKat, upperNama);
+            if (operatorKey === "LAINNYA") operatorKey = "PULSA";
+            if (!masterPulsaGroup[operatorKey]) masterPulsaGroup[operatorKey] = [];
+            masterPulsaGroup[operatorKey].push(itemObject);
+        } 
+        else {
+            let operatorKey = dapatkanOperatorKey(upperKat, upperNama);
+            if (!masterKuotaGroup[operatorKey]) masterKuotaGroup[operatorKey] = [];
+            masterKuotaGroup[operatorKey].push(itemObject);
+        }
+    });
+}
+
 
 function dapatkanOperatorKey(upperKat, upperNama) {
     if (upperKat.includes("TELKOMSEL") || upperNama.includes("TELKOMSEL")) return "TELKOMSEL";
