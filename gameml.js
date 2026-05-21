@@ -56,7 +56,7 @@ async function muatDataDariSpreadsheet() {
         if (selectEl) {
             selectEl.innerHTML = '<option value="">-- Pilih Game --</option>';
             Object.keys(dbGame).forEach(game => {
-                const blacklistKategori = ['PULSA', 'INDOSAT', 'XL', 'TELKOMSEL', 'AXIS', 'TRI', 'SMARTFREN', 'BY.U', 'SHOPEEPAY', 'GOPAY', 'DANA'];
+                const blacklistKategori = ['PULSA', 'INDOSAT', 'XL', 'TELKOMSEL', 'AXIS', 'TRI', 'SMARTFREN', 'BY.U', 'SHOPEEPAY', 'GOPAY', 'DANA','TOKEN','PLN'];
                 if(blacklistKategori.includes(game.toUpperCase())) return;
                 selectEl.innerHTML += `<option value="${game}">${game}</option>`;
             });
