@@ -220,7 +220,7 @@ function hitungAdminSpesifik() {
         nominal <= t.max
     );
 
-    return tarif ? tarif.fee : 2500;
+    return tarif ? tarif.fee : 5000;
 }
 
 /**
