@@ -422,13 +422,33 @@ function renderCardsProduk() {
 
 function jalankanTimerMundurDinamis(targetString) {
     let targetDate = null;
-    if (targetString) {
-        targetDate = new Date(targetString.replace(/-/g, "/"));
+    
+    if (targetString && targetString.trim() !== "") {
+        try {
+            // SISTEM PENGAMAN: Bersihkan teks jika admin salah input di spreadsheet
+            let formatBersih = targetString
+                .replace(/WITA|WIB|WIT|jam/gi, '') // Hapus tulisan WITA/WIB/Jam
+                .replace(/\./g, ':')               // Ubah paksa titik (.) menjadi titik dua (:)
+                .trim();
+                
+            targetDate = new Date(formatBersih);
+            
+            // Jika hasilnya tetap rusak (NaN), gunakan pengaman waktu default (Jam 12 malam ini)
+            if (isNaN(targetDate.getTime())) {
+                throw new Error("Format tanggal spreadsheet tidak valid.");
+            }
+        } catch (e) {
+            console.warn("Koreksi otomatis aktif: ", e.message);
+            const skrg = new Date();
+            targetDate = new Date(skrg.getFullYear(), skrg.getMonth(), skrg.getDate(), 23, 59, 59);
+        }
     } else {
+        // Jika kolom waktu di spreadsheet dikosongkan, otomatis hitung mundur ke jam 12 malam hari ini
         const skrg = new Date();
         targetDate = new Date(skrg.getFullYear(), skrg.getMonth(), skrg.getDate(), 23, 59, 59);
     }
 
+    // Interval pemicu perubahan teks angka di halaman index.html
     intervalMainTimer = setInterval(() => {
         const kini = new Date();
         const selisih = targetDate - kini;
@@ -450,6 +470,7 @@ function jalankanTimerMundurDinamis(targetString) {
         document.getElementById('timer-sec').innerText = s < 10 ? '0' + s : s;
     }, 1000);
 }
+
 
 /**
  * 5. PENGELOLAAN KERANJANG/DRAF TRANSAKSI
