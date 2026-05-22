@@ -454,12 +454,20 @@ function jalankanTimerMundurDinamis(targetString) {
         const selisih = targetDate - kini;
 
         if (selisih <= 0) {
-            document.getElementById('timer-hour').innerText = "00";
-            document.getElementById('timer-min').innerText = "00";
-            document.getElementById('timer-sec').innerText = "00";
-            clearInterval(intervalMainTimer);
-            return;
-        }
+    document.getElementById('timer-hour').innerText = "00";
+    document.getElementById('timer-min').innerText = "00";
+    document.getElementById('timer-sec').innerText = "00";
+    clearInterval(intervalMainTimer);
+    
+    // TAMBAHAN KEAMANAN: Otomatis sembunyikan area Flash Sale di Web NK JAYA CELL
+    const sectionFlash = document.getElementById('main-flash-section');
+    if (sectionFlash) {
+        sectionFlash.classList.add('hidden'); // Menyembunyikan etalase promo dari mata pembeli
+    }
+    
+    return;
+}
+
 
         const h = Math.floor(selisih / (1000 * 60 * 60));
         const m = Math.floor((selisih / (1000 * 60)) % 60);
