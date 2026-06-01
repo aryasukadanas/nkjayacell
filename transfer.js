@@ -377,14 +377,14 @@ function prosesTransfer() {
 Halo Admin, saya ingin melakukan transfer dengan rincian berikut:
 
 📝 *DETAIL TRANSAKSI*
-• *Kategori* : 💸 KIRIM UANG
-• *Bank Tujuan* : 🏛️ ${bank}
-• *No. Rekening* : \`${norekTanpaSpasi}\` _(Salin/Copy)_
-• *Nama Pemilik* : 👤 *${namaPemilik}*
+•💸*Kategori* : KIRIM UANG
+•🏛️*Bank Tujuan* : ${bank}
+•💳*No. Rekening* : \`${norekTanpaSpasi}\`
+•👤*Nama Pemilik* : *${namaPemilik}*
 
 💵 *RINCIAN BIAYA*
-• *Nominal* : Rp ${nominal.toLocaleString('id-ID')}
-• *Biaya Admin* : Rp ${admin.toLocaleString('id-ID')}
+•💰*Nominal* : Rp ${nominal.toLocaleString('id-ID')}
+•⚡*Biaya Admin* : Rp ${admin.toLocaleString('id-ID')}
 ----------------------------------
 💰 *TOTAL BAYAR : Rp ${total.toLocaleString('id-ID')}*
 ==================================
