@@ -881,3 +881,42 @@ function konfirmasiSudahBayarQris() {
     
     kirimTransaksiKeSheetDanWA(noHp, "Lunas (Scan QRIS Dinamis)");
 }
+
+// ==========================================================
+// LOGIKA INSTALASI APLIKASI (PWA FLOATING BUTTON)
+// ==========================================================
+let deferredPrompt;
+const btnInstallFloating = document.getElementById('btn-install-floating');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Mencegah browser menampilkan prompt bawaan secara otomatis
+    e.preventDefault();
+    // Simpan event agar bisa dipicu nanti
+    deferredPrompt = e;
+    // Munculkan tombol melayang dari persembunyian
+    if (btnInstallFloating) {
+        btnInstallFloating.classList.remove('hidden');
+    }
+});
+
+if (btnInstallFloating) {
+    btnInstallFloating.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        // Tampilkan prompt instalasi ke pengguna
+        deferredPrompt.prompt();
+        // Tunggu jawaban pengguna
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to the install prompt: ${outcome}`);
+        // Reset variabel prompt karena hanya bisa digunakan sekali
+        deferredPrompt = null;
+        // Sembunyikan kembali tombolnya
+        btnInstallFloating.classList.add('hidden');
+    });
+}
+
+window.addEventListener('appinstalled', () => {
+    console.log('Aplikasi NK JAYA CELL berhasil diinstal!');
+    if (btnInstallFloating) {
+        btnInstallFloating.classList.add('hidden');
+    }
+});
