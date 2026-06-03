@@ -648,10 +648,10 @@ function filterRiwayatStatus(filterType) {
         }
 
         // Sensor nomor HP bagian tengah demi kenyamanan pelanggan (0858****9692)
-        let formatTarget = item.target;
-        if (formatTarget.length > 8) {
-            formatTarget = formatTarget.substring(0, 4) + "****" + formatTarget.substring(formatTarget.length - 4);
-        }
+        //let formatTarget = item.target;
+        //if (formatTarget.length > 8) {
+            //formatTarget = formatTarget.substring(0, 4) + "****" + formatTarget.substring(formatTarget.length - 4);
+        //}
 
         htmlOutput += `
             <div class="p-3.5 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-2.5 text-left relative overflow-hidden">
