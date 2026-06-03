@@ -3,6 +3,7 @@
 // ==========================================================
 const WA_ADMIN = "6285847909692";
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=0&single=true&output=csv";
+const SHEET_ARSIP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=702573697&single=true&output=csv"
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwh0lE_0ebqn2ScCWvxioXBJYwLl2qT3aGVHk_W0QHTRP21lWb88djzWMCrihY0ZkHj/exec";
 
 const iconMap = {
@@ -53,6 +54,7 @@ function buatTeksQrisDinamis(nominal) {
 }
 
 let rawDatabaseRows = [];
+let rawArsipRows = [];
 let masterPulsaGroup = {};
 let masterKuotaGroup = {};
 let masterTokenGroup = {}; 
@@ -101,32 +103,47 @@ async function muatDataDanPisahKategori() {
 
     // 1. AMBIL DARI MEMORI INTERNAL HP TERLEBIH DAHULU (INSTAN < 1 DETIK)
     const cacheLokalProduk = localStorage.getItem('nk_cache_produk_csv');
+    const cacheLokalArsip = localStorage.getItem('nk_cache_arsip_csv'); // Ambil cache arsip jika ada
+    
     if (cacheLokalProduk) {
         console.log("Memuat daftar harga dari cache lokal HP...");
         uraiDanProsesTeksCSV(cacheLokalProduk);
         gantiTabUtama("KUOTA");
     }
 
+    if (cacheLokalArsip) {
+        rawArsipRows = cacheLokalArsip.split(/\r?\n/).slice(1);
+    }
+
     // 2. TETAP SINKRONISASI DATA TERBARU DARI GOOGLE SHEET DI LATAR BELAKANG
     try {
-        const response = await fetch(SHEET_CSV_URL);
-        if (!response.ok) throw new Error("Gagal mengambil respon dari Google");
-        
-        const textDataTerbaru = await response.text();
+       // Ambil data dari kedua sheet secara paralel (bersamaan)
+        const [resProduk, resArsip] = await Promise.all([
+            fetch(SHEET_CSV_URL),
+            fetch(SHEET_ARSIP_URL)
+        ]);
 
-        // Jika ada perubahan harga di Google Sheets, perbarui memori HP
+        if (!resProduk.ok || !resArsip.ok) throw new Error("Gagal mengambil respon dari Google");
+        
+        const textDataTerbaru = await resProduk.text();
+        const textArsipTerbaru = await resArsip.text();
+
+    // Update data produk jika ada perubahan harga
         if (textDataTerbaru !== cacheLokalProduk) {
             localStorage.setItem('nk_cache_produk_csv', textDataTerbaru);
-            console.log("Daftar harga terbaru berhasil diperbarui dari awan Google Sheets!");
-            
             uraiDanProsesTeksCSV(textDataTerbaru);
             gantiTabUtama(tabUtamaAktif); 
         }
+
+        // Update data arsip status transaksi harian
+        localStorage.setItem('nk_cache_arsip_csv', textArsipTerbaru);
+        rawArsipRows = textArsipTerbaru.split(/\r?\n/).slice(1);
+        console.log("Daftar harga & status arsip berhasil diperbarui dari Google Sheets!");
+
     } catch (error) {
         console.warn("Koneksi lambat/offline. Menggunakan pangkalan data internal HP:", error);
     }
 }
-
 /**
  * FUNGSI BANTUAN UNTUK MEMPROSES STRUKTUR DATA BARIS CSV (KODE BARU)
  */
@@ -588,6 +605,12 @@ function bukaModalRiwayatLangsung() {
     // Langsung ambil data dari LocalStorage
     listCacheRiwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
 
+    // KODE TAMBAHAN: Pastikan database dari lokal/Google Sheet dipetakan ulang sebelum merender status
+    const cacheLokalProduk = localStorage.getItem('nk_cache_produk_csv');
+    if (cacheLokalProduk && rawDatabaseRows.length === 0) {
+        uraiDanProsesTeksCSV(cacheLokalProduk);
+    }
+
     // Jalankan render list dengan filter default 'SEMUA'
     filterRiwayatStatus('SEMUA');
 }
@@ -612,13 +635,47 @@ function filterRiwayatStatus(filterType) {
         }
     });
 
-    // Ambil ulang dari cache
-    let dataTerfilter = listCacheRiwayat;
+    // Buat peta (map) status terupdate berdasarkan "Nomor/ID Target" dari sheet ARSIP
+    let statusTerupdateMap = {};
+    
+    rawArsipRows.forEach(row => {
+        if (!row.trim()) return;
+        const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        
+        // PENTING: Sesuaikan indeks di bawah ini sesuai urutan kolom pada Sheet "ARSIP" Anda!
+        // Contoh di bawah berasumsi: Kolom 2 (indeks 1) adalah Nomor HP Target, dan Kolom 6 (indeks 5) adalah Statusnya.
+        const noHpTargetSheet = cols[1] ? cols[1].trim().replace(/"/g, "").replace(/'/g, "") : "";
+        const statusTransaksiSheet = cols[5] ? cols[5].trim().replace(/"/g, "").toUpperCase() : "";
+
+        if (noHpTargetSheet && statusTransaksiSheet) {
+            statusTerupdateMap[noHpTargetSheet] = statusTransaksiSheet;
+        }
+    });
+
+    // Proses data riwayat dan perbarui statusnya berdasarkan pencocokan nomor HP target
+    let riwayatDiproses = listCacheRiwayat.map(item => {
+        let noHpKey = item.target ? item.target.trim() : "";
+        // Jika ditemukan status terbaru di sheet ARSIP berdasarkan nomor HP, pakai status itu.
+        let statusFinal = statusTerupdateMap[noHpKey] || item.statusAwal || item.status || "PROSES";
+        
+        // Standarisasi kata status dari Google Sheet ke sistem UI aplikasi Anda
+        if (statusFinal.includes("LUNAS") || statusFinal === "SUCCESS") statusFinal = "SUKSES";
+        if (statusFinal.includes("PENDING")) statusFinal = "PROSES";
+        if (statusFinal.includes("FAILED")) statusFinal = "GAGAL";
+
+        return {
+            ...item,
+            status: statusFinal
+        };
+    });
+
+    // Filter berdasarkan tipe status yang dipilih pengguna
+    let dataTerfilter = riwayatDiproses;
     if (filterType !== 'SEMUA') {
-        dataTerfilter = listCacheRiwayat.filter(item => item.status === filterType);
+        dataTerfilter = riwayatDiproses.filter(item => item.status === filterType);
     }
 
-    // Batasi maks 20 riwayat teranyar
+    // Batasi maksimal 20 riwayat teranyar
     const dataFinal = dataTerfilter.slice(0, 20);
 
     if (dataFinal.length === 0) {
@@ -647,11 +704,8 @@ function filterRiwayatStatus(filterType) {
             iconStyle = "fa-spinner animate-spin text-amber-500";
         }
 
-        // Sensor nomor HP bagian tengah demi kenyamanan pelanggan (0858****9692)
         let formatTarget = item.target;
-        if (formatTarget.length > 8) {
-            formatTarget = formatTarget.substring(0, 4) + "****" + formatTarget.substring(formatTarget.length - 4);
-        }
+        let produkLabelTampil = item.kategoriLengkap || item.produk;
 
         htmlOutput += `
             <div class="p-3.5 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-2.5 text-left relative overflow-hidden">
@@ -666,7 +720,7 @@ function filterRiwayatStatus(filterType) {
                 </div>
                 
                 <div class="font-extrabold text-gray-900 text-xs tracking-tight leading-snug uppercase">
-                    ${item.produk}
+                    ${produkLabelTampil}
                 </div>
                 
                 <div class="flex justify-between items-end pt-1 border-t border-gray-50">
@@ -682,7 +736,6 @@ function filterRiwayatStatus(filterType) {
         `;
     });
 
-    // Berikan tombol tambahan untuk menghapus log riwayat di bagian paling bawah
     itemsContainer.innerHTML = `
         <div class="space-y-2.5">${htmlOutput}</div>
         <div class="pt-2">
