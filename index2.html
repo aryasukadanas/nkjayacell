@@ -74,20 +74,30 @@
                     </select>
                     <i class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
                 </div>
+<div>
+    <div class="relative flex items-center bg-transparent rounded-2xl border-2 border-gray-300 focus-within:border-blue-500 transition-all h-[58px]">
+        <label for="no-rekening" class="absolute left-4 -top-3 px-2 bg-white text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 pointer-events-none">
+            <i class="fas fa-fingerprint text-blue-500 text-[10px]"></i> Rekening Tujuan
+        </label>
 
-                <div>
-                    <div class="relative flex items-center bg-transparent rounded-2xl border-2 border-gray-300 focus-within:border-blue-500 transition-all h-[58px]">
-                        <label for="no-rekening" class="absolute left-4 -top-3 px-2 bg-white text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 pointer-events-none">
-                            <i class="fas fa-fingerprint text-blue-500 text-[10px]"></i> Rekening Tujuan
-                        </label>
+        <input type="tel" id="no-rekening" placeholder="0000 0000 0000" 
+               class="w-full h-full pl-4 pr-24 bg-transparent text-base font-black text-gray-700 tracking-wide placeholder:text-gray-200 border-0 outline-none ring-0 focus:ring-0">
+        
+        <div class="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2.5 z-10">
+            <button type="button" onclick="pilihDariKontak()" class="text-gray-400 hover:text-blue-600 active:scale-90 transition-all p-1" title="Ambil dari Kontak">
+                <i class="fas fa-address-book text-xl"></i>
+            </button>
+           
+            <span class="h-4 w-[1px] bg-gray-300"></span>
 
-                        <input type="tel" id="no-rekening" placeholder="0000 0000 0000" 
-                               class="w-full h-full px-4 pr-14 bg-transparent text-base font-black text-gray-700 tracking-wide placeholder:text-gray-200 border-0 outline-none ring-0 focus:ring-0">
-                        
-                        <button type="button" onclick="pilihDariKontak()" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 active:scale-90 transition-all p-1 z-10" title="Ambil dari Kontak">
-                            <i class="fas fa-address-book text-xl"></i>
-                        </button>
-                    </div>
+             <button type="button" onclick="mulaiInputSuara('norek')" class="text-gray-400 hover:text-red-500 active:scale-90 transition-all p-1" title="Input Suara">
+                <i class="fas fa-microphone text-xl" id="mic-icon-norek"></i>
+            </button>
+            
+            
+        </div>
+    </div>
+
 
                     <div id="rekening-valid" class="hidden mt-2 ml-2 flex items-center gap-1.5">
                         <i class="fas fa-check-circle text-green-500 text-[11px]"></i>
@@ -106,15 +116,22 @@
     </div>
 </div>
 
-                <div class="relative flex items-center bg-transparent rounded-2xl border-2 border-gray-300 focus-within:border-blue-500 transition-all h-[58px] px-4">
-                    <label for="nominal-transfer" class="absolute left-4 -top-3 px-2 bg-white text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 pointer-events-none">
-                        <i class="fas fa-coins text-blue-500 text-[10px]"></i> Jumlah Kirim
-                    </label>
-                    
-                    <span class="font-black text-gray-400 text-base mr-1 select-none">Rp</span>
-                    <input type="text" inputmode="numeric" id="nominal-transfer" placeholder="0"
-                           class="w-full h-full bg-transparent text-base font-black text-gray-700 placeholder:text-gray-200 tracking-wide border-0 outline-none ring-0 focus:ring-0">
-                </div>
+                <div>
+    <div class="relative flex items-center bg-transparent rounded-2xl border-2 border-gray-300 focus-within:border-blue-500 transition-all h-[58px] pl-4 pr-12">
+        <label for="nominal-transfer" class="absolute left-4 -top-3 px-2 bg-white text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 pointer-events-none">
+            <i class="fas fa-coins text-blue-500 text-[10px]"></i> Jumlah Kirim
+        </label>
+        
+        <span class="font-black text-gray-400 text-base mr-1 select-none">Rp</span>
+        <input type="text" inputmode="numeric" id="nominal-transfer" placeholder="0"
+               class="w-full h-full bg-transparent text-base font-black text-gray-700 placeholder:text-gray-200 tracking-wide border-0 outline-none ring-0 focus:ring-0">
+        
+        <button type="button" onclick="mulaiInputSuara('nominal')" 
+                class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 active:scale-90 transition-all p-1 z-10" 
+                title="Input Suara">
+            <i class="fas fa-microphone text-xl" id="mic-icon-nominal"></i>
+        </button>
+    </div>
 
                 <div class="bg-gray-50 p-5 rounded-[2rem] border border-gray-100 space-y-3">
                     <span class="block text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1">Rincian Pembayaran</span>
