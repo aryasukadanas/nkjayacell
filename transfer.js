@@ -460,23 +460,75 @@ function simpanKeSpreadsheet(namaFinalDariForm) {
     .catch((error) => console.error("❌ Gagal ke Google Sheets:", error));
 }
 
+ /**
+ * Fungsi Pembantu: Mengubah teks ucapan Indonesia (seperti "satu juta dua ratus ribu") menjadi angka digital
+ */
+function konversiTeksKeAngkaIndo(teks) {
+    let kata = teks.toLowerCase()
+        .replace(/[,.]/g, '') // Hapus titik/koma bawaan browser jika ada
+        .replace(/nol/g, '0')
+        .replace(/kosong/g, '0')
+        .split(' ');
+
+    const kamusAngka = {
+        'satu': 1, 'se': 1, 'dua': 2, 'tiga': 3, 'empat': 4, 
+        'lima': 5, 'enam': 6, 'tujuh': 7, 'delapan': 8, 'sembilan': 9,
+        'sepuluh': 10, 'sebelas': 11
+    };
+
+    let total = 0;
+    let hasilSementara = 0;
+
+    for (let i = 0; i < kata.length; i++) {
+        let k = kata[i];
+
+        // Jika kata berupa angka langsung (misal browser menangkap "1" atau "50")
+        if (!isNaN(k) && k !== '') {
+            hasilSementara = parseFloat(k);
+            continue;
+        }
+
+        // Cek angka satuan/belasan
+        if (kamusAngka[k] !== undefined) {
+            hasilSementara = kamusAngka[k];
+        } else if (k === 'belas') {
+            hasilSementara += 10;
+        } else if (k === 'puluh') {
+            if (hasilSementara === 0) hasilSementara = 1;
+            hasilSementara *= 10;
+        } else if (k === 'ratus') {
+            if (hasilSementara === 0) hasilSementara = 1;
+            hasilSementara *= 100;
+        } else if (k === 'ribu') {
+            if (hasilSementara === 0) hasilSementara = 1;
+            hasilSementara *= 1000;
+            total += hasilSementara;
+            hasilSementara = 0;
+        } else if (k === 'juta') {
+            if (hasilSementara === 0) hasilSementara = 1;
+            hasilSementara *= 1000000;
+            total += hasilSementara;
+            hasilSementara = 0;
+        }
+    }
+
+    total += hasilSementara;
+    return total > 0 ? total.toString() : teks;
+}
+
 /**
- * Fungsi Tambahan: Menjalankan Input Suara (Speech Recognition) untuk Kolom Ketikan
- * Fitur: Teks langsung muncul seketika saat berbicara (Interim Results)
+ * UPDATE FUNGSI INPUT SUARA GLOBAL
  */
 function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.warn("Browser ini tidak mendukung Web Speech API (Input Suara).");
-        return;
-    }
+    if (!SpeechRecognition) return;
 
     if (elemenInput.dataset.sedangMerekam === "true") return;
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'id-ID'; 
-    recognition.interimResults = true; // 🟢 MENGAKTIFKAN KETIKAN LANGSUNG (REAL-TIME)
-    recognition.continuous = false;   // Berhenti otomatis jika Anda jeda bicara agak lama
+    recognition.interimResults = true; 
+    recognition.continuous = false;   
 
     const placeholderAsli = elemenInput.placeholder || "";
 
@@ -487,15 +539,17 @@ function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
     };
 
     recognition.onresult = function(event) {
-        // Ambil hasil ucapan sementara maupun final
         let hasilSuara = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             hasilSuara += event.results[i][0].transcript;
         }
 
-        // 1. JIKA KOLOM ANGKA (No Rekening / Nominal)
         if (tipeInput === "angka") {
-            let angkaBersih = hasilSuara.replace(/[^0-9]/g, '');
+            // 🟢 Langkah 1: Konversi kata "Juta / Ribu" dari suara menjadi angka digital terlebih dahulu
+            let hasilKonversi = konversiTeksKeAngkaIndo(hasilSuara);
+            
+            // Langkah 2: Baru bersihkan sisa karakter non-angka
+            let angkaBersih = hasilKonversi.replace(/[^0-9]/g, '');
             
             if (elemenInput.id === 'no-rekening') {
                 elemenInput.value = formatSpasiRekening(angkaBersih);
@@ -503,35 +557,21 @@ function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
             } else if (elemenInput.id === 'nominal-transfer') {
                 elemenInput.value = formatRibuan(angkaBersih);
                 hitungTotal();
+            } else {
+                elemenInput.value = angkaBersih;
             }
-        } 
-        
-        // 2. JIKA KOLOM TEKS (Nama Pelanggan Baru)
-        else if (tipeInput === "teks") {
+        } else {
             elemenInput.value = hasilSuara.toUpperCase();
-            
-            // Langsung update rincian nama di bawah secara real-time
-            const norekValue = document.getElementById('no-rekening')?.value || "";
-            cekNamaPemilikRekening(norekValue);
         }
     };
 
-    recognition.onerror = function(event) {
-        console.error("Kesalahan input suara:", event.error);
-    };
+    recognition.onerror = function(event) { console.error(event.error); };
 
     recognition.onend = function() {
         elemenInput.dataset.sedangMerekam = "false";
         elemenInput.placeholder = placeholderAsli;
         elemenInput.style.backgroundColor = ""; 
-        
-        // Pemicu akhir untuk memastikan hitungan total & pencocokan nama benar-benar sinkron saat mic mati
-        if (tipeInput === "angka") {
-            hitungTotal();
-        } else {
-            const norekValue = document.getElementById('no-rekening')?.value || "";
-            cekNamaPemilikRekening(norekValue);
-        }
+        if (tipeInput === "angka") hitungTotal();
     };
 
     recognition.start();

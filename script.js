@@ -90,23 +90,35 @@ function aktifkanInputSuaraRealTime(elemenInput, tipeInput) {
         elemenInput.style.backgroundColor = "#1e293b"; // Efek visual saat mic aktif
     };
 
-    recognition.onresult = function(event) {
-        let hasilSuara = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            hasilSuara += event.results[i][0].transcript;
-        }
+   // Pastikan di bagian onresult script.js untuk nomor HP seperti ini:
+recognition.onresult = function(event) {
+    let hasilSuara = "";
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+        hasilSuara += event.results[i][0].transcript;
+    }
 
-        if (tipeInput === "angka") {
-            // Jika kolom angka (No HP / ID Game), hapus karakter selain angka
-            elemenInput.value = hasilSuara.replace(/[^0-9]/g, '');
-        } else {
-            // Jika kolom teks, ubah menjadi huruf kapital semua
-            elemenInput.value = hasilSuara.toUpperCase();
-        }
+    // Ganti kata-kata angka mandiri yang sering salah ditangkap browser sebelum difilter
+    let teksDisempurnakan = hasilSuara.toLowerCase()
+        .replace(/kosong/g, '0')
+        .replace(/nol/g, '0')
+        .replace(/satu/g, '1')
+        .replace(/dua/g, '2')
+        .replace(/tiga/g, '3')
+        .replace(/empat/g, '4')
+        .replace(/lima/g, '5')
+        .replace(/enam/g, '6')
+        .replace(/tujuh/g, '7')
+        .replace(/delapan/g, '8')
+        .replace(/sembilan/g, '9');
 
-        // Memicu event 'input' manual agar fungsi pencarian otomatis/filter produk langsung merespon
-        elemenInput.dispatchEvent(new Event('input'));
-    };
+    let angkaBersih = teksDisempurnakan.replace(/[^0-9]/g, '');
+    elemenInput.value = angkaBersih;
+    
+    if (typeof fiturDeteksiOtomatisDanCariProvider === "function") {
+        fiturDeteksiOtomatisDanCariProvider(angkaBersih);
+    }
+    elemenInput.dispatchEvent(new Event('input'));
+};
 
     recognition.onerror = function(event) {
         console.error("Kesalahan input suara:", event.error);
