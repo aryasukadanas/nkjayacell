@@ -10,10 +10,84 @@ let gameDipilih = '';
 let diamondDipilih = null;
 let intervalTimerGlobal = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-    muatDataDariSpreadsheet();
-});
+// ==========================================================
+// 1. DEKLARASI FUNGSI INPUT SUARA (TARUH DI ATAS)
+// ==========================================================
+function aktifkanInputSuaraRealTime(elemenInput, tipeInput) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        console.warn("Browser ini tidak mendukung Web Speech API (Input Suara).");
+        return;
+    }
 
+    if (elemenInput.dataset.sedangMerekam === "true") return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'id-ID'; 
+    recognition.interimResults = true; // Ketikan langsung muncul real-time
+    recognition.continuous = false;   
+
+    const placeholderAsli = elemenInput.placeholder || "";
+
+    recognition.onstart = function() {
+        elemenInput.dataset.sedangMerekam = "true";
+        elemenInput.placeholder = "🎙️ Mendengarkan...";
+        elemenInput.style.backgroundColor = "#1e293b"; // Efek visual saat mic aktif
+    };
+
+    recognition.onresult = function(event) {
+        let hasilSuara = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            hasilSuara += event.results[i][0].transcript;
+        }
+
+        if (tipeInput === "angka") {
+            // Jika kolom angka (No HP / ID Game), hapus karakter selain angka
+            elemenInput.value = hasilSuara.replace(/[^0-9]/g, '');
+        } else {
+            // Jika kolom teks, ubah menjadi huruf kapital semua
+            elemenInput.value = hasilSuara.toUpperCase();
+        }
+
+        // Memicu event 'input' manual agar fungsi pencarian otomatis/filter produk langsung merespon
+        elemenInput.dispatchEvent(new Event('input'));
+    };
+
+    recognition.onerror = function(event) {
+        console.error("Kesalahan input suara:", event.error);
+    };
+
+    recognition.onend = function() {
+        elemenInput.dataset.sedangMerekam = "false";
+        elemenInput.placeholder = placeholderAsli;
+        elemenInput.style.backgroundColor = ""; 
+        elemenInput.dispatchEvent(new Event('input'));
+    };
+
+    recognition.start();
+}
+
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    muatDataDariSpreadsheet(); // Fungsi bawaan gameml.js Anda
+
+    // 🟢 TAMBAHKAN KODE INI DI DALAMNYA:
+    const gameIdEl = document.getElementById('game-id') || document.getElementById('user-id');
+    const zoneIdEl = document.getElementById('zone-id') || document.getElementById('server-id');
+
+    if (gameIdEl) {
+        gameIdEl.addEventListener('click', function() {
+            aktifkanInputSuaraGame(this);
+        });
+    }
+
+    if (zoneIdEl) {
+        zoneIdEl.addEventListener('click', function() {
+            aktifkanInputSuaraGame(this);
+        });
+    }
+});
 /**
  * FETCHING DATA DAN SYNC MULTI-KOLOM DARI SPREADSHEET
  */
@@ -234,6 +308,58 @@ function tandaiPilihanItem(el, name, price, typeLabel) {
     el.classList.add('active');
     diamondDipilih = { name, price, label: typeLabel };
 }
+
+/**
+ * Fungsi Tambahan: Menjalankan Input Suara (Speech Recognition) Real-Time
+ * Khusus untuk file gameml.js (Mengisi ID Game & Zone ID)
+ */
+function aktifkanInputSuaraGame(elemenInput) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        console.warn("Browser ini tidak mendukung Web Speech API (Input Suara).");
+        return;
+    }
+
+    if (elemenInput.dataset.sedangMerekam === "true") return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'id-ID'; 
+    recognition.interimResults = true; // Ketikan langsung muncul real-time
+    recognition.continuous = false;   
+
+    const placeholderAsli = elemenInput.placeholder || "";
+
+    recognition.onstart = function() {
+        elemenInput.dataset.sedangMerekam = "true";
+        elemenInput.placeholder = "🎙️ Sebutkan ID...";
+        elemenInput.style.backgroundColor = "#1e293b"; 
+    };
+
+    recognition.onresult = function(event) {
+        let hasilSuara = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            hasilSuara += event.results[i][0].transcript;
+        }
+
+        // Bersihkan karakter aneh, biarkan hanya angka/huruf (Alfanumerik) sesuai tipe ID Game
+        let idBersih = hasilSuara.replace(/[^a-zA-Z0-9]/g, '');
+        elemenInput.value = idBersih;
+    };
+
+    recognition.onerror = function(event) {
+        console.error("Kesalahan input suara:", event.error);
+    };
+
+    recognition.onend = function() {
+        elemenInput.dataset.sedangMerekam = "false";
+        elemenInput.placeholder = placeholderAsli;
+        elemenInput.style.backgroundColor = ""; 
+    };
+
+    recognition.start();
+}
+
+
 
 /**
  * SIMPAN SPREADSHEET & KIRIM DATA FORMAT MONOSPACE WHATSAPP
