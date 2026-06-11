@@ -519,6 +519,10 @@ function konversiTeksKeAngkaIndo(teks) {
 /**
  * UPDATE FUNGSI INPUT SUARA GLOBAL
  */
+/**
+ * Fungsi Input Suara Global Pintar
+ * Mampu membaca ejaan acak untuk nomor rekening, nominal, maupun nama
+ */
 function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -544,41 +548,50 @@ function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
             hasilSuara += event.results[i][0].transcript;
         }
 
-        if (tipeInput === "angka") {
-            // 🟢 Langkah 1: Konversi kata "Juta / Ribu" dari suara menjadi angka digital terlebih dahulu
+        // 🟢 KHUSUS KOLOM NOMOR REKENING (Bisa disebut acak / dieja / disebut nominal)
+        if (elemenInput.id === 'no-rekening') {
+            let teksFormat = hasilSuara.toLowerCase()
+                .replace(/kosong/g, '0').replace(/nol/g, '0')
+                .replace(/satu/g, '1').replace(/dua/g, '2')
+                .replace(/tiga/g, '3').replace(/empat/g, '4')
+                .replace(/lima/g, '5').replace(/enam/g, '6')
+                .replace(/tujuh/g, '7').replace(/delapan/g, '8')
+                .replace(/sembilan/g, '9')
+                .replace(/sepuluh/g, '10').replace(/sebelas/g, '11')
+                .replace(/ratus/g, '00').replace(/ribu/g, '000').replace(/juta/g, '000000')
+                .replace(/belas/g, '').replace(/puluh/g, ''); // Hapus imbuhan agar angka mentah bergabung
+
+            let angkaBersih = teksFormat.replace(/[^0-9]/g, '');
+            elemenInput.value = formatSpasiRekening(angkaBersih);
+            cekNamaPemilikRekening(elemenInput.value);
+        } 
+        
+        // 🟢 KHUSUS KOLOM NOMINAL TRANSFER (Menggunakan konversi nominal penuh)
+        else if (elemenInput.id === 'nominal-transfer') {
             let hasilKonversi = konversiTeksKeAngkaIndo(hasilSuara);
-            
-            // Langkah 2: Baru bersihkan sisa karakter non-angka
             let angkaBersih = hasilKonversi.replace(/[^0-9]/g, '');
-            
-            if (elemenInput.id === 'no-rekening') {
-                elemenInput.value = formatSpasiRekening(angkaBersih);
-                cekNamaPemilikRekening(elemenInput.value);
-            } else if (elemenInput.id === 'nominal-transfer') {
-                elemenInput.value = formatRibuan(angkaBersih);
-                hitungTotal();
-            } else {
-                elemenInput.value = angkaBersih;
-            }
-        } else {
+            elemenInput.value = formatRibuan(angkaBersih);
+            hitungTotal();
+        } 
+        
+        // 🟢 KHUSUS KOLOM NAMA
+        else if (tipeInput === "teks") {
             elemenInput.value = hasilSuara.toUpperCase();
+            const norekValue = document.getElementById('no-rekening')?.value || "";
+            cekNamaPemilikRekening(norekValue);
         }
     };
 
     recognition.onerror = function(event) { console.error(event.error); };
 
-  recognition.onend = function() {
+    recognition.onend = function() {
         elemenInput.dataset.sedangMerekam = "false";
         elemenInput.placeholder = placeholderAsli;
         elemenInput.style.backgroundColor = ""; 
         
-        // Selaraskan hitungan akhir & langsung cek kelengkapan untuk asisten suara suara
-        if (tipeInput === "angka") {
+        if (elemenInput.id === 'nominal-transfer') {
             hitungTotal();
         }
-        
-        // Pemicu asisten suara setelah perekaman mic selesai sepenuhnya
-        cekKelengkapanKolom(); 
     };
 
     recognition.start();
@@ -586,17 +599,45 @@ function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
 
 /**
  * Fungsi Tambahan: Mengubah Teks menjadi Suara (Text-to-Speech)
+ * Versi Optimasi PC: Memaksa mencari database suara Bahasa Indonesia asli
  */
 function bicaraRincianTransfer(teks) {
-    // Batalkan suara sebelumnya jika ada yang sedang berjalan agar tidak bertabrakan
+    // Batalkan suara sebelumnya yang sedang berjalan
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(teks);
-    utterance.lang = 'id-ID'; // Bahasa Indonesia
     utterance.rate = 1.0;     // Kecepatan normal
-    utterance.pitch = 1.0;    // Nada suara normal
+    utterance.pitch = 1.0;    // Nada normal
 
+    // 🟢 Ambil semua daftar opsi suara yang tersedia di sistem PC/HP Anda
+    const semuaSuara = window.speechSynthesis.getVoices();
+    
+    // Cari suara yang kodenya mengandung 'id-ID' (Indonesia) atau bernama 'Google Bahasa Indonesia'
+    const suaraIndonesia = semuaSuara.find(voice => 
+        voice.lang === 'id-ID' || 
+        voice.lang.includes('id_ID') || 
+        voice.name.toLowerCase().includes('indonesia')
+    );
+
+    if (suaraIndonesia) {
+        // Jika ditemukan suara lokal Indonesia di PC, pasang langsung!
+        utterance.voice = suaraIndonesia;
+        utterance.lang = 'id-ID';
+    } else {
+        // Jika PC benar-benar tidak punya suara Indo, setel default bahasa sistem agar tidak error
+        utterance.lang = 'id-ID';
+        console.warn("Peringatan: PC Anda belum menginstal paket bahasa id-ID asli.");
+    }
+
+    // Eksekusi suara pembacaan nota
     window.speechSynthesis.speak(utterance);
+}
+
+// SISTEM PENGAMAN KHUSUS BROWSER PC (Mencegah getVoices kosong saat load pertama kali)
+if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = () => {
+        // Hanya memicu pemuatan ulang daftar suara internal browser PC di latar belakang
+    };
 }
 
 /**
@@ -656,15 +697,19 @@ window.addEventListener('load', () => {
         });
     }
 
+   // 2. Nomor Rekening (AKTIF INPUT SUARA DENGAN EJEAN ACAK)
     if (elNorek) {
         elNorek.addEventListener('input', function() {
             let cleanVal = this.value.replace(/[^0-9]/g, '');
             this.value = formatSpasiRekening(cleanVal);
             cekNamaPemilikRekening(this.value);
-            cekKelengkapanKolom(); // 🟢 Cek saat nomor rekening diketik/diisi suara
         });
 
+        // Pasang kembali pemicu klik suaranya di sini
         elNorek.addEventListener('click', function() {
+            if (typeof speechSynthesis !== 'undefined') {
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+            }
             aktifkanInputSuaraGlobal(this, "angka");
         });
     }
