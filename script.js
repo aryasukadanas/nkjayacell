@@ -123,16 +123,19 @@ function aktifkanInputSuaraRealTime(elemenInput, tipeInput) {
 }  
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. Jalankan fungsi bawaan aplikasi
     muatDataDanPisahKategori();
 
-// Cari elemen input nomor HP pelanggan Anda (sesuaikan ID jika berbeda, contoh: 'no-hp' atau 'input-tujuan')
-const inputNoHp = document.getElementById('no-hp') || document.getElementById('input-tujuan');
+    // 2. Ambil elemen input nomor HP utama berdasarkan ID yang benar
+    const inputNoHp = document.getElementById('search-phone-input') || document.getElementById('no-hp') || document.getElementById('input-tujuan');
 
-if (inputNoHp) {
-    inputNoHp.addEventListener('click', function() {
-        aktifkanInputSuaraScript(this);
-    });
-}
+    // 3. Pasangkan fitur input suara real-time saat kolom diklik
+    if (inputNoHp) {
+        inputNoHp.addEventListener('click', function() {
+            // Memanggil fungsi real-time yang sudah Anda deklarasikan di bagian atas
+            aktifkanInputSuaraRealTime(this, "angka");
+        });
+    }
 });
 
 /**
@@ -1033,16 +1036,19 @@ function aktifkanInputSuaraScript(elemenInput) {
             hasilSuara += event.results[i][0].transcript;
         }
 
-        // Filter hanya angka saja (membersihkan spasi / huruf jika terdeteksi)
-        let angkaBersih = hasilSuara.replace(/[^0-9]/g, '');
-        elemenInput.value = angkaBersih;
-
-        // Pemicu fungsi deteksi operator otomatis bawaan script.js jika ada (misal: cekOperator)
-        if (typeof deteksiOperator === "function") {
-            deteksiOperator(angkaBersih);
-        } else if (typeof cekProvider === "function") {
-            cekProvider(angkaBersih);
+        if (tipeInput === "angka") {
+            let angkaBersih = hasilSuara.replace(/[^0-9]/g, '');
+            elemenInput.value = angkaBersih;
+            
+            // 🟢 TAMBAHAN: Langsung pemicu deteksi operator otomatis NK JAYA CELL saat sedang berbicara
+            if (typeof fiturDeteksiOtomatisDanCariProvider === "function") {
+                fiturDeteksiOtomatisDanCariProvider(angkaBersih);
+            }
+        } else {
+            elemenInput.value = hasilSuara.toUpperCase();
         }
+
+        elemenInput.dispatchEvent(new Event('input'));
     };
 
     recognition.onerror = function(event) {
