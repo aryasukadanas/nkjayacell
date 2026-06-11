@@ -567,16 +567,75 @@ function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
 
     recognition.onerror = function(event) { console.error(event.error); };
 
-    recognition.onend = function() {
+  recognition.onend = function() {
         elemenInput.dataset.sedangMerekam = "false";
         elemenInput.placeholder = placeholderAsli;
         elemenInput.style.backgroundColor = ""; 
-        if (tipeInput === "angka") hitungTotal();
+        
+        // Selaraskan hitungan akhir & langsung cek kelengkapan untuk asisten suara suara
+        if (tipeInput === "angka") {
+            hitungTotal();
+        }
+        
+        // Pemicu asisten suara setelah perekaman mic selesai sepenuhnya
+        cekKelengkapanKolom(); 
     };
 
     recognition.start();
 }
 
+/**
+ * Fungsi Tambahan: Mengubah Teks menjadi Suara (Text-to-Speech)
+ */
+function bicaraRincianTransfer(teks) {
+    // Batalkan suara sebelumnya jika ada yang sedang berjalan agar tidak bertabrakan
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(teks);
+    utterance.lang = 'id-ID'; // Bahasa Indonesia
+    utterance.rate = 1.0;     // Kecepatan normal
+    utterance.pitch = 1.0;    // Nada suara normal
+
+    window.speechSynthesis.speak(utterance);
+}
+
+/**
+ * Fungsi Tambahan: Memeriksa apakah semua kolom sudah terisi lengkap
+ * Jika lengkap, jalankan asisten suara otomatis
+ */
+function cekKelengkapanKolom() {
+    const elBank = document.getElementById('bank-tujuan');
+    const elNorek = document.getElementById('no-rekening');
+    const elNominal = document.getElementById('nominal-transfer');
+    const elNama = document.getElementById('nama-pelanggan-baru'); // Menyesuaikan input nama pelanggan baru Anda
+
+    // Ambil nilai mentah
+    const bank = elBank ? elBank.value : "";
+    const norek = elNorek ? elNorek.value.replace(/\s/g, '') : ""; // Hilangkan spasi format
+    const nominal = elNominal ? elNominal.value.replace(/[^0-9]/g, '') : "";
+    
+    // Nama diambil dari elemen text input (jika ada) atau teks preview rincian yang muncul di halaman Anda
+    const nama = elNama ? elNama.value.trim() : "";
+
+    // JIKA SEMUA KOLOM UTAMA SUDAH TERISI LENGKAP
+    if (bank !== "" && norek.length >= 5 && nominal !== "" && nominal !== "0" && nama !== "") {
+        
+        // Mencegah asisten bersuara berulang-ulang saat user masih mengedit huruf terakhir
+        if (window.datasetTerakhirBicara === `${bank}-${norek}-${nominal}-${nama}`) return;
+        window.datasetTerakhirBicara = `${bank}-${norek}-${nominal}-${nama}`;
+
+        // Format mata uang nominal agar dibaca natural oleh robot
+        const nominalFormatBicara = parseInt(nominal).toLocaleString('id-ID');
+
+        // Susun kalimat yang akan diucapkan oleh aplikasi
+        const kalimatSuara = `Transfer ${bank}. Nomor rekening ${norek.split('').join(' ')}. Atas nama ${nama}. Nominal ${nominalFormatBicara} rupiah. Rincian sudah sesuai, silakan tekan tombol proses transfer di bagian bawah.`;
+
+        // Jalankan suara rincian otomatis
+        setTimeout(() => {
+            bicaraRincianTransfer(kalimatSuara);
+        }, 800); // Diberi jeda sebentar agar ketikan teks final selesai sepenuhnya terlebih dahulu
+    }
+}
 
 /**
  * Inisialisasi utama saat seluruh komponen halaman siap
@@ -589,18 +648,20 @@ window.addEventListener('load', () => {
 
     renderRiwayatUI();
 
-    // --- 1. Kolom Pilihan Bank (MURNI MANUAL BROWSER) ---
     if (elBank) {
         fetchTarifAdminBank();
-        elBank.addEventListener('change', hitungTotal);
+        elBank.addEventListener('change', () => {
+            hitungTotal();
+            cekKelengkapanKolom(); // 🟢 Cek setelah bank diganti
+        });
     }
 
-    // --- 2. Kolom No Rekening (BISA SUARA) ---
     if (elNorek) {
         elNorek.addEventListener('input', function() {
             let cleanVal = this.value.replace(/[^0-9]/g, '');
             this.value = formatSpasiRekening(cleanVal);
             cekNamaPemilikRekening(this.value);
+            cekKelengkapanKolom(); // 🟢 Cek saat nomor rekening diketik/diisi suara
         });
 
         elNorek.addEventListener('click', function() {
@@ -608,7 +669,6 @@ window.addEventListener('load', () => {
         });
     }
 
-    // --- 3. Kolom Nominal Transfer (BISA SUARA) ---
     if (elNominal) {
         elNominal.setAttribute('type', 'text');
         elNominal.setAttribute('inputmode', 'numeric');
@@ -616,6 +676,7 @@ window.addEventListener('load', () => {
         elNominal.addEventListener('input', function() {
             this.value = formatRibuan(this.value);
             hitungTotal();
+            cekKelengkapanKolom(); // 🟢 Cek saat nominal diketik/diisi suara
         });
 
         elNominal.addEventListener('click', function() {
@@ -623,11 +684,11 @@ window.addEventListener('load', () => {
         });
     }
 
-    // --- 4. Kolom Nama Pelanggan Baru (BISA SUARA) ---
     if (inputNamaBaru) {
         inputNamaBaru.addEventListener('input', () => {
             const norekValue = document.getElementById('no-rekening')?.value || "";
             cekNamaPemilikRekening(norekValue);
+            cekKelengkapanKolom(); // 🟢 Cek saat nama baru diketik/diisi suara
         });
 
         inputNamaBaru.addEventListener('click', function() {
