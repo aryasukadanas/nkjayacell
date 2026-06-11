@@ -555,4 +555,170 @@ async function prosesTransferKeSheet() {
   }
 }
 
+/**
+ * ==========================================
+ * FITUR INPUT SUARA (SPEECH RECOGNITION)
+ * ==========================================
+ */
+
+/**
+ * Fungsi Utama untuk Mengaktifkan Perekam Suara (Mic)
+ * @param {string} tipe - 'norek' atau 'nominal'
+ */
+function mulaiInputSuara(tipe) {
+    // Cek apakah browser mendukung Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Fitur input suara tidak didukung di browser ini. Silakan gunakan Google Chrome atau Safari terbaru.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'id-ID'; // Setel ke Bahasa Indonesia
+    recognition.interimResults = false; // Hanya mengambil hasil akhir setelah selesai bicara
+    recognition.maxAlternatives = 1;
+
+    const micIcon = document.getElementById(`mic-icon-${tipe}`);
+    
+    // Beri efek visual/animasi saat mikrofon sedang aktif merekam
+    if (micIcon) {
+        micIcon.classList.remove('text-gray-400');
+        micIcon.classList.add('text-red-500', 'animate-pulse');
+    }
+
+    // Mulai mendengarkan suara
+    recognition.start();
+
+    // Event ketika suara berhasil dikenali dan diubah menjadi teks
+    recognition.onresult = function(event) {
+        let hasilSuara = event.results[0][0].transcript.toLowerCase().trim();
+        console.log(`[Voice Input] Hasil Suara (${tipe}): "${hasilSuara}"`);
+
+        if (tipe === 'norek') {
+            const elNorek = document.getElementById('no-rekening');
+            // Ambil hanya karakter angka saja dari suara
+            let angkaNorek = hasilSuara.replace(/\D/g, '');
+            if (elNorek && angkaNorek) {
+                elNorek.value = formatSpasiRekening(angkaNorek);
+                // Trigger fungsi bawaan NK Jaya Cell untuk cek nama di spreadsheet
+                cekNamaPemilikRekening(elNorek.value);
+            }
+        } 
+        else if (tipe === 'nominal') {
+            const elNominal = document.getElementById('nominal-transfer');
+            if (elNominal) {
+                // Konversi teks ucapan bahasa Indonesia menjadi angka matematika mentah
+                let angkaNominal = parsingTeksKeAngka(hasilSuara);
+                
+                if (angkaNominal > 0) {
+                    // Format angka mentah menjadi berpemisah titik (ribuan)
+                    elNominal.value = formatRibuan(angkaNominal.toString());
+                    // Trigger fungsi bawaan NK Jaya Cell untuk kalkulasi total + admin
+                    hitungTotal();
+                } else {
+                    alert(`Gagal memproses nominal. Suara terdeteksi: "${hasilSuara}". Harap ucapkan dengan jelas (Contoh: "Dua puluh lima juta ratus ribu").`);
+                }
+            }
+        }
+    };
+
+    // Event jika terjadi error (misal: izin mic ditolak atau mic tidak mendeteksi suara)
+    recognition.onerror = function(event) {
+        console.error("Speech Recognition Error:", event.error);
+        if (event.error === 'not-allowed') {
+            alert("Akses mikrofon ditolak. Silakan izinkan mikrofon pada pengaturan browser Anda.");
+        } else {
+            alert("Gagal mengenali suara, silakan coba lagi dengan suara lebih jelas.");
+        }
+    };
+
+    // Event ketika proses perekaman selesai (baik sukses maupun error)
+    recognition.onend = function() {
+        // Kembalikan tampilan ikon mic ke kondisi semula
+        if (micIcon) {
+            micIcon.classList.remove('text-red-500', 'animate-pulse');
+            micIcon.classList.add('text-gray-400');
+        }
+    };
+}
+
+/**
+ * Mesin Penerjemah Teks Ucapan ke Angka Matematika (Nominal Rupiah)
+ * Mendukung pembacaan: ratusan, ribuan, jutaan, hingga puluhan juta rupiah.
+ * @param {string} teks - Kalimat hasil tangkapan microphone
+ * @returns {number} Hasil konversi berupa angka murni
+ */
+function parsingTeksKeAngka(teks) {
+    // Jalur pintas: Jika Google langsung menerjemahkan suara menjadi angka digital tulisan (misal: "50000" atau "2.500.000")
+    let langsungAngka = teks.replace(/\./g, '').replace(/[^0-9]/g, '');
+    if (langsungAngka.length > 0 && !isNaN(langsungAngka) && teks.indexOf('juta') === -1 && teks.indexOf('ribu') === -1) {
+        return parseInt(langsungAngka);
+    }
+
+    // Kamus dasar angka Bahasa Indonesia
+    const kamusAngka = {
+        'se': 1, 'satu': 1, 'dua': 2, 'tiga': 3, 'empat': 4, 'lima': 5,
+        'enam': 6, 'tujuh': 7, 'delapan': 8, 'sembilan': 9, 'sepuluh': 10,
+        'sebelas': 11
+    };
+
+    let total = 0;
+    let tempJuta = 0;
+    let tempRibu = 0;
+    let tempRatus = 0;
+    let bilanganSaatIni = 0;
+
+    // Pecah teks suara menjadi potongan kata per kata
+    const kataKata = teks.replace(/-/g, ' ').split(/\s+/);
+
+    for (let i = 0; i < kataKata.length; i++) {
+        let kata = kataKata[i];
+
+        // 1. Ambil nilai dasar angka dari kamus
+        if (kamusAngka[kata] !== undefined) {
+            bilanganSaatIni = kamusAngka[kata];
+        } else if (kata.match(/^\d+$/)) {
+            bilanganSaatIni = parseInt(kata);
+        }
+        // Kondisi khusus awalan "se" (seratus, seribu)
+        else if (kata.startsWith('se') && kata !== 'sembilan' && kata !== 'sepuluh' && kata !== 'sebelas') {
+            bilanganSaatIni = 1;
+            let sisaKata = kata.substring(2);
+            if (sisaKata === 'ratus') { tempRatus = 100; bilanganSaatIni = 0; continue; }
+            if (sisaKata === 'ribu') { tempRibu = 1000; bilanganSaatIni = 0; continue; }
+        }
+
+        // 2. Kalkulasi berdasarkan pengali satuan (puluh, belas, ratus, ribu, juta)
+        if (kata === 'belas') {
+            bilanganSaatIni += 10;
+        } 
+        else if (kata === 'puluh') {
+            bilanganSaatIni *= 10;
+        } 
+        else if (kata === 'ratus') {
+            if (bilanganSaatIni === 0) bilanganSaatIni = 1; 
+            tempRatus = bilanganSaatIni * 100;
+            bilanganSaatIni = 0;
+        } 
+        else if (kata === 'ribu') {
+            if (bilanganSaatIni === 0 && tempRatus === 0) bilanganSaatIni = 1;
+            tempRibu = (tempRatus + bilanganSaatIni) * 1000;
+            tempRatus = 0;
+            bilanganSaatIni = 0;
+        } 
+        else if (kata === 'juta') {
+            if (bilanganSaatIni === 0 && tempRatus === 0 && tempRibu === 0) bilanganSaatIni = 1;
+            // Kunci utama: kumpulkan seluruh nilai sementara sebelum dikalikan satu juta
+            tempJuta = (tempRibu + tempRatus + bilanganSaatIni) * 1000000;
+            tempRibu = 0;
+            tempRatus = 0;
+            bilanganSaatIni = 0;
+        }
+    }
+
+    // Gabungkan sisa angka di barisan belakang kalimat jika ada
+    total = tempJuta + tempRibu + tempRatus + bilanganSaatIni;
+    return total;
+}
+
 
