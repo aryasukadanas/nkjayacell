@@ -462,7 +462,7 @@ function simpanKeSpreadsheet(namaFinalDariForm) {
 
 /**
  * Fungsi Tambahan: Menjalankan Input Suara (Speech Recognition) untuk Kolom Ketikan
- * Mendukung tipe: 'angka' (Norek & Nominal) dan 'teks' (Nama Pelanggan Baru)
+ * Fitur: Teks langsung muncul seketika saat berbicara (Interim Results)
  */
 function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -475,20 +475,24 @@ function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'id-ID'; 
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+    recognition.interimResults = true; // 🟢 MENGAKTIFKAN KETIKAN LANGSUNG (REAL-TIME)
+    recognition.continuous = false;   // Berhenti otomatis jika Anda jeda bicara agak lama
 
     const placeholderAsli = elemenInput.placeholder || "";
 
     recognition.onstart = function() {
         elemenInput.dataset.sedangMerekam = "true";
         elemenInput.placeholder = "🎙️ Mendengarkan...";
-        elemenInput.style.backgroundColor = "#1e293b"; // Memberikan warna penanda aktif
+        elemenInput.style.backgroundColor = "#1e293b"; 
     };
 
     recognition.onresult = function(event) {
-        let hasilSuara = event.results[0][0].transcript.trim();
-        
+        // Ambil hasil ucapan sementara maupun final
+        let hasilSuara = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            hasilSuara += event.results[i][0].transcript;
+        }
+
         // 1. JIKA KOLOM ANGKA (No Rekening / Nominal)
         if (tipeInput === "angka") {
             let angkaBersih = hasilSuara.replace(/[^0-9]/g, '');
@@ -505,6 +509,8 @@ function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
         // 2. JIKA KOLOM TEKS (Nama Pelanggan Baru)
         else if (tipeInput === "teks") {
             elemenInput.value = hasilSuara.toUpperCase();
+            
+            // Langsung update rincian nama di bawah secara real-time
             const norekValue = document.getElementById('no-rekening')?.value || "";
             cekNamaPemilikRekening(norekValue);
         }
@@ -518,6 +524,14 @@ function aktifkanInputSuaraGlobal(elemenInput, tipeInput) {
         elemenInput.dataset.sedangMerekam = "false";
         elemenInput.placeholder = placeholderAsli;
         elemenInput.style.backgroundColor = ""; 
+        
+        // Pemicu akhir untuk memastikan hitungan total & pencocokan nama benar-benar sinkron saat mic mati
+        if (tipeInput === "angka") {
+            hitungTotal();
+        } else {
+            const norekValue = document.getElementById('no-rekening')?.value || "";
+            cekNamaPemilikRekening(norekValue);
+        }
     };
 
     recognition.start();
