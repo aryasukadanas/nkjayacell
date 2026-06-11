@@ -463,10 +463,14 @@ function simpanKeSpreadsheet(namaFinalDariForm) {
 /**
  * Inisialisasi utama saat seluruh komponen halaman siap
  */
+/**
+ * Inisialisasi utama saat seluruh komponen halaman siap
+ */
 window.addEventListener('load', () => {
     const elBank = document.getElementById('bank-tujuan');
     const elNorek = document.getElementById('no-rekening');
     const elNominal = document.getElementById('nominal-transfer');
+    const inputNamaBaru = document.getElementById('nama-pelanggan-baru');
 
     renderRiwayatUI();
 
@@ -475,14 +479,21 @@ window.addEventListener('load', () => {
         elBank.addEventListener('change', hitungTotal);
     }
 
+    // --- Kolom No Rekening ---
     if (elNorek) {
         elNorek.addEventListener('input', function() {
             let cleanVal = this.value.replace(/[^0-9]/g, '');
             this.value = formatSpasiRekening(cleanVal);
             cekNamaPemilikRekening(this.value);
         });
+
+        // TAMBAHAN: Jalankan input suara saat kolom diklik
+        elNorek.addEventListener('click', function() {
+            aktifkanInputSuara(this, "angka");
+        });
     }
 
+    // --- Kolom Nominal Transfer ---
     if (elNominal) {
         elNominal.setAttribute('type', 'text');
         elNominal.setAttribute('inputmode', 'numeric');
@@ -491,17 +502,94 @@ window.addEventListener('load', () => {
             this.value = formatRibuan(this.value);
             hitungTotal();
         });
+
+        // TAMBAHAN: Jalankan input suara saat kolom diklik
+        elNominal.addEventListener('click', function() {
+            aktifkanInputSuara(this, "angka");
+        });
     }
 
-    // Tambahkan baris ini di dalam window.addEventListener('load') pada transfer.js Anda
-    const inputNamaBaru = document.getElementById('nama-pelanggan-baru');
+    // --- Kolom Nama Pelanggan Baru ---
     if (inputNamaBaru) {
         inputNamaBaru.addEventListener('input', () => {
-        const norekValue = document.getElementById('no-rekening')?.value || "";
-        cekNamaPemilikRekening(norekValue);
-    });
-}
+            const norekValue = document.getElementById('no-rekening')?.value || "";
+            cekNamaPemilikRekening(norekValue);
+        });
+
+        // TAMBAHAN: Jalankan input suara saat kolom diklik
+        inputNamaBaru.addEventListener('click', function() {
+            aktifkanInputSuara(this, "teks");
+        });
+    }
 });
+
+/**
+ * Fungsi Tambahan: Menjalankan Input Suara (Speech Recognition)
+ * Mengisi nilai text/angka ke dalam input yang sedang aktif berdasarkan suara
+ */
+function aktifkanInputSuara(elemenInput, tipeInput = "teks") {
+    // Cek dukungan browser
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        console.warn("Browser ini tidak mendukung Web Speech API (Input Suara).");
+        return;
+    }
+
+    // Jika sedang merekam pada elemen ini, jangan buat recognition ganda
+    if (elemenInput.dataset.sedangMerekam === "true") return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'id-ID'; // Menggunakan Bahasa Indonesia
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = function() {
+        elemenInput.dataset.sedangMerekam = "true";
+        elemenInput.placeholder = "🎙️ Mendengarkan suara Anda...";
+        elemenInput.style.backgroundColor = "#1e293b"; // Memberi efek visual saat merekam (opsional)
+    };
+
+    recognition.onresult = function(event) {
+        let hasilSuara = event.results[0][0].transcript;
+        
+        if (tipeInput === "angka") {
+            // Bersihkan huruf/spasi, hanya ambil angka saja
+            let angkaBersih = hasilSuara.replace(/[^0-9]/g, '');
+            
+            if (elemenInput.id === 'no-rekening') {
+                elemenInput.value = formatSpasiRekening(angkaBersih);
+                cekNamaPemilikRekening(elemenInput.value);
+            } else if (elemenInput.id === 'nominal-transfer') {
+                elemenInput.value = formatRibuan(angkaBersih);
+                hitungTotal();
+            } else {
+                elemenInput.value = angkaBersih;
+            }
+        } else {
+            // Untuk teks biasa (Nama Pelanggan Baru)
+            elemenInput.value = hasilSuara.toUpperCase();
+            // Trigger pencocokan nama ulang jika yang diisi nama baru
+            const norekValue = document.getElementById('no-rekening')?.value || "";
+            cekNamaPemilikRekening(norekValue);
+        }
+    };
+
+    recognition.onerror = function(event) {
+        console.error("Kesalahan input suara: ", event.error);
+    };
+
+    recognition.onend = function() {
+        elemenInput.dataset.sedangMerekam = "false";
+        // Kembalikan placeholder bawaan
+        if (elemenInput.id === 'no-rekening') elemenInput.placeholder = "Masukkan nomor rekening";
+        if (elemenInput.id === 'nominal-transfer') elemenInput.placeholder = "Contoh: 50.000";
+        if (elemenInput.id === 'nama-pelanggan-baru') elemenInput.placeholder = "Ketik Nama Pemilik Rekening";
+        elemenInput.style.backgroundColor = ""; 
+    };
+
+    // Jalankan perekaman suara
+    recognition.start();
+}
 
 async function prosesTransferKeSheet() {
   // 1. Ambil nilai data dari elemen-elemen input form Anda
