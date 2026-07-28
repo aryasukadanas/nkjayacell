@@ -417,6 +417,19 @@ async function bayarGame() {
         status: "Pending"
     }];
 
+    // SIMPAN KE RIWAYAT LOKAL (Fungsi dari script.js)
+    if (typeof simpanRiwayatProdukLokal === 'function') {
+        simpanRiwayatProdukLokal(
+            waktuMks,
+            gabungID,
+            labelProduk,
+            diamondDipilih.price,
+            "PROSES"
+        );
+    } else {
+        console.warn("Fungsi simpanRiwayatProdukLokal() tidak ditemukan.");
+    }
+
     try {
         const targetAppsScriptUrl = typeof SCRIPT_URL !== 'undefined' ? SCRIPT_URL : "https://script.google.com/macros/s/AKfycbwh0lE_0ebqn2ScCWvxioXBJYwLl2qT3aGVHk_W0QHTRP21lWb88djzWMCrihY0ZkHj/exec";
         await fetch(targetAppsScriptUrl, {

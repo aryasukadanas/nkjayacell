@@ -202,6 +202,12 @@
         </a>
     </nav>
 
+    <!-- Tombol Instal Aplikasi Melayang -->
+    <button id="btn-install-floating" class="hidden fixed bottom-24 right-4 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-black text-xs px-4 py-3 rounded-full shadow-2xl z-50 flex items-center gap-2 animate-bounce hover:scale-105 active:scale-95 transition-all border-2 border-white">
+        <i class="fas fa-download text-sm"></i>
+        <span>Instal Aplikasi NK JAYA CELL</span>
+    </button>
+
     <script>
         function hitungTotal() {
             const inputNominal = document.getElementById('nominal-transfer').value;
@@ -212,6 +218,25 @@
             document.getElementById('rincian-nominal').innerText = 'Rp ' + nominal.toLocaleString('id-ID');
             document.getElementById('rincian-total').innerText = 'Rp ' + total.toLocaleString('id-ID');
         }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const nominalInput = document.getElementById('nominal-transfer');
+            if (nominalInput) {
+                nominalInput.addEventListener('blur', function() {
+                    let nilai = this.value.replace(/\./g, ''); // Hapus format ribuan
+                    let nominal = parseInt(nilai) || 0;
+
+                    if (nominal > 0 && nominal % 1000 !== 0) {
+                        // Bulatkan ke atas ke kelipatan 1000 berikutnya
+                        nominal = Math.ceil(nominal / 1000) * 1000;
+                        // Format kembali dengan titik sebagai pemisah ribuan
+                        this.value = nominal.toLocaleString('id-ID').replace(/,/g, '.');
+                    }
+                    // Panggil fungsi hitungTotal untuk memperbarui rincian
+                    hitungTotal();
+                });
+            }
+        });
     </script>
 
     <script src="config.js"></script>
