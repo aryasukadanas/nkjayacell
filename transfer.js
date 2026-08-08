@@ -263,15 +263,18 @@ function hitungTotal() {
 /**
  * Menyimpan transaksi sukses ke riwayat lokal browser
  */
-function simpanKeRiwayat(bank, norek, nominal, admin) {
+function simpanKeRiwayat(bank, norek, nama, nominal, admin) {
     let riwayat = JSON.parse(localStorage.getItem('nk_transfer_history')) || [];
     
     const waktuHariIni = new Date();
+    const tanggalFormat = waktuHariIni.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
     const jamFormat = waktuHariIni.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WITA';
 
     const transaksiBaru = {
+        nama: nama,
         bank: bank,
         norek: norek,
+        tanggal: tanggalFormat,
         nominal: nominal,
         admin: admin,
         waktu: jamFormat
@@ -299,16 +302,21 @@ function renderRiwayatUI() {
 
     sectionRiwayat.classList.remove('hidden');
     containerDaftar.innerHTML = riwayat.map(item => `
-        <div class="bg-slate-950 p-4 rounded-2xl flex justify-between items-center shadow-md relative border-l-4 border-green-500">
-            <div>
-                <span class="block text-[8px] font-black text-green-400 uppercase tracking-widest">${item.waktu} - SUCCESS</span>
-                <span class="text-white font-black text-xs uppercase">${item.bank}</span>
-                <span class="text-gray-400 font-bold text-[10px] block tracking-wider">${item.norek}</span>
+        <div class="bg-slate-950 p-4 rounded-2xl shadow-md relative border-l-4 border-green-500 space-y-3">
+            <div class="flex justify-between items-start">
+                <div>
+                    <span class="block text-[8px] font-black text-green-400 uppercase tracking-widest">${item.tanggal ? item.tanggal + ' - ' : ''}${item.waktu} - SUCCESS</span>
+                    <span class="text-white font-black text-xs uppercase">${item.bank} - ${item.nama}</span>
+                    <span class="text-gray-400 font-bold text-[10px] block tracking-wider">${item.norek}</span>
+                </div>
+                <div class="text-right">
+                    <span class="block text-white font-black text-sm">Rp ${item.nominal.toLocaleString('id-ID')}</span>
+                    <span class="text-gray-400 font-bold text-[9px]">Admin: Rp ${item.admin.toLocaleString('id-ID')}</span>
+                </div>
             </div>
-            <div class="text-right">
-                <span class="block text-white font-black text-sm">Rp ${item.nominal.toLocaleString('id-ID')}</span>
-                <span class="text-gray-400 font-bold text-[9px]">Admin: Rp ${item.admin.toLocaleString('id-ID')}</span>
-            </div>
+            <button onclick="gunakanLagiDariRiwayat('${item.bank}', '${item.norek}', '${item.nama}')" class="w-full text-center bg-green-600/20 text-green-300 text-[9px] font-bold py-1.5 rounded-lg hover:bg-green-500 hover:text-white transition-all">
+                <i class="fas fa-redo-alt mr-1"></i> Gunakan Lagi
+            </button>
         </div>
     `).join('');
 }
@@ -390,9 +398,8 @@ Halo Admin, saya ingin melakukan transfer dengan rincian berikut:
 ==================================
 
 _Mohon segera diproses ya, terima kasih!_ 🙏✨`;
-
 // PROSES PENYIMPANAN DATA
-   simpanKeRiwayat(bank, norekDenganSpasi, nominal, admin);
+   simpanKeRiwayat(bank, norekDenganSpasi, namaPemilik, nominal, admin);
     // Kirim data yang valid (termasuk nama baru yang diketik) ke Google Sheets
     simpanKeSpreadsheet(namaPemilik);
 
@@ -458,6 +465,25 @@ function simpanKeSpreadsheet(namaFinalDariForm) {
     })
     .then(() => console.log("✅ Berhasil terekam di Google Sheets."))
     .catch((error) => console.error("❌ Gagal ke Google Sheets:", error));
+}
+
+/**
+ * Mengisi ulang form dari data riwayat untuk transaksi baru
+ */
+function gunakanLagiDariRiwayat(bank, norek, nama) {
+    const elBank = document.getElementById('bank-tujuan');
+    const elNorek = document.getElementById('no-rekening');
+    const elNominal = document.getElementById('nominal-transfer');
+
+    if (elBank) elBank.value = bank;
+    if (elNorek) {
+        elNorek.value = norek;
+        cekNamaPemilikRekening(norek); // Panggil cek nama untuk update UI
+    }
+    if (elNominal) elNominal.focus(); // Fokus ke input nominal
+
+    // Gulir ke atas halaman
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 /**
@@ -720,5 +746,3 @@ function parsingTeksKeAngka(teks) {
     total = tempJuta + tempRibu + tempRatus + bilanganSaatIni;
     return total;
 }
-
-
