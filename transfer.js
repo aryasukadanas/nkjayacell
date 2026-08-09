@@ -526,6 +526,9 @@ window.addEventListener('load', () => {
         const norekValue = document.getElementById('no-rekening')?.value || "";
         cekNamaPemilikRekening(norekValue);
     });
+    
+    // Jalankan banner slider khusus untuk halaman transfer (index2.html)
+    setupBannerSlider();
 }
 });
 
@@ -745,4 +748,90 @@ function parsingTeksKeAngka(teks) {
     // Gabungkan sisa angka di barisan belakang kalimat jika ada
     total = tempJuta + tempRibu + tempRatus + bilanganSaatIni;
     return total;
+}
+
+// FUNGSI SLIDER BANNER (KHUSUS UNTUK INDEX2.HTML)
+function setupBannerSlider() {
+    const slider = document.getElementById('banner-slider');
+    const dotsContainer = document.getElementById('banner-dots');
+    if (!slider || !dotsContainer) return; // Jika tidak ada slider di halaman ini, hentikan
+
+    const slides = Array.from(slider.children).filter(el => el.classList.contains('w-full'));
+    const totalSlides = slides.length;
+    if (totalSlides === 0) return;
+    let currentSlide = 0;
+
+    // Buat dots navigasi
+    dotsContainer.innerHTML = ''; // Kosongkan dulu jika ada
+    for (let i = 0; i < totalSlides; i++) {
+        const dot = document.createElement('button');
+        dot.classList.add('w-2', 'h-2', 'rounded-full', 'transition-all', 'duration-300');
+        dot.classList.add(i === 0 ? 'bg-white' : 'bg-white/50');
+        dot.addEventListener('click', () => {
+            goToSlide(i);
+        });
+        dotsContainer.appendChild(dot);
+    }
+
+    const dots = dotsContainer.children;
+
+    function goToSlide(slideIndex) {
+        currentSlide = slideIndex;
+        slider.style.transform = `translateX(-${currentSlide * 100}%)`;
+        
+        // Update active dot
+        for (let i = 0; i < totalSlides; i++) {
+            dots[i].classList.toggle('bg-white', i === currentSlide);
+            dots[i].classList.toggle('bg-white/50', i !== currentSlide);
+        }
+    }
+
+    function nextSlide() {
+        goToSlide((currentSlide + 1) % totalSlides);
+    }
+
+    setInterval(nextSlide, 3000); // Ganti slide setiap 3 detik
+}
+
+// FUNGSI SLIDER BANNER (KHUSUS UNTUK INDEX2.HTML)
+function setupBannerSlider() {
+    const slider = document.getElementById('banner-slider');
+    const dotsContainer = document.getElementById('banner-dots');
+    if (!slider || !dotsContainer) return; // Jika tidak ada slider di halaman ini, hentikan
+
+    const slides = Array.from(slider.children).filter(el => el.classList.contains('w-full'));
+    const totalSlides = slides.length;
+    if (totalSlides === 0) return;
+    let currentSlide = 0;
+
+    // Buat dots navigasi
+    dotsContainer.innerHTML = ''; // Kosongkan dulu jika ada
+    for (let i = 0; i < totalSlides; i++) {
+        const dot = document.createElement('button');
+        dot.classList.add('w-2', 'h-2', 'rounded-full', 'transition-all', 'duration-300');
+        dot.classList.add(i === 0 ? 'bg-white' : 'bg-white/50');
+        dot.addEventListener('click', () => {
+            goToSlide(i);
+        });
+        dotsContainer.appendChild(dot);
+    }
+
+    const dots = dotsContainer.children;
+
+    function goToSlide(slideIndex) {
+        currentSlide = slideIndex;
+        slider.style.transform = `translateX(-${currentSlide * 100}%)`;
+        
+        // Update active dot
+        for (let i = 0; i < totalSlides; i++) {
+            dots[i].classList.toggle('bg-white', i === currentSlide);
+            dots[i].classList.toggle('bg-white/50', i !== currentSlide);
+        }
+    }
+
+    function nextSlide() {
+        goToSlide((currentSlide + 1) % totalSlides);
+    }
+
+    setInterval(nextSlide, 3000); // Ganti slide setiap 3 detik
 }

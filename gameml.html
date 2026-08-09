@@ -70,6 +70,33 @@
 
     <main class="max-w-md mx-auto p-4 space-y-6">
         
+        <!-- Banner Slider Section -->
+        <section class="relative w-full h-32 md:h-40 rounded-2xl overflow-hidden shadow-lg">
+            <div id="banner-slider" class="flex transition-transform duration-500 ease-in-out h-full">
+                <!-- Slide 1 -->
+                <div class="w-full h-full flex-shrink-0">
+                    <img src="1.jpg" alt="Promo Mobile Legends" class="w-full h-full object-cover">
+                </div>
+                <!-- Slide 2 -->
+                <div class="w-full h-full flex-shrink-0">
+                    <img src="2.jpg" alt="Diskon Free Fire" class="w-full h-full object-cover">
+                </div>
+                <!-- Slide 3 -->
+                <div class="w-full h-full flex-shrink-0">
+                    <img src="3.jpg" alt="Top Up Murah" class="w-full h-full object-cover">
+                </div>
+                <!-- Slide 4 -->
+                <div class="w-full h-full flex-shrink-0">
+                    <img src="4.jpg" alt="Promo Valorant" class="w-full h-full object-cover">
+                </div>
+                <!-- Slide 5 -->
+                <div class="w-full h-full flex-shrink-0">
+                    <img src="5.jpg" alt="Promo Valorant" class="w-full h-full object-cover">
+                </div>
+            </div>
+            <div id="banner-dots" class="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-2"></div>
+        </section>
+
         <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
             <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">1. Pilih Game</label>
             <select id="pilih-game" onchange="gantiGame(this.value)" class="w-full p-4 rounded-2xl bg-gray-50 border border-gray-200 text-sm font-bold text-gray-800 focus:outline-none focus:border-blue-600 transition-all cursor-pointer">

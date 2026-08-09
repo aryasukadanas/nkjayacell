@@ -148,6 +148,9 @@ document.addEventListener('DOMContentLoaded', () => {
             aktifkanInputSuaraRealTime(this, "angka");
         });
     }
+    
+    // 4. Jalankan banner slider khusus untuk halaman index.html
+    setupBannerSlider();
 });
 
 /**
@@ -1054,6 +1057,48 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
     }, 1500); // Jeda 1.5 detik
 }
 
+// FUNGSI SLIDER BANNER (KHUSUS UNTUK INDEX.HTML)
+function setupBannerSlider() {
+    const slider = document.getElementById('banner-slider');
+    const dotsContainer = document.getElementById('banner-dots');
+    if (!slider || !dotsContainer) return; // Jika tidak ada slider di halaman ini, hentikan
+
+    const slides = Array.from(slider.children).filter(el => el.classList.contains('w-full'));
+    const totalSlides = slides.length;
+    if (totalSlides === 0) return;
+    let currentSlide = 0;
+
+    // Buat dots navigasi
+    dotsContainer.innerHTML = ''; // Kosongkan dulu jika ada
+    for (let i = 0; i < totalSlides; i++) {
+        const dot = document.createElement('button');
+        dot.classList.add('w-2', 'h-2', 'rounded-full', 'transition-all', 'duration-300');
+        dot.classList.add(i === 0 ? 'bg-white' : 'bg-white/50');
+        dot.addEventListener('click', () => {
+            goToSlide(i);
+        });
+        dotsContainer.appendChild(dot);
+    }
+
+    const dots = dotsContainer.children;
+
+    function goToSlide(slideIndex) {
+        currentSlide = slideIndex;
+        slider.style.transform = `translateX(-${currentSlide * 100}%)`;
+        
+        // Update active dot
+        for (let i = 0; i < totalSlides; i++) {
+            dots[i].classList.toggle('bg-white', i === currentSlide);
+            dots[i].classList.toggle('bg-white/50', i !== currentSlide);
+        }
+    }
+
+    function nextSlide() {
+        goToSlide((currentSlide + 1) % totalSlides);
+    }
+
+    setInterval(nextSlide, 3000); // Ganti slide setiap 3 detik
+}
 // Fungsi internal baru untuk mendata ke LocalStorage
 function simpanRiwayatProdukLokal(waktu, noHp, produk, total, status) {
     let riwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
