@@ -581,33 +581,29 @@ function jalankanTimerMundurDinamis(targetString) {
 /**
  * 5. PENGELOLAAN KERANJANG/DRAF TRANSAKSI
  */
-function tambahKeKeranjang(nama, harga, label) {
-    const nomorHpDariPencarian = document.getElementById('search-phone-input').value.trim();
-
+function tambahKeKeranjang(nama, harga, label, kategoriOtomatis = null, targetOtomatis = null) {
     keranjangBelanja = {
-        kategori: `${tabUtamaAktif} - ${operatorAktif}`,
+        kategori: kategoriOtomatis || `${tabUtamaAktif} - ${operatorAktif}`,
         produk: nama,
         harga: harga,
         labelType: label
     };
-    document.getElementById('cart-count').innerText = "1";
+    const cartCountEl = document.getElementById('cart-count');
+    if (cartCountEl) cartCountEl.innerText = "1";
 
-    bukaModalKeranjang();
+    // Tentukan nomor target yang akan diisi di modal
+    // Jika dari halaman game, gunakan targetOtomatis. Jika dari index, gunakan input utama.
+    const nomorTargetFinal = targetOtomatis || document.getElementById('search-phone-input')?.value.trim() || "";
 
-    if (nomorHpDariPencarian) {
-        const inputModalPhone = document.getElementById('customer-phone');
-        if(inputModalPhone) {
-            inputModalPhone.value = nomorHpDariPencarian;
-            inputModalPhone.readOnly = true; 
-        }
-    }
+    bukaModalKeranjang(nomorTargetFinal);
 }
 
-function bukaModalKeranjang() {
+function bukaModalKeranjang(nomorTargetOtomatis = "") {
     const modal = document.getElementById('cart-modal');
     const titleModal = document.getElementById('modal-title-dynamic');
     const listContainer = document.getElementById('cart-items-list');
     const totalPriceEl = document.getElementById('cart-total-price');
+    const inputModalPhone = document.getElementById('customer-phone');
     
     const checkoutSection = document.getElementById('checkout-payment-section');
     const historySection = document.getElementById('history-view-section');
@@ -616,6 +612,13 @@ function bukaModalKeranjang() {
     
     if (checkoutSection) checkoutSection.classList.remove('hidden');
     if (historySection) historySection.classList.add('hidden');
+
+    // Otomatis isi nomor target di modal jika ada
+    if (inputModalPhone) {
+        inputModalPhone.value = nomorTargetOtomatis;
+        // Kunci input jika nomor sudah terisi otomatis (baik dari game atau index)
+        inputModalPhone.readOnly = !!nomorTargetOtomatis;
+    }
 
     if (titleModal) titleModal.innerHTML = `<i class="fas fa-shopping-basket text-blue-600"></i> Rincian Pembelian`;
 
@@ -788,6 +791,9 @@ function filterRiwayatStatus(filterType) {
         let formatTarget = item.target;
         let produkLabelTampil = item.kategoriLengkap || item.produk;
 
+        // Amankan objek item menjadi string JSON yang valid untuk atribut HTML
+        const itemJson = JSON.stringify(item).replace(/"/g, "'");
+
         htmlOutput += `
             <div class="p-3.5 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-2.5 text-left relative overflow-hidden">
                 <div class="flex justify-between items-center">
@@ -813,6 +819,9 @@ function filterRiwayatStatus(filterType) {
                         <p class="text-xs font-black text-blue-600 mt-0.5">Rp ${item.biaya.toLocaleString('id-ID')}</p>
                     </div>
                 </div>
+                <button onclick="orderUlangDariRiwayat(${itemJson})" class="w-full text-center bg-blue-600/10 text-blue-600 text-[10px] font-bold py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all mt-1 flex items-center justify-center gap-1.5">
+                    <i class="fas fa-redo-alt"></i> Beli Lagi
+                </button>
             </div>
         `;
     });
@@ -827,6 +836,50 @@ function filterRiwayatStatus(filterType) {
     `;
 }
 
+/**
+ * Fungsi untuk mengisi ulang form dari data riwayat untuk transaksi baru
+ */
+function orderUlangDariRiwayat(itemRiwayat) {
+    // Perbaikan: Cek apakah ini riwayat topup game.
+    // Logika baru: Semua kategori yang diawali dengan "TOPUP " dianggap sebagai game.
+    // Ini lebih andal karena `kategoriLengkap` selalu disimpan (misal: "TOPUP FF", "TOPUP MLBB").
+    const kategori = itemRiwayat.kategoriLengkap || "";
+    const isGameTopup = kategori.toUpperCase().startsWith('TOPUP ');
+
+    if (isGameTopup) {
+        // Cek apakah kita berada di halaman topup game
+        if (!window.location.pathname.includes('gameml.html')) {
+            // Jika tidak, simpan data ke session dan arahkan ke halaman game
+            sessionStorage.setItem('order_ulang_game', JSON.stringify(itemRiwayat));
+            window.location.href = 'gameml.html';
+        } else {
+            // Jika sudah di halaman game, langsung panggil fungsi untuk mengisi form tanpa refresh
+            tutupModalKeranjang();
+            // Panggil fungsi yang ada di gameml.js dengan data riwayat sebagai parameter
+            if (typeof prosesOrderUlangGame === 'function') {
+                prosesOrderUlangGame(itemRiwayat);
+            }
+        }
+    } else {
+        // Ini adalah item pulsa/kuota. Cek apakah kita sedang di halaman game.
+        if (window.location.pathname.includes('gameml.html')) {
+            // Jika di halaman game, simpan data dan redirect ke index.html
+            sessionStorage.setItem('order_ulang_non_game', JSON.stringify(itemRiwayat));
+            window.location.href = 'index.html';
+        } else {
+            // Jika sudah di index.html, langsung isi form.
+            const elInputTujuan = document.getElementById('search-phone-input');
+            if (elInputTujuan && itemRiwayat.target) {
+                elInputTujuan.value = itemRiwayat.target;
+                fiturDeteksiOtomatisDanCariProvider(itemRiwayat.target);
+            }
+            tutupModalKeranjang();
+        }
+    }
+
+    // Gulir ke atas halaman agar pengguna fokus ke input
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 // Fungsi pelengkap untuk menghapus riwayat jika memori penuh
 function bersihkanRiwayatProduk() {
     if (confirm("Hapus permanen semua histori transaksi produk di perangkat ini?")) {
@@ -856,7 +909,11 @@ function toggleMetodePembayaranUI(metode) {
     const lblQris = document.getElementById('label-pay-qris');
     const btnCheckout = document.getElementById('btn-checkout');
 
+    const radioWa = document.getElementById('radio-pay-wa');
+    const radioQris = document.getElementById('radio-pay-qris');
+
     if (metode === 'WA') {
+        if(radioWa) radioWa.checked = true;
         if(lblWa) lblWa.className = "border-2 border-blue-600 bg-blue-50/50 p-3 rounded-xl flex items-center gap-2.5 cursor-pointer";
         if(lblQris) lblQris.className = "border border-gray-200 p-3 rounded-xl flex items-center gap-2.5 cursor-pointer";
         if(btnCheckout) {
@@ -864,6 +921,7 @@ function toggleMetodePembayaranUI(metode) {
             btnCheckout.className = "w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-sm py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95";
         }
     } else {
+        if(radioQris) radioQris.checked = true;
         if(lblQris) lblQris.className = "border-2 border-blue-600 bg-blue-50/50 p-3 rounded-xl flex items-center gap-2.5 cursor-pointer";
         if(lblWa) lblWa.className = "border border-gray-200 p-3 rounded-xl flex items-center gap-2.5 cursor-pointer";
         if(btnCheckout) {
@@ -933,7 +991,11 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
     }
 
     const waktuMks = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA';
-    const fullProdukLabel = `[${keranjangBelanja.kategori}] ${keranjangBelanja.produk} (${keranjangBelanja.labelType})`;
+    
+    // Perbaikan: Standarisasi format produk untuk riwayat
+    const isGame = keranjangBelanja.kategori.toUpperCase().includes('TOPUP');
+    const produkUntukRiwayat = isGame ? `${keranjangBelanja.kategori.replace('TOPUP ', '').trim()} - ${keranjangBelanja.produk}` : `[${keranjangBelanja.kategori}] ${keranjangBelanja.produk}`;
+    const fullProdukLabel = `${produkUntukRiwayat} (${keranjangBelanja.labelType})`;
 
     // Ambil harga final (jika ada kode unik dari sistem QRIS sebelumnya)
     const hargaFinal = keranjangBelanja.hargaDenganKodeUnik ? keranjangBelanja.hargaDenganKodeUnik : keranjangBelanja.harga;
@@ -967,29 +1029,46 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
 
     window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(textWA)}`, '_blank');
 
-    const inputPencarian = document.getElementById('search-phone-input');
-    if(inputPencarian) inputPencarian.value = "";
-    document.getElementById('customer-phone').value = "";
-    document.getElementById('customer-phone').readOnly = false;
-    keranjangBelanja = null;
-    document.getElementById('cart-count').innerText = "0";
-    if(btn) {
-        btn.disabled = false;
-        btn.innerHTML = txtAsli;
-    }
-    tutupModalKeranjang();
+    // PERBAIKAN: Beri jeda agar pengguna melihat proses selesai sebelum modal ditutup.
+    setTimeout(() => {
+        const inputPencarian = document.getElementById('search-phone-input');
+        if(inputPencarian) inputPencarian.value = "";
+        
+        const customerPhoneEl = document.getElementById('customer-phone');
+
+        // PERBAIKAN: Tambahkan pembersihan untuk input ID di halaman game.
+        const gameIdEl = document.getElementById('game_id');
+        const zoneIdEl = document.getElementById('zone_id');
+        if (gameIdEl) gameIdEl.value = "";
+        if (zoneIdEl) zoneIdEl.value = "";
+
+        if (customerPhoneEl) {
+            customerPhoneEl.value = "";
+            customerPhoneEl.readOnly = false;
+        }
+        
+        keranjangBelanja = null;
+        document.getElementById('cart-count').innerText = "0";
+        if(btn) btn.disabled = false; // Cukup aktifkan kembali, teks akan direset saat modal dibuka lagi.
+        tutupModalKeranjang();
+    }, 1500); // Jeda 1.5 detik
 }
 
 // Fungsi internal baru untuk mendata ke LocalStorage
 function simpanRiwayatProdukLokal(waktu, noHp, produk, total, status) {
     let riwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
     
+    const isGame = keranjangBelanja.kategori.toUpperCase().includes('TOPUP');
+    const gameName = isGame ? keranjangBelanja.kategori.replace('TOPUP ', '').trim() : null;
+
     const transaksiBaru = {
         tanggal: waktu,
         target: noHp,
-        produk: produk,
+        produk: keranjangBelanja.produk, // Gunakan nama produk bersih
         biaya: total,
-        status: status.toUpperCase().includes("LUNAS") ? "SUKSES" : "PROSES"
+        status: status.toUpperCase().includes("LUNAS") ? "SUKSES" : "PROSES", // Tetap 'PROSES' jika bukan LUNAS
+        kategoriLengkap: keranjangBelanja.kategori, // Selalu simpan kategori lengkap
+        gameName: gameName // Properti baru untuk menyimpan nama game yang bersih
     };
 
     riwayat.unshift(transaksiBaru); // Masukkan ke urutan paling atas
@@ -1005,8 +1084,10 @@ function tutupModalQris() {
 }
 
 function konfirmasiSudahBayarQris() {
-    const inputHp = document.getElementById('customer-phone');
-    const noHp = inputHp ? inputHp.value.trim() : "";
+    // Perbaikan: Ambil nomor target dari input yang benar.
+    // Input ini sudah diisi otomatis baik dari halaman game maupun index.
+    const inputTarget = document.getElementById('customer-phone');
+    const noHp = inputTarget ? inputTarget.value.trim() : "";
     tutupModalQris();
     
     if(keranjangBelanja && keranjangBelanja.hargaDenganKodeUnik) {
