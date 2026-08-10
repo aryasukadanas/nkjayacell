@@ -792,7 +792,10 @@ function filterRiwayatStatus(filterType) {
         }
 
         let formatTarget = item.target;
-        let produkLabelTampil = item.kategoriLengkap || item.produk;
+        // PERBAIKAN: Gunakan label produk yang lebih deskriptif dari data riwayat
+        let produkLabelTampil = item.produkLengkap || // Gunakan field baru jika ada
+                                (item.kategoriLengkap ? `[${item.kategoriLengkap}] ${item.produk}` : item.produk) || // Fallback ke format lama
+                                "Produk Tidak Dikenal";
 
         // Amankan objek item menjadi string JSON yang valid untuk atribut HTML
         const itemJson = JSON.stringify(item).replace(/"/g, "'");
@@ -843,11 +846,9 @@ function filterRiwayatStatus(filterType) {
  * Fungsi untuk mengisi ulang form dari data riwayat untuk transaksi baru
  */
 function orderUlangDariRiwayat(itemRiwayat) {
-    // Perbaikan: Cek apakah ini riwayat topup game.
-    // Logika baru: Semua kategori yang diawali dengan "TOPUP " dianggap sebagai game.
-    // Ini lebih andal karena `kategoriLengkap` selalu disimpan (misal: "TOPUP FF", "TOPUP MLBB").
-    const kategori = itemRiwayat.kategoriLengkap || "";
-    const isGameTopup = kategori.toUpperCase().startsWith('TOPUP ');
+    // PERBAIKAN: Gunakan properti `gameName` yang sudah ada di riwayat untuk mendeteksi item game.
+    // Properti ini akan bernilai nama game (misal: "MLBB", "FF") jika itu adalah transaksi game, dan null jika bukan.
+    const isGameTopup = !!itemRiwayat.gameName;
 
     if (isGameTopup) {
         // Cek apakah kita berada di halaman topup game
@@ -1106,13 +1107,16 @@ function simpanRiwayatProdukLokal(waktu, noHp, produk, total, status) {
     const isGame = keranjangBelanja.kategori.toUpperCase().includes('TOPUP');
     const gameName = isGame ? keranjangBelanja.kategori.replace('TOPUP ', '').trim() : null;
 
+    // PENYEMPURNAAN: Buat satu field baru yang menyimpan deskripsi lengkap produk
+    const produkLengkap = `[${keranjangBelanja.kategori}] ${keranjangBelanja.produk} (${keranjangBelanja.labelType})`;
+
     const transaksiBaru = {
         tanggal: waktu,
         target: noHp,
         produk: keranjangBelanja.produk, // Gunakan nama produk bersih
         biaya: total,
         status: status.toUpperCase().includes("LUNAS") ? "SUKSES" : "PROSES", // Tetap 'PROSES' jika bukan LUNAS
-        kategoriLengkap: keranjangBelanja.kategori, // Selalu simpan kategori lengkap
+        produkLengkap: produkLengkap, // Simpan deskripsi lengkap ke dalam satu field
         gameName: gameName // Properti baru untuk menyimpan nama game yang bersih
     };
 
