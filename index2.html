@@ -7,6 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="index2.css">
+    <!-- [FIX] Tambahkan CSS Tom-Select untuk styling dropdown bank -->
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+
    <style>
         .glass-card {
             background: rgba(255, 255, 255, 0.95);
@@ -20,19 +23,6 @@
             background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
             background-size: 200% 100%;
             animation: shimmer 2s infinite;
-        }
-        @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-        }
-        
-        /* Pengunci reset tampilan input bawaan browser */
-        input, select {
-            border: none !important;
-            outline: none !important;
-            box-shadow: none !important;
-            -webkit-appearance: none;
-            appearance: none;
         }
     </style>
 </head>
@@ -86,17 +76,16 @@
             </section>
             <div class="space-y-7 pt-2">
                 
-                <div class="relative flex items-center bg-transparent rounded-2xl border-2 border-gray-300 focus-within:border-blue-500 transition-all h-[58px]">
+                <div class="relative flex items-center bg-transparent rounded-2xl border-2 border-gray-300 focus-within:border-blue-500 transition-all h-[58px] px-4">
                     <label for="bank-tujuan" class="absolute left-4 -top-3 px-2 bg-white text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 pointer-events-none">
                         <i class="fas fa-university text-blue-500 text-[10px]"></i> Lembaga Keuangan
                     </label>
                     
-                    <select id="bank-tujuan" class="w-full h-full px-4 bg-transparent text-sm font-black text-gray-700 cursor-pointer pr-10 border-0 outline-none ring-0 focus:ring-0">
+                    <select id="bank-tujuan" class="w-full">
                         <option value="">Memuat enkripsi bank...</option>
                     </select>
-                    <i class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
                 </div>
-<div>
+
     <div class="relative flex items-center bg-transparent rounded-2xl border-2 border-gray-300 focus-within:border-blue-500 transition-all h-[58px]">
         <label for="no-rekening" class="absolute left-4 -top-3 px-2 bg-white text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 pointer-events-none">
             <i class="fas fa-fingerprint text-blue-500 text-[10px]"></i> Rekening Tujuan
@@ -136,9 +125,9 @@
         </div>
         <p class="text-[9px] text-blue-500 font-bold tracking-wide mt-1.5 ml-2">💡 Rekening baru terdeteksi, mohon isi nama pemilik sesuai buku tabungan.</p>
     </div>
-</div>
 
-                <div>
+
+                <div class="space-y-4">
     <div class="relative flex items-center bg-transparent rounded-2xl border-2 border-gray-300 focus-within:border-blue-500 transition-all h-[58px] pl-4 pr-12">
         <label for="nominal-transfer" class="absolute left-4 -top-3 px-2 bg-white text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 pointer-events-none">
             <i class="fas fa-coins text-blue-500 text-[10px]"></i> Jumlah Kirim
@@ -155,7 +144,7 @@
         </button>
     </div>
 
-                <div class="bg-gray-50 p-5 rounded-[2rem] border border-gray-100 space-y-3">
+                <div id="rincian-pembayaran-container" class="bg-gray-50 p-5 rounded-[2rem] border border-gray-100 space-y-3 hidden">
                     <span class="block text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1">Rincian Pembayaran</span>
                     
                     <div class="flex justify-between items-center text-sm font-bold text-gray-600">
@@ -183,22 +172,10 @@
 
                 <button onclick="prosesTransfer()" class="shimmer relative w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-sm uppercase shadow-xl shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-3 overflow-hidden">
                     <i class="fab fa-whatsapp text-lg"></i>
-                    PROSES TRANSFER
+                    KIRIM DATA TRANSFER KE ADMIN
                 </button>
                 
             </div>
-        </section>
-
-        <section id="section-riwayat" class="glass-card p-6 rounded-[2.5rem] shadow-xl border-b-4 border-slate-600/10 hidden">
-            <div class="flex justify-between items-center mb-4 px-2">
-                <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <i class="fas fa-history text-slate-500"></i> Riwayat Transaksi Hari Ini
-                </h3>
-                <button onclick="bersihkanRiwayat()" class="text-[9px] font-black text-red-500 uppercase tracking-wider hover:underline">
-                    Hapus Semua
-                </button>
-            </div>
-            <div id="daftar-riwayat" class="space-y-3 max-h-60 overflow-y-auto pr-1"></div>
         </section>
 
         <section class="px-2">
@@ -218,11 +195,79 @@
             <span class="text-[8px] font-black uppercase">Produk</span>
         </a>
         
+        <button onclick="bukaModalRiwayat()" class="flex-1 flex flex-col items-center gap-1 text-gray-400 py-2">
+            <i class="fas fa-history text-xl"></i>
+            <span class="text-[8px] font-black uppercase">Riwayat</span>
+        </button>
+        
         <a href="index2.html" class="flex-1 flex flex-col items-center gap-1 text-blue-600 py-2">
             <i class="fas fa-exchange-alt text-xl"></i>
             <span class="text-[8px] font-black uppercase tracking-tighter">Transfer</span>
         </a>
     </nav>
+
+    <!-- [NEW] Modal Riwayat Transaksi (Meniru index.html) -->
+    <div id="history-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden opacity-0 transition-all duration-300 flex items-end justify-center">
+        <div class="bg-white w-full max-w-md rounded-t-[2.5rem] p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto transform translate-y-full transition-transform duration-300 no-scrollbar">
+            
+            <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+                <h3 class="font-black text-gray-900 text-base flex items-center gap-2"><i class="fas fa-history text-indigo-600"></i> Riwayat Transfer</h3>
+                <button onclick="tutupModalRiwayat()" class="text-gray-400 hover:text-gray-600 text-lg p-1 transition-transform active:scale-90">
+                    <i class="fas fa-times-circle"></i>
+                </button>
+            </div>
+
+            <div id="history-view-section" class="space-y-3">
+                <div id="daftar-riwayat" class="space-y-2.5 max-h-[65vh] overflow-y-auto no-scrollbar pr-0.5"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- [NEW] Modal Struk Bukti Transfer -->
+    <div id="struk-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-300 flex items-center justify-center p-4">
+        <div class="bg-gray-100 w-full max-w-sm rounded-3xl shadow-2xl transform scale-95 transition-transform duration-300">
+            <!-- Bagian konten struk yang akan di-screenshot -->
+            <div id="struk-content" class="bg-white p-6 rounded-t-3xl">
+                <div class="text-center mb-4">
+                    <img src="icon.png" alt="Logo" class="w-16 h-16 mx-auto mb-2 rounded-full shadow-md border-4 border-white">
+                    <h2 id="struk-status-judul" class="font-black text-blue-600 text-lg"></h2>
+                    <p id="struk-waktu" class="text-xs text-gray-500 font-medium"></p>
+                </div>
+
+                <div class="border-t border-dashed border-gray-200 py-3 text-xs space-y-2.5">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 font-medium">No. Referensi:</span>
+                        <span id="struk-ref" class="font-bold text-gray-800"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 font-medium">Penerima:</span>
+                        <span id="struk-penerima" class="font-bold text-gray-800 text-right uppercase"></span>
+                    </div>
+                </div>
+
+                <div class="border-t border-dashed border-gray-200 py-3 text-xs space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 font-medium">Nominal Transfer:</span>
+                        <span id="struk-nominal" class="font-bold text-gray-800"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 font-medium">Biaya Admin:</span>
+                        <span id="struk-admin" class="font-bold text-gray-800"></span>
+                    </div>
+                </div>
+
+                <div class="border-t-2 border-gray-300 pt-3 mt-1 text-center">
+                    <p class="text-xs text-gray-500 font-bold">TOTAL BAYAR</p>
+                    <p id="struk-total" class="text-3xl font-black text-gray-900 tracking-tight mt-1"></p>
+                </div>
+                <p class="text-center text-[10px] text-gray-400 font-semibold mt-2">Terima kasih telah menggunakan layanan NK JAYA CELL.</p>
+            </div>
+            <!-- Tombol Aksi -->
+            <div id="struk-actions" class="p-4 grid grid-cols-2 gap-3">
+            </div>
+        </div>
+    </div>
 
     <!-- Tombol Instal Aplikasi Melayang -->
     <button id="btn-install-floating" class="hidden fixed bottom-24 right-4 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-black text-xs px-4 py-3 rounded-full shadow-2xl z-50 flex items-center gap-2 animate-bounce hover:scale-105 active:scale-95 transition-all border-2 border-white">
@@ -230,39 +275,11 @@
         <span>Instal Aplikasi NK JAYA CELL</span>
     </button>
 
-    <script>
-        function hitungTotal() {
-            const inputNominal = document.getElementById('nominal-transfer').value;
-            const nominal = parseInt(inputNominal.replace(/\./g, '')) || 0;
-            const admin = typeof hitungAdminSpesifik === "function" ? hitungAdminSpesifik() : 5000; 
-            const total = nominal + admin;
-
-            document.getElementById('rincian-nominal').innerText = 'Rp ' + nominal.toLocaleString('id-ID');
-            document.getElementById('rincian-total').innerText = 'Rp ' + total.toLocaleString('id-ID');
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            const nominalInput = document.getElementById('nominal-transfer');
-            if (nominalInput) {
-                nominalInput.addEventListener('blur', function() {
-                    let nilai = this.value.replace(/\./g, ''); // Hapus format ribuan
-                    let nominal = parseInt(nilai) || 0;
-
-                    if (nominal > 0 && nominal % 1000 !== 0) {
-                        // Bulatkan ke atas ke kelipatan 1000 berikutnya
-                        nominal = Math.ceil(nominal / 1000) * 1000;
-                        // Format kembali dengan titik sebagai pemisah ribuan
-                        this.value = nominal.toLocaleString('id-ID').replace(/,/g, '.');
-                    }
-                    // Panggil fungsi hitungTotal untuk memperbarui rincian
-                    hitungTotal();
-                });
-            }
-        });
-    </script>
-
-    <script src="config.js"></script>
-    <script src="script.js"></script> 
+    <!-- [FIX] Tambahkan JS Tom-Select sebelum file transfer.js -->
+    <!-- [NEW] Tambahkan JS html2canvas untuk fitur download struk -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <!-- [FIX] Hapus script.js yang tidak relevan dan memperlambat loading -->
     <script src="transfer.js"></script>
 
 </body>

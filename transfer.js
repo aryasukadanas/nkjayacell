@@ -2,11 +2,19 @@
 // LOGIKA TRANSFER BANK - NK JAYA CELL (V3.1 LIVE DATABASES)
 // ==========================================
 
+// [NEW] Konfigurasi yang dipindahkan dari config.js
+const WA_ADMIN = "6285847909692";
+const ADMIN_BANK_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=1584396032&single=true&output=csv"; 
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQKdBfsrmlEBlKlVZiY02jx8HeIW2AtTQrE4_tcXThibDH6X9py965fHMRj--QBiH-/exec";
+const SHEET_REKENING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=1939084256&single=true&output=csv";
+const SHEET_ARSIP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=53248706&single=true&output=csv";
+
 let databaseAdminBank = [];
 let databasePelangganSheet = []; // Menampung data nama pemilik rekening dari spreadsheet
+let databaseArsip = []; // [NEW] Menampung data status transaksi dari sheet arsip
 
 // Variabel Global untuk menampung URL Web App Google Apps Script Anda
-const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbwQKdBfsrmlEBlKlVZiY02jx8HeIW2AtTQrE4_tcXThibDH6X9py965fHMRj--QBiH-/exec";
+const URL_APPS_SCRIPT = SCRIPT_URL; // Menggunakan SCRIPT_URL yang sudah dipindahkan
 
 /**
  * Fungsi pembantu untuk memecah baris CSV dengan aman meskipun ada tanda koma di dalam nama/teks
@@ -35,13 +43,20 @@ function parseCSVRow(row) {
  * Mengambil data tarif admin dan data riwayat/pelanggan dari Google Sheets
  */
 async function fetchTarifAdminBank() {
+    console.log("Memulai sinkronisasi database transfer...");
     try {
-        // 1. Ambil Data Aturan Bank (Dari ADMIN_BANK_URL)
-        const res = await fetch(ADMIN_BANK_URL);
-        const text = await res.text();
-        const rows = text.split(/\r?\n/).slice(1);
+        // Ambil semua data dari Google Sheets secara bersamaan (paralel) untuk efisiensi
+        const [resBank, resPelanggan, resArsip] = await Promise.all([
+            fetch(ADMIN_BANK_URL + '&_v=' + Date.now()),
+            fetch(SHEET_REKENING_URL + '&_v=' + Date.now()),
+            fetch(SHEET_ARSIP_URL + '&_v=' + Date.now()) // [FIX] Tambahkan cache buster
+        ]);
+
+        // 1. Proses Data Aturan Bank
+        const textBank = await resBank.text();
+        const rowsBank = textBank.split(/\r?\n/).slice(1);
         
-        databaseAdminBank = rows.map(row => {
+        databaseAdminBank = rowsBank.map(row => {
             if (!row.trim()) return null;
             const cols = parseCSVRow(row); 
             return { 
@@ -51,31 +66,29 @@ async function fetchTarifAdminBank() {
                 fee: parseInt(cols[3]) || 0 
             };
         }).filter(item => item !== null && item.bank !== "" && item.bank !== undefined);
-
+        console.log("Database Bank Admin dimuat:", databaseAdminBank.length, "aturan.");
         renderDaftarBank();
 
-        // 2. Ambil Data Riwayat Pelanggan (Dari SHEET_REKENING_URL atau RIWAYAT_SALES_URL)
-        const urlRekeningLive = typeof SHEET_REKENING_URL !== 'undefined' ? SHEET_REKENING_URL : (typeof RIWAYAT_SALES_URL !== 'undefined' ? RIWAYAT_SALES_URL : null);
-        
-        if (urlRekeningLive) {
-            const resPelanggan = await fetch(urlRekeningLive);
-            const textPelanggan = await resPelanggan.text();
-            const rowsPelanggan = textPelanggan.split(/\r?\n/).slice(1);
-            
-            databasePelangganSheet = rowsPelanggan.map(row => {
-                if (!row.trim()) return null;
-                const cols = parseCSVRow(row);
-                return {
-                    // Kolom A (cols[0]) = Nomor Rekening, Kolom B (cols[1]) = Nama Pemilik
-                    norek: cols[0]?.replace(/\D/g, '').trim(), 
-                    nama: cols[1]?.replace(/"/g, "").trim().toUpperCase()
-                };
-            }).filter(item => item !== null && item.norek && item.nama);
-            
-            console.log("Database Nama Rekening Berhasil Dimuat! Total:", databasePelangganSheet.length);
-        } else {
-            console.warn("URL database rekening (SHEET_REKENING_URL) belum dikonfigurasi di config.js");
-        }
+        // 2. Proses Data Riwayat Pelanggan
+        const textPelanggan = await resPelanggan.text();
+        const rowsPelanggan = textPelanggan.split(/\r?\n/).slice(1);
+        databasePelangganSheet = rowsPelanggan.map(row => {
+            if (!row.trim()) return null;
+            const cols = parseCSVRow(row);
+            return {
+                norek: cols[0]?.replace(/\D/g, '').trim(), 
+                nama: cols[1]?.replace(/"/g, "").trim().toUpperCase()
+            };
+        }).filter(item => item !== null && item.norek && item.nama);
+        console.log("Database Nama Rekening dimuat:", databasePelangganSheet.length, "entri.");
+
+        // 3. [NEW] Proses Data Arsip Status Transaksi
+        const textArsip = await resArsip.text();
+        databaseArsip = textArsip.split(/\r?\n/).slice(1).map(row => {
+            if (!row.trim()) return null;
+            return parseCSVRow(row);
+        }).filter(Boolean);
+        console.log("Database Arsip Status dimuat:", databaseArsip.length, "transaksi.");
 
     } catch (e) { 
         console.error("Gagal sinkron database bank/pelanggan:", e); 
@@ -86,20 +99,55 @@ async function fetchTarifAdminBank() {
  * Menampilkan daftar bank ke dalam dropdown select
  */
 function renderDaftarBank() {
-    const selectBank = document.getElementById('bank-tujuan');
-    if (!selectBank) return;
+    const selectEl = document.getElementById('bank-tujuan');
+    if (!selectEl) return;
 
-    const listBankUnik = [...new Set(databaseAdminBank.map(item => item.bank))];
+    // Hancurkan instance TomSelect yang ada jika ada, untuk pembaruan
+    if (selectEl.tomselect) {
+        selectEl.tomselect.destroy();
+    }
 
-    if (listBankUnik.length === 0) {
-        selectBank.innerHTML = '<option value="">Gagal memuat daftar bank</option>';
+    const listBank = [...new Set(databaseAdminBank.map(item => item.bank.toUpperCase()))];
+
+    if (listBank.length === 0) {
+        selectEl.innerHTML = '<option value="">Gagal memuat daftar bank</option>';
         return;
     }
 
-    selectBank.innerHTML = '<option value="">-- PILIH BANK --</option>' + 
-        listBankUnik.map(nama => `<option value="${nama}">${nama}</option>`).join('');
-    
-    hitungTotal();
+    // Inisialisasi Tom-Select
+    new TomSelect(selectEl, {
+        create: false,
+        sortField: {
+            field: "text",
+            direction: "asc"
+        },
+        placeholder: 'PILIH BANK / E-WALLET TUJUAN', // Hapus spasi di awal
+        options: listBank.map(bank => ({
+            value: bank,
+            text: bank
+        })),
+        onChange: function() {
+            // [FIX] Panggil hitungTotal setiap kali bank diganti untuk update biaya admin
+            hitungTotal();
+        },
+        render: {
+            option: function(data, escape) {
+                // Mendapatkan path ikon berdasarkan nama bank (pastikan nama file ikon sesuai)
+                const iconPath = `img/bank/${data.value.toLowerCase().replace(/ /g, '-')}.png`;
+                return `<div class="flex items-center gap-3 p-2">
+                            <img src="${iconPath}" class="w-8 h-5 object-contain" alt="${escape(data.text)}" onerror="this.style.display='none'">
+                            <span class="font-bold text-sm">${escape(data.text)}</span>
+                        </div>`;
+            },
+            item: function(item, escape) {
+                const iconPath = `img/bank/${item.value.toLowerCase().replace(/ /g, '-')}.png`;
+                return `<div class="flex items-center gap-2">
+                            <img src="${iconPath}" class="w-6 h-4 object-contain" alt="${escape(item.text)}" onerror="this.style.display='none'">
+                            <span>${escape(item.text)}</span>
+                        </div>`;
+            }
+        }
+    });
 }
 
 /**
@@ -251,6 +299,7 @@ function hitungTotal() {
     const elRincianNominal = document.getElementById('rincian-nominal');
     const elRincianAdmin = document.getElementById('rincian-admin');
     const elRincianTotal = document.getElementById('rincian-total');
+    const elRincianContainer = document.getElementById('rincian-pembayaran-container');
 
     if (elRincianNominal) elRincianNominal.innerText = 'Rp ' + nominal.toLocaleString('id-ID');
     if (elRincianAdmin) elRincianAdmin.innerText = 'Rp ' + admin.toLocaleString('id-ID');
@@ -258,6 +307,20 @@ function hitungTotal() {
 
     const norekValue = document.getElementById('no-rekening')?.value || "";
     cekNamaPemilikRekening(norekValue);
+
+    // [NEW] Logika untuk menampilkan rincian dengan animasi
+    const bankDipilih = document.getElementById('bank-tujuan')?.value;
+    const norekBersih = norekValue.replace(/\s+/g, '');
+
+    if (elRincianContainer) {
+        if (bankDipilih && norekBersih.length >= 5 && nominal >= 10000) {
+            elRincianContainer.classList.remove('hidden');
+            elRincianContainer.classList.add('rincian-muncul');
+        } else {
+            elRincianContainer.classList.add('hidden');
+            elRincianContainer.classList.remove('rincian-muncul');
+        }
+    }
 }
 
 /**
@@ -289,36 +352,101 @@ function simpanKeRiwayat(bank, norek, nama, nominal, admin) {
  * Merender daftar riwayat ke HTML
  */
 function renderRiwayatUI() {
-    const sectionRiwayat = document.getElementById('section-riwayat');
     const containerDaftar = document.getElementById('daftar-riwayat');
-    if (!containerDaftar || !sectionRiwayat) return;
+    if (!containerDaftar) return;
 
     const riwayat = JSON.parse(localStorage.getItem('nk_transfer_history')) || [];
 
     if (riwayat.length === 0) {
-        sectionRiwayat.classList.add('hidden');
+        containerDaftar.innerHTML = `
+            <div class="text-center py-10 text-gray-400 italic text-xs bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                <i class="fas fa-folder-open text-3xl mb-2 text-gray-300 block"></i>
+                Belum ada riwayat transfer.
+            </div>
+        `;
         return;
     }
 
-    sectionRiwayat.classList.remove('hidden');
-    containerDaftar.innerHTML = riwayat.map(item => `
-        <div class="bg-slate-950 p-4 rounded-2xl shadow-md relative border-l-4 border-green-500 space-y-3">
-            <div class="flex justify-between items-start">
-                <div>
-                    <span class="block text-[8px] font-black text-green-400 uppercase tracking-widest">${item.tanggal ? item.tanggal + ' - ' : ''}${item.waktu} - SUCCESS</span>
-                    <span class="text-white font-black text-xs uppercase">${item.bank} - ${item.nama}</span>
-                    <span class="text-gray-400 font-bold text-[10px] block tracking-wider">${item.norek}</span>
+    // [NEW] Buat peta status terbaru dari databaseArsip
+    const statusMap = {};
+    databaseArsip.forEach(row => {
+        // Asumsi: Kolom 4 (indeks 3) adalah rekening, Kolom 8 (indeks 7) adalah status
+        const noRek = row[3]?.replace(/\D/g, '').trim(); // [FIX] Hapus SEMUA karakter selain angka agar formatnya bersih dan konsisten.
+        const status = row[8]?.trim().toUpperCase(); // [FIX] Kolom I (indeks 8) untuk Status
+        if (noRek && status) {
+            // Simpan status terbaru untuk setiap nomor rekening
+            statusMap[noRek] = status;
+        }
+    });
+
+    const riwayatHTML = riwayat.map(item => {
+        const noRekRiwayat = item.norek.replace(/\D/g, ''); // [FIX] Hapus SEMUA karakter selain angka agar formatnya bersih dan konsisten.
+        let statusFinal = statusMap[noRekRiwayat] || "PROSES"; // Default "PROSES" jika tidak ditemukan
+
+        // Standarisasi label status
+        if (statusFinal.includes("LUNAS") || statusFinal.includes("SUKSES")) statusFinal = "SUKSES";
+        if (statusFinal.includes("PENDING")) statusFinal = "PROSES";
+        if (statusFinal.includes("GAGAL") || statusFinal.includes("FAILED")) statusFinal = "GAGAL";
+
+        let badgeClass = "bg-amber-50 text-amber-700 border-amber-100 animate-pulse";
+        let iconClass = "fa-spinner animate-spin";
+
+        if (statusFinal === "SUKSES") {
+            badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-100";
+            iconClass = "fa-check-circle";
+        } else if (statusFinal === "GAGAL") {
+            badgeClass = "bg-rose-50 text-rose-700 border-rose-100";
+            iconClass = "fa-times-circle";
+        }
+
+        // [FIX] Siapkan tombol struk agar selalu tampil, apa pun statusnya
+        const itemJson = JSON.stringify(item).replace(/"/g, "'");
+        const tombolStrukHTML = `
+            <button onclick="tampilkanStrukDariRiwayat(${itemJson}, '${statusFinal}')" class="w-full text-center bg-emerald-600/10 text-emerald-600 text-[10px] font-bold py-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all mt-1 flex items-center justify-center gap-1.5">
+                <i class="fas fa-receipt"></i> Lihat Struk
+            </button>
+        `;
+
+        return `
+        <div class="p-3.5 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-2.5 text-left relative overflow-hidden">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center gap-1.5 text-[9px] text-gray-400 font-bold">
+                    <i class="far fa-clock text-indigo-500"></i>
+                    <span>${item.tanggal} - ${item.waktu}</span>
+                </div>
+                <span class="${badgeClass} px-2 py-0.5 rounded-lg font-black text-[9px] tracking-wide flex items-center gap-1 uppercase">
+                    <i class="fas ${iconClass}"></i> ${statusFinal}
+                </span>
+            </div>
+            <div class="font-extrabold text-gray-900 text-xs tracking-tight leading-snug uppercase">
+                ${item.bank} - ${item.nama}
+            </div>
+            <div class="flex justify-between items-end pt-1 border-t border-gray-50">
+                <div class="text-[10px] text-gray-400 font-semibold">
+                    No. Rek: <span class="text-gray-700 font-black tracking-wider">${item.norek}</span>
                 </div>
                 <div class="text-right">
-                    <span class="block text-white font-black text-sm">Rp ${item.nominal.toLocaleString('id-ID')}</span>
-                    <span class="text-gray-400 font-bold text-[9px]">Admin: Rp ${item.admin.toLocaleString('id-ID')}</span>
+                    <p class="text-[8px] uppercase text-gray-400 font-bold tracking-wider leading-none">Total Bayar</p>
+                    <p class="text-xs font-black text-blue-600 mt-0.5">Rp ${(item.nominal + item.admin).toLocaleString('id-ID')}</p>
                 </div>
             </div>
-            <button onclick="gunakanLagiDariRiwayat('${item.bank}', '${item.norek}', '${item.nama}')" class="w-full text-center bg-green-600/20 text-green-300 text-[9px] font-bold py-1.5 rounded-lg hover:bg-green-500 hover:text-white transition-all">
-                <i class="fas fa-redo-alt mr-1"></i> Gunakan Lagi
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="gunakanLagiDariRiwayat('${item.bank}', '${item.norek}', '${item.nama}')" class="w-full text-center bg-blue-600/10 text-blue-600 text-[10px] font-bold py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all mt-1 flex items-center justify-center gap-1.5">
+                    <i class="fas fa-redo-alt"></i> Gunakan Lagi
+                </button>
+                ${tombolStrukHTML}
+            </div>
+        </div>
+    `}).join('');
+
+    containerDaftar.innerHTML = `
+        <div class="space-y-2.5">${riwayatHTML}</div>
+        <div class="pt-2">
+            <button onclick="bersihkanRiwayat()" class="w-full py-2 bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-600 text-[10px] font-bold rounded-xl transition-colors border border-dashed">
+                <i class="fas fa-trash-alt mr-1"></i> Bersihkan Riwayat Transfer
             </button>
         </div>
-    `).join('');
+    `;
 }
 
 /**
@@ -393,13 +521,13 @@ Halo Admin, saya ingin melakukan transfer dengan rincian berikut:
 💵 *RINCIAN BIAYA*
 •💰*Nominal* : Rp ${nominal.toLocaleString('id-ID')}
 •⚡*Biaya Admin* : Rp ${admin.toLocaleString('id-ID')}
-----------------------------------
+-----------------------------------
 💰 *TOTAL BAYAR : Rp ${total.toLocaleString('id-ID')}*
 ==================================
 
 _Mohon segera diproses ya, terima kasih!_ 🙏✨`;
-// PROSES PENYIMPANAN DATA
-   simpanKeRiwayat(bank, norekDenganSpasi, namaPemilik, nominal, admin);
+    // PROSES PENYIMPANAN DATA
+    simpanKeRiwayat(bank, norekDenganSpasi, namaPemilik, nominal, admin);
     // Kirim data yang valid (termasuk nama baru yang diketik) ke Google Sheets
     simpanKeSpreadsheet(namaPemilik);
 
@@ -419,11 +547,151 @@ window.open(url, '_blank');
     setTimeout(() => {
         if (btnTransfer) {
             btnTransfer.disabled = false;
-            btnTransfer.innerHTML = `Kirim Uang Sekarang`; 
+            btnTransfer.innerHTML = `KIRIM DATA TRANSFER KE ADMIN`; 
             btnTransfer.style.opacity = "1";
             btnTransfer.style.cursor = "pointer";
         }
     }, 2000);
+}
+
+/**
+ * [NEW] Menampilkan modal struk dengan data transaksi
+ */
+function tampilkanStruk(data) {
+    const modal = document.getElementById('struk-modal');
+    if (!modal) return;
+
+    // [NEW] Logika untuk mengubah judul dan warna struk berdasarkan status
+    const judulEl = document.getElementById('struk-status-judul');
+    if (data.status === 'SUKSES') {
+        judulEl.innerText = 'TRANSFER BERHASIL';
+        judulEl.className = 'font-black text-green-600 text-lg';
+    } else if (data.status === 'GAGAL') {
+        judulEl.innerText = 'TRANSFER GAGAL';
+        judulEl.className = 'font-black text-red-600 text-lg';
+    } else {
+        judulEl.innerText = 'TRANSFER DIPROSES';
+        judulEl.className = 'font-black text-amber-600 text-lg';
+    }
+
+    // Isi data ke elemen struk
+    const ref = 'NKJ' + Date.now().toString().slice(-8);
+    document.getElementById('struk-waktu').innerText = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
+    document.getElementById('struk-ref').innerText = ref;
+    document.getElementById('struk-penerima').innerText = `${data.bank} - ${data.nama} (${data.norek})`;
+    
+    // [NEW] Isi rincian biaya
+    document.getElementById('struk-nominal').innerText = 'Rp ' + data.nominal.toLocaleString('id-ID');
+    document.getElementById('struk-admin').innerText = 'Rp ' + data.admin.toLocaleString('id-ID');
+    document.getElementById('struk-total').innerText = 'Rp ' + data.total.toLocaleString('id-ID');
+
+    // Siapkan tombol aksi
+    const actionsContainer = document.getElementById('struk-actions');
+    actionsContainer.innerHTML = `
+        <button onclick="downloadStruk('${ref}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
+            <i class="fas fa-download"></i> Download
+        </button>
+        <button onclick="shareStruk('${ref}')" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+            <i class="fab fa-whatsapp"></i> Bagikan
+        </button>
+        <button onclick="tutupModalStruk()" class="col-span-2 w-full py-2 bg-transparent text-gray-500 font-bold text-xs rounded-xl active:scale-95 transition-all">
+            Tutup
+        </button>
+    `;
+
+    // Tampilkan modal dengan animasi
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('div').classList.remove('scale-95');
+    }, 10);
+}
+/**
+ * [NEW] Fungsi jembatan untuk menampilkan struk dari data riwayat
+ */
+function tampilkanStrukDariRiwayat(item, status) {
+    tampilkanStruk({
+        bank: item.bank,
+        norek: item.norek,
+        nama: item.nama,
+        nominal: item.nominal,
+        admin: item.admin,
+        total: item.nominal + item.admin,
+        status: status // Kirim status ke fungsi utama
+    });
+}
+
+/**
+ * [NEW] Menutup modal struk dan mengaktifkan kembali tombol proses
+ */
+function tutupModalStruk() {
+    const modal = document.getElementById('struk-modal');
+    if (modal) {
+        modal.classList.add('opacity-0');
+        modal.querySelector('div').classList.add('scale-95');
+        setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+
+    // Aktifkan kembali tombol proses utama
+    const btnTransfer = document.getElementById('btn-proses-transfer') || document.querySelector('button[onclick="prosesTransfer()"]');
+    if (btnTransfer) {
+        btnTransfer.disabled = false;
+        btnTransfer.innerHTML = `KIRIM DATA TRANSFER KE ADMIN`;
+        btnTransfer.style.opacity = "1";
+        btnTransfer.style.cursor = "pointer";
+    }
+}
+
+/**
+ * [NEW] Mengubah HTML struk menjadi gambar dan mengunduhnya
+ */
+async function downloadStruk(ref) {
+    const strukElement = document.getElementById('struk-content');
+    const originalBg = strukElement.style.backgroundColor;
+    strukElement.style.backgroundColor = 'white'; // Pastikan background putih
+
+    try {
+        const canvas = await html2canvas(strukElement, { scale: 3 }); // Tingkatkan skala untuk kualitas lebih baik
+        const link = document.createElement('a');
+        link.download = `struk-transfer-${ref}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    } catch (error) {
+        console.error('Gagal membuat gambar struk:', error);
+        alert('Gagal mengunduh struk.');
+    } finally {
+        strukElement.style.backgroundColor = originalBg; // Kembalikan background
+    }
+}
+
+/**
+ * [NEW] Membagikan gambar struk ke aplikasi lain (terutama WhatsApp)
+ */
+async function shareStruk(ref) {
+    const strukElement = document.getElementById('struk-content');
+    const originalBg = strukElement.style.backgroundColor;
+    strukElement.style.backgroundColor = 'white';
+
+    try {
+        const canvas = await html2canvas(strukElement, { scale: 2 });
+        canvas.toBlob(async (blob) => {
+            const file = new File([blob], `struk-transfer-${ref}.png`, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: `Bukti Transfer ${ref}`,
+                    text: `Berikut adalah bukti transfer untuk no. ref ${ref}.`
+                });
+            } else {
+                alert('Browser Anda tidak mendukung fitur berbagi file. Silakan download struk terlebih dahulu.');
+            }
+        }, 'image/png');
+    } catch (error) {
+        console.error('Gagal berbagi struk:', error);
+        alert('Gagal membagikan struk.');
+    } finally {
+        strukElement.style.backgroundColor = originalBg;
+    }
 }
 
 /**
@@ -452,7 +720,7 @@ function simpanKeSpreadsheet(namaFinalDariForm) {
     formData.append('tanggal', new Date().toLocaleString('id-ID'));
     formData.append('kategori', 'KIRIM UANG');
     formData.append('bank', bank);
-    formData.append('rekening', norekBersih); 
+    formData.append('rekening', "'" + norekBersih); // [FIX] Tambahkan tanda kutip di depan untuk menjaga angka 0
     formData.append('nama_pemilik', namaPemilik);
     formData.append('nominal', nominal);
     formData.append('admin', admin);
@@ -471,19 +739,104 @@ function simpanKeSpreadsheet(namaFinalDariForm) {
  * Mengisi ulang form dari data riwayat untuk transaksi baru
  */
 function gunakanLagiDariRiwayat(bank, norek, nama) {
-    const elBank = document.getElementById('bank-tujuan');
+    const elBank = document.getElementById('bank-tujuan'); // Ini adalah elemen <select> asli
     const elNorek = document.getElementById('no-rekening');
     const elNominal = document.getElementById('nominal-transfer');
 
-    if (elBank) elBank.value = bank;
+    // [FIX] Gunakan API dari Tom-Select untuk mengatur nilai, bukan .value biasa.
+    // Tom-Select menempelkan dirinya pada elemen select asli.
+    if (elBank && elBank.tomselect) {
+        elBank.tomselect.setValue(bank);
+    }
+
     if (elNorek) {
         elNorek.value = norek;
-        cekNamaPemilikRekening(norek); // Panggil cek nama untuk update UI
+        cekNamaPemilikRekening(norek.replace(/\s+/g, '')); // [FIX] Kirim nomor rekening yang sudah bersih dari spasi
     }
     if (elNominal) elNominal.focus(); // Fokus ke input nominal
 
     // Gulir ke atas halaman
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // [FIX] Tutup modal riwayat setelah data diisi ulang
+    tutupModalRiwayat();
+}
+
+async function bukaModalRiwayat() {
+    const modal = document.getElementById('history-modal');
+    if (!modal) return;
+
+    // [FIX] Selalu ambil data status terbaru dari spreadsheet setiap kali modal dibuka
+    try {
+        const loadingEl = document.getElementById('daftar-riwayat');
+        if (loadingEl) loadingEl.innerHTML = `<div class="text-center py-10 text-gray-400 italic text-xs"><i class="fas fa-spinner animate-spin mr-2"></i> Memperbarui status...</div>`;
+
+        const resArsip = await fetch(SHEET_ARSIP_URL + '&_v=' + Date.now()); // [FIX] Tambahkan cache buster
+        const textArsip = await resArsip.text();
+        databaseArsip = textArsip.split(/\r?\n/).slice(1).map(row => {
+            if (!row.trim()) return null;
+            return parseCSVRow(row);
+        }).filter(Boolean);
+    } catch (e) {
+        console.error("Gagal mengambil status terbaru:", e);
+    }
+
+    renderRiwayatUI(); // Render ulang dengan data status yang sudah diperbarui
+
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('div').classList.remove('translate-y-full');
+    }, 10);
+}
+
+function tutupModalRiwayat() {
+    const modal = document.getElementById('history-modal');
+    if (!modal) return;
+    modal.classList.add('opacity-0');
+    modal.querySelector('div').classList.add('translate-y-full');
+    setTimeout(() => modal.classList.add('hidden'), 300);
+}
+
+/**
+ * [NEW] FUNGSI SLIDER BANNER (KHUSUS UNTUK INDEX2.HTML)
+ * Dipindahkan dari script.js agar halaman transfer mandiri.
+ */
+function setupBannerSlider() {
+    const slider = document.getElementById('banner-slider');
+    const dotsContainer = document.getElementById('banner-dots');
+    if (!slider || !dotsContainer) return;
+
+    const slides = Array.from(slider.children).filter(el => el.classList.contains('w-full'));
+    const totalSlides = slides.length;
+    if (totalSlides === 0) return;
+    let currentSlide = 0;
+
+    dotsContainer.innerHTML = '';
+    for (let i = 0; i < totalSlides; i++) {
+        const dot = document.createElement('button');
+        dot.classList.add('w-2', 'h-2', 'rounded-full', 'transition-all', 'duration-300');
+        dot.classList.add(i === 0 ? 'bg-white' : 'bg-white/50');
+        dot.addEventListener('click', () => goToSlide(i));
+        dotsContainer.appendChild(dot);
+    }
+
+    const dots = dotsContainer.children;
+
+    function goToSlide(slideIndex) {
+        currentSlide = slideIndex;
+        slider.style.transform = `translateX(-${currentSlide * 100}%)`;
+        for (let i = 0; i < totalSlides; i++) {
+            dots[i].classList.toggle('bg-white', i === currentSlide);
+            dots[i].classList.toggle('bg-white/50', i !== currentSlide);
+        }
+    }
+
+    function nextSlide() {
+        goToSlide((currentSlide + 1) % totalSlides);
+    }
+
+    setInterval(nextSlide, 3000);
 }
 
 /**
@@ -493,13 +846,6 @@ window.addEventListener('load', () => {
     const elBank = document.getElementById('bank-tujuan');
     const elNorek = document.getElementById('no-rekening');
     const elNominal = document.getElementById('nominal-transfer');
-
-    renderRiwayatUI();
-
-    if (elBank) {
-        fetchTarifAdminBank();
-        elBank.addEventListener('change', hitungTotal);
-    }
 
     if (elNorek) {
         elNorek.addEventListener('input', function() {
@@ -525,11 +871,17 @@ window.addEventListener('load', () => {
         inputNamaBaru.addEventListener('input', () => {
         const norekValue = document.getElementById('no-rekening')?.value || "";
         cekNamaPemilikRekening(norekValue);
-    });
-    
+        });
+    }
+
     // Jalankan banner slider khusus untuk halaman transfer (index2.html)
     setupBannerSlider();
-}
+
+    // [FIX] Panggil fetch data setelah semua elemen DOM siap
+    // Ini memastikan semua data (bank, status) diambil dari awal.
+    if (elBank) {
+        fetchTarifAdminBank();
+    }
 });
 
 async function prosesTransferKeSheet() {
@@ -748,49 +1100,6 @@ function parsingTeksKeAngka(teks) {
     // Gabungkan sisa angka di barisan belakang kalimat jika ada
     total = tempJuta + tempRibu + tempRatus + bilanganSaatIni;
     return total;
-}
-
-// FUNGSI SLIDER BANNER (KHUSUS UNTUK INDEX2.HTML)
-function setupBannerSlider() {
-    const slider = document.getElementById('banner-slider');
-    const dotsContainer = document.getElementById('banner-dots');
-    if (!slider || !dotsContainer) return; // Jika tidak ada slider di halaman ini, hentikan
-
-    const slides = Array.from(slider.children).filter(el => el.classList.contains('w-full'));
-    const totalSlides = slides.length;
-    if (totalSlides === 0) return;
-    let currentSlide = 0;
-
-    // Buat dots navigasi
-    dotsContainer.innerHTML = ''; // Kosongkan dulu jika ada
-    for (let i = 0; i < totalSlides; i++) {
-        const dot = document.createElement('button');
-        dot.classList.add('w-2', 'h-2', 'rounded-full', 'transition-all', 'duration-300');
-        dot.classList.add(i === 0 ? 'bg-white' : 'bg-white/50');
-        dot.addEventListener('click', () => {
-            goToSlide(i);
-        });
-        dotsContainer.appendChild(dot);
-    }
-
-    const dots = dotsContainer.children;
-
-    function goToSlide(slideIndex) {
-        currentSlide = slideIndex;
-        slider.style.transform = `translateX(-${currentSlide * 100}%)`;
-        
-        // Update active dot
-        for (let i = 0; i < totalSlides; i++) {
-            dots[i].classList.toggle('bg-white', i === currentSlide);
-            dots[i].classList.toggle('bg-white/50', i !== currentSlide);
-        }
-    }
-
-    function nextSlide() {
-        goToSlide((currentSlide + 1) % totalSlides);
-    }
-
-    setInterval(nextSlide, 3000); // Ganti slide setiap 3 detik
 }
 
 // FUNGSI SLIDER BANNER (KHUSUS UNTUK INDEX2.HTML)

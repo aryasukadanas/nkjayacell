@@ -49,23 +49,6 @@ header::after {
     margin-top: -3rem !important;
 }
 
-/* INPUT & SELECT PREMIUM */
-input, select {
-    background: #ffffff !important;
-    border: 1.5px solid #e2e8f0 !important;
-    border-radius: 1.25rem !important;
-    padding: 1rem 1.25rem !important;
-    font-weight: 600 !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    outline: none !important;
-}
-
-input:focus, select:focus {
-    border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1) !important;
-    transform: translateY(-2px);
-}
-
 /* BUTTON MEWAH */
 button#btn-proses {
     background: var(--brand-gradient);
@@ -125,12 +108,10 @@ button#btn-proses:active {
 
 /* NAVBAR BAWAH */
 nav.fixed {
-    background: rgba(255, 255, 255, 0.8) !important;
-    backdrop-filter: blur(20px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.3) !important;
-    bottom: 20px !important;
-    border-radius: 2.5rem !important;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1) !important;
+    /* [FIX] Hapus styling yang tidak perlu karena sudah diatur oleh Tailwind di HTML */
+    /* Styling seperti background, backdrop-filter, border, bottom, border-radius, dan shadow
+       sudah ada di class="... fixed bottom-0 ..." pada file index2.html.
+       Menghapusnya dari sini membuat kode lebih bersih dan mudah dikelola. */
 }
 
 /* BADGE KERANJANG */
@@ -143,4 +124,132 @@ nav.fixed {
 @keyframes pop {
     0% { transform: scale(0.5); }
     100% { transform: scale(1); }
+}
+
+/* [NEW] Animasi untuk memunculkan rincian pembayaran */
+.rincian-muncul {
+    animation: slideUpFadeIn 0.5s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+}
+
+@keyframes slideUpFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==========================================
+   CUSTOM STYLES FOR TOM-SELECT INTEGRATION
+   ========================================== */
+
+/* Wrapper utama Tom-Select */
+.ts-wrapper {
+    width: 100%;
+    height: 100%; /* Mengisi tinggi div parent */
+    outline: none !important; /* Pastikan tidak ada outline saat fokus */
+    border: none !important; /* Hapus border bawaan Tom-Select */
+    box-shadow: none !important;
+    border-radius: 0 !important; /* Biarkan div parent yang mengatur border-radius */
+    background: transparent !important; /* Biarkan div parent yang mengatur background */
+    padding: 0 !important; /* Hapus padding bawaan */
+}
+
+/* Bagian kontrol yang terlihat (input/display item terpilih) */
+.ts-control {
+    border: none !important; /* Hapus border */
+    outline: none !important; /* Pastikan tidak ada outline saat fokus */
+    box-shadow: none !important;
+    background: transparent !important; /* Transparan agar background div parent terlihat */
+    padding: 0 !important; /* Hapus padding */
+    height: 100% !important; /* Mengisi tinggi wrapper */
+    display: flex; /* Untuk penataan ikon dan teks */
+    align-items: center; /* Pusatkan secara vertikal */
+}
+
+/* Input field di dalam Tom-Select */
+/* Ini untuk input pencarian di dropdown */
+.ts-control input {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important; /* Hapus padding bawaan input */
+    height: auto !important;
+    font-weight: 900 !important; /* Sesuaikan dengan font-black */
+    color: #4a5568 !important; /* Sesuaikan dengan text-gray-700 */
+    font-size: 0.875rem !important; /* Sesuaikan dengan text-sm */
+    line-height: 1.25rem !important;
+    padding-left: 1rem !important; /* Padding kiri agar sejajar dengan label */
+}
+
+
+/* Tampilan item yang sudah dipilih */
+.ts-control .item {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    font-weight: 900 !important;
+    color: #4a5568 !important;
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+    padding-left: 1rem !important; /* Padding kiri agar sejajar dengan label */
+    display: flex;
+    align-items: center;
+    gap: 0.5rem; /* Jarak antara ikon dan teks bank */
+}
+
+/* Placeholder styling untuk Tom-Select */
+.ts-placeholder {
+    color: #9ca3af !important; /* text-gray-400 */
+    font-weight: 900 !important; /* font-black */
+    font-size: 0.875rem !important; /* text-sm */
+    line-height: 1.25rem !important;
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center !important; /* [FIX] Posisikan teks placeholder ke tengah */
+}
+
+/* Dropdown menu */
+.ts-dropdown {
+    background-color: #ffffff !important; /* Latar belakang putih solid */
+    backdrop-filter: none !important; /* Hapus efek blur */
+    border: 1px solid #e2e8f0 !important; /* Border tipis */
+    border-radius: 0.75rem !important; /* Sudut membulat */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important; /* Tambah bayangan */
+    overflow: hidden; /* Pastikan konten tidak keluar dari sudut membulat */
+    z-index: 1000; /* Pastikan dropdown muncul di atas elemen lain */
+}
+
+/* Opsi di dalam dropdown */
+.ts-dropdown .option {
+    padding: 0.75rem 1rem !important; /* Sesuaikan padding */
+    background-color: #ffffff !important;
+    color: #4a5568 !important;
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+}
+
+/* Opsi yang sedang aktif/hover di dropdown */
+.ts-dropdown .option.active {
+    background-color: #e0f2fe !important; /* Latar belakang biru muda */
+    color: #2563eb !important; /* Teks biru gelap */
+}
+
+/* Penyesuaian posisi ikon panah (caret) Tom-Select */
+.ts-wrapper.form-control .ts-control::after {
+    right: 1rem !important; /* Sesuaikan posisi kanan */
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+}
+
+/* Pastikan elemen internal Tom-Select mengambil ruang yang tersedia */
+.ts-control > input,
+.ts-control > .item,
+.ts-control > .ts-placeholder {
+    box-sizing: border-box; /* Sertakan padding dalam perhitungan lebar/tinggi */
 }
