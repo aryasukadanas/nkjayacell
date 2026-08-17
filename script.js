@@ -3,8 +3,8 @@
 // ==========================================================
 const WA_ADMIN = "6285847909692";
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=0&single=true&output=csv";
-const SHEET_ARSIP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=702573697&single=true&output=csv"
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwh0lE_0ebqn2ScCWvxioXBJYwLl2qT3aGVHk_W0QHTRP21lWb88djzWMCrihY0ZkHj/exec";
+const SHEET_ARSIP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=702573697&single=true&output=csv";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuXWWh7RyCB-r2CZRyypdsaGDAUzhG6sf4vNQMGN292vbWzHtuJgNnNYF7AvGjgZwp/exec";
 
 const iconMap = {
     'PULSA': 'PULSA.png', 'INDOSAT': 'logo_indosat.png', 'XL': 'logo_xl.png', 'TELKOMSEL': 'logo_telkomsel.png',
@@ -13,43 +13,31 @@ const iconMap = {
     'PLN': 'logo_pln.png', 'TOKEN PLN': 'logo_pln.png', 'LAINNYA': 'PULSA.png'
 };
 
-// ==========================================================
-// CONFIG TAMBAHAN UNTUK QRIS DINAMIS
-// ==========================================================
 const MASTER_TEXT_QRIS = "00020101021126570011ID.DANA.WWW011893600915307833630202090783363020303UMI51440014ID.CO.QRIS.WWW0215ID10200446107530303UMI5204549953033605802ID5912NK JAYA CELL6013Kab. Jembrana61058225263045BED"; 
 
-// Fungsi untuk generate CRC16 (Wajib untuk standardisasi QRIS EMVCo)
 function kelolaCRC16(str) {
     let crc = 0xFFFF;
     for (let c = 0; c < str.length; c++) {
         let cls = str.charCodeAt(c);
         crc ^= cls << 8;
         for (let i = 0; i < 8; i++) {
-            if (crc & 0x8000) {
-                crc = (crc << 1) ^ 0x1021;
-            } else {
-                crc = crc << 1;
-            }
+            if (crc & 0x8000) crc = (crc << 1) ^ 0x1021;
+            else crc = crc << 1;
         }
     }
     crc &= 0xFFFF;
-    let hasilCrc = crc.toString(16).toUpperCase();
-    return hasilCrc.padStart(4, '0');
+    return crc.toString(16).toUpperCase().padStart(4, '0');
 }
 
-// Fungsi mengubah QRIS Statis menjadi Dinamis dengan Nominal + Kode Unik
 function buatTeksQrisDinamis(nominal) {
     let qrisAwal = MASTER_TEXT_QRIS.substring(0, MASTER_TEXT_QRIS.indexOf("5802ID"));
     let nominalString = nominal.toString();
     let formatNominal = "54" + nominalString.length.toString().padStart(2, '0') + nominalString;
     let qrisSisa = MASTER_TEXT_QRIS.substring(MASTER_TEXT_QRIS.indexOf("5802ID"));
-    
-    // Potong string bawaan CRC lama di bagian paling akhir (4 karakter terakhir)
     qrisSisa = qrisSisa.substring(0, qrisSisa.length - 4);
     
     let gabunganTeks = qrisAwal + formatNominal + qrisSisa;
     let crcBaru = kelolaCRC16(gabunganTeks);
-    
     return gabunganTeks + crcBaru;
 }
 
@@ -65,65 +53,45 @@ let keranjangBelanja = null;
 let intervalMainTimer = null;
 let listCacheRiwayat = []; 
 
-  // ==========================================================
-// 1. DEKLARASI FUNGSI INPUT SUARA (TARUH DI ATAS)
-// ==========================================================
-function aktifkanInputSuaraRealTime(elemenInput, tipeInput) {
+function aktifkanInputSuaraRealTime(elemenInput, tipeInput = "angka") {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.warn("Browser ini tidak mendukung Web Speech API (Input Suara).");
-        return;
-    }
-
+    if (!SpeechRecognition) return console.warn("Browser tidak mendukung Speech Recognition.");
     if (elemenInput.dataset.sedangMerekam === "true") return;
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'id-ID'; 
-    recognition.interimResults = true; // Ketikan langsung muncul real-time
+    recognition.interimResults = true; 
     recognition.continuous = false;   
-
     const placeholderAsli = elemenInput.placeholder || "";
 
     recognition.onstart = function() {
         elemenInput.dataset.sedangMerekam = "true";
         elemenInput.placeholder = "🎙️ Mendengarkan...";
-        elemenInput.style.backgroundColor = "#1e293b"; // Efek visual saat mic aktif
+        elemenInput.style.backgroundColor = "#1e293b";
     };
 
-   // Pastikan di bagian onresult script.js untuk nomor HP seperti ini:
-recognition.onresult = function(event) {
-    let hasilSuara = "";
-    for (let i = event.resultIndex; i < event.results.length; ++i) {
-        hasilSuara += event.results[i][0].transcript;
-    }
+    recognition.onresult = function(event) {
+        let hasilSuara = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            hasilSuara += event.results[i][0].transcript;
+        }
 
-    // Ganti kata-kata angka mandiri yang sering salah ditangkap browser sebelum difilter
-    let teksDisempurnakan = hasilSuara.toLowerCase()
-        .replace(/kosong/g, '0')
-        .replace(/nol/g, '0')
-        .replace(/satu/g, '1')
-        .replace(/dua/g, '2')
-        .replace(/tiga/g, '3')
-        .replace(/empat/g, '4')
-        .replace(/lima/g, '5')
-        .replace(/enam/g, '6')
-        .replace(/tujuh/g, '7')
-        .replace(/delapan/g, '8')
-        .replace(/sembilan/g, '9');
+        let teksDisempurnakan = hasilSuara.toLowerCase()
+            .replace(/kosong/g, '0').replace(/nol/g, '0').replace(/satu/g, '1')
+            .replace(/dua/g, '2').replace(/tiga/g, '3').replace(/empat/g, '4')
+            .replace(/lima/g, '5').replace(/enam/g, '6').replace(/tujuh/g, '7')
+            .replace(/delapan/g, '8').replace(/sembilan/g, '9');
 
-    let angkaBersih = teksDisempurnakan.replace(/[^0-9]/g, '');
-    elemenInput.value = angkaBersih;
-    
-    if (typeof fiturDeteksiOtomatisDanCariProvider === "function") {
-        fiturDeteksiOtomatisDanCariProvider(angkaBersih);
-    }
-    elemenInput.dispatchEvent(new Event('input'));
-};
-
-    recognition.onerror = function(event) {
-        console.error("Kesalahan input suara:", event.error);
+        let angkaBersih = teksDisempurnakan.replace(/[^0-9]/g, '');
+        elemenInput.value = angkaBersih;
+        
+        if (typeof fiturDeteksiOtomatisDanCariProvider === "function") {
+            fiturDeteksiOtomatisDanCariProvider(angkaBersih);
+        }
+        elemenInput.dispatchEvent(new Event('input'));
     };
 
+    recognition.onerror = function(event) { console.error("Error suara:", event.error); };
     recognition.onend = function() {
         elemenInput.dataset.sedangMerekam = "false";
         elemenInput.placeholder = placeholderAsli;
@@ -135,34 +103,20 @@ recognition.onresult = function(event) {
 }  
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Jalankan fungsi bawaan aplikasi
     muatDataDanPisahKategori();
-
-    // 2. Ambil elemen input nomor HP utama berdasarkan ID yang benar
     const inputNoHp = document.getElementById('search-phone-input') || document.getElementById('no-hp') || document.getElementById('input-tujuan');
-
-    // 3. Pasangkan fitur input suara real-time saat kolom diklik
     if (inputNoHp) {
         inputNoHp.addEventListener('click', function() {
-            // Memanggil fungsi real-time yang sudah Anda deklarasikan di bagian atas
             aktifkanInputSuaraRealTime(this, "angka");
         });
     }
-    
-    // 4. Jalankan banner slider khusus untuk halaman index.html
     setupBannerSlider();
 });
 
-/**
- * 1. AMBIL KONTAK HP NATIVE (CONTACT PICKER API)
- */
 async function bukaDaftarKontakHP() {
-    const props = ['tel'];
-    const opts = { multiple: false };
-
     if ('contacts' in navigator && 'ContactsManager' in window) {
         try {
-            const contact = await navigator.contacts.select(props, opts);
+            const contact = await navigator.contacts.select(['tel'], { multiple: false });
             if (contact && contact.length > 0 && contact[0].tel && contact[0].tel.length > 0) {
                 let nomorBersih = contact[0].tel[0].replace(/\s+/g, '').replace(/-/g, '').replace(/^\+62/, '0');
                 const inputUtama = document.getElementById('search-phone-input');
@@ -171,26 +125,17 @@ async function bukaDaftarKontakHP() {
                     fiturDeteksiOtomatisDanCariProvider(nomorBersih);
                 }
             }
-        } catch (err) {
-            console.log("Akses kontak ditolak atau dibatalkan.", err);
-        }
+        } catch (err) { console.log("Kontak ditolak/dibatalkan.", err); }
     } else {
-        alert("Browser Anda tidak mendukung Contact Picker. Silakan ketik nomor secara manual.");
+        alert("Browser Anda tidak mendukung Contact Picker.");
     }
 }
 
-/**
- * 2. LOAD DATA SPREADSHEET REAL-TIME (GANTI BLOK INI DENGAN YANG BARU)
- */
 async function muatDataDanPisahKategori() {
-    console.log("Memulai penataan pangkalan data...");
-
-    // 1. AMBIL DARI MEMORI INTERNAL HP TERLEBIH DAHULU (INSTAN < 1 DETIK)
     const cacheLokalProduk = localStorage.getItem('nk_cache_produk_csv');
-    const cacheLokalArsip = localStorage.getItem('nk_cache_arsip_csv'); // Ambil cache arsip jika ada
+    const cacheLokalArsip = localStorage.getItem('nk_cache_arsip_csv');
     
     if (cacheLokalProduk) {
-        console.log("Memuat daftar harga dari cache lokal HP...");
         uraiDanProsesTeksCSV(cacheLokalProduk);
         gantiTabUtama("KUOTA");
     }
@@ -199,44 +144,34 @@ async function muatDataDanPisahKategori() {
         rawArsipRows = cacheLokalArsip.split(/\r?\n/).slice(1);
     }
 
-    // 2. TETAP SINKRONISASI DATA TERBARU DARI GOOGLE SHEET DI LATAR BELAKANG
     try {
-       // Ambil data dari kedua sheet secara paralel (bersamaan)
         const [resProduk, resArsip] = await Promise.all([
             fetch(SHEET_CSV_URL),
             fetch(SHEET_ARSIP_URL)
         ]);
 
-        if (!resProduk.ok || !resArsip.ok) throw new Error("Gagal mengambil respon dari Google");
+        if (!resProduk.ok || !resArsip.ok) throw new Error("Gagal mengambil data dari Google");
         
         const textDataTerbaru = await resProduk.text();
         const textArsipTerbaru = await resArsip.text();
 
-    // Update data produk jika ada perubahan harga
         if (textDataTerbaru !== cacheLokalProduk) {
             localStorage.setItem('nk_cache_produk_csv', textDataTerbaru);
             uraiDanProsesTeksCSV(textDataTerbaru);
             gantiTabUtama(tabUtamaAktif); 
         }
 
-        // Update data arsip status transaksi harian
         localStorage.setItem('nk_cache_arsip_csv', textArsipTerbaru);
         rawArsipRows = textArsipTerbaru.split(/\r?\n/).slice(1);
-        console.log("Daftar harga & status arsip berhasil diperbarui dari Google Sheets!");
 
     } catch (error) {
-        console.warn("Koneksi lambat/offline. Menggunakan pangkalan data internal HP:", error);
+        console.warn("Menggunakan data lokal HP:", error);
     }
 }
-/**
- * FUNGSI BANTUAN UNTUK MEMPROSES STRUKTUR DATA BARIS CSV (KODE BARU)
- */
+
 function uraiDanProsesTeksCSV(teksMentah) {
     rawDatabaseRows = teksMentah.split(/\r?\n/).slice(1);
-
-    masterPulsaGroup = {};
-    masterKuotaGroup = {};
-    masterTokenGroup = {};
+    masterPulsaGroup = {}; masterKuotaGroup = {}; masterTokenGroup = {};
 
     rawDatabaseRows.forEach(row => {
         if (!row.trim()) return;
@@ -263,21 +198,18 @@ function uraiDanProsesTeksCSV(teksMentah) {
             let opKey = "TOKEN PLN";
             if (!masterTokenGroup[opKey]) masterTokenGroup[opKey] = [];
             masterTokenGroup[opKey].push(itemObject);
-        } 
-        else if (upperKat.includes("PULSA") || upperNama.includes("PULSA")) {
+        } else if (upperKat.includes("PULSA") || upperNama.includes("PULSA")) {
             let operatorKey = dapatkanOperatorKey(upperKat, upperNama);
             if (operatorKey === "LAINNYA") operatorKey = "PULSA";
             if (!masterPulsaGroup[operatorKey]) masterPulsaGroup[operatorKey] = [];
             masterPulsaGroup[operatorKey].push(itemObject);
-        } 
-        else {
+        } else {
             let operatorKey = dapatkanOperatorKey(upperKat, upperNama);
             if (!masterKuotaGroup[operatorKey]) masterKuotaGroup[operatorKey] = [];
             masterKuotaGroup[operatorKey].push(itemObject);
         }
     });
 }
-
 
 function dapatkanOperatorKey(upperKat, upperNama) {
     if (upperKat.includes("TELKOMSEL") || upperNama.includes("TELKOMSEL")) return "TELKOMSEL";
@@ -293,9 +225,6 @@ function dapatkanOperatorKey(upperKat, upperNama) {
     return "LAINNYA";
 }
 
-/**
- * 3. ENGINE DETEKSI PROVIDER NOMOR HP (SUDAH DIPERBAIKI)
- */
 function fiturDeteksiOtomatisDanCariProvider(noHp) {
     if (tabUtamaAktif === "TOKEN") return; 
     const helper = document.getElementById('helper-deteksi-operator');
@@ -305,12 +234,8 @@ function fiturDeteksiOtomatisDanCariProvider(noHp) {
     }
 
     let providerDitemukan = "";
-    if (/^(0851)/.test(noHp)) {
-        providerDitemukan = "BY.U";
-    }
-    else if (/^(0811|0812|0813|0821|0822|0823)/.test(noHp)) {
-        providerDitemukan = "TELKOMSEL";
-    }
+    if (/^(0851)/.test(noHp)) providerDitemukan = "BY.U";
+    else if (/^(0811|0812|0813|0821|0822|0823)/.test(noHp)) providerDitemukan = "TELKOMSEL";
     else if (/^(0814|0815|0816|0855|0856|0857|0858)/.test(noHp)) providerDitemukan = "INDOSAT";
     else if (/^(0817|0818|0819|0859|0877|0878)/.test(noHp)) providerDitemukan = "XL";
     else if (/^(0831|0832|0833|0838)/.test(noHp)) providerDitemukan = "AXIS";
@@ -322,43 +247,10 @@ function fiturDeteksiOtomatisDanCariProvider(noHp) {
             helper.classList.remove('hidden');
             helper.innerHTML = `<i class="fas fa-robot text-emerald-600"></i> Terdeteksi: <span class="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black text-[9px]">${providerDitemukan}</span>`;
         }
-
-        // PERBAIKAN LOGIKA DISINI (PULSA ke masterPulsaGroup, KUOTA ke masterKuotaGroup)
         const databaseTarget = (tabUtamaAktif === "PULSA") ? masterPulsaGroup : masterKuotaGroup;
         if (databaseTarget[providerDitemukan]) {
             operatorAktif = providerDitemukan;
-            function renderPilihanTombolSliderAktif() {
-    const container = document.getElementById('category-container');
-    if(!container) return;
-    container.innerHTML = "";
-
-    // MEMAKSA KONTAINER AGAR BISA DIGESER SECARA HORIZONTAL VIA TAILWIND
-    container.className = "flex flex-row overflow-x-auto snap-x snap-mandatory whitespace-nowrap gap-2 py-2 w-full max-w-full";
-
-    let databaseTarget = {};
-    if (tabUtamaAktif === "PULSA") databaseTarget = masterPulsaGroup;
-    else if (tabUtamaAktif === "KUOTA") databaseTarget = masterKuotaGroup;
-    else if (tabUtamaAktif === "TOKEN") databaseTarget = masterTokenGroup;
-
-    const listOperatorTerdeteksi = Object.keys(databaseTarget);
-
-    listOperatorTerdeteksi.forEach(op => {
-        const btn = document.createElement('button');
-        // shrink-0 sangat penting agar tombol tidak gepeng/mengecil dan bisa meluber ke kanan agar bisa digeser
-        btn.className = `operator-slider-btn shrink-0 font-black text-xs px-4 py-2.5 rounded-xl transition-all border flex items-center gap-2 snap-center ${
-            op === operatorAktif ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-gray-700 border-gray-200 shadow-sm'
-        }`;
-
-        const fileIcon = iconMap[op] || "PULSA.png";
-        btn.innerHTML = `<img src="${fileIcon}" class="w-4 h-4 object-contain rounded" onerror="this.src='PULSA.png'"> <span>${op}</span>`;
-        btn.onclick = () => {
-            operatorAktif = op;
             renderPilihanTombolSliderAktif();
-            renderCardsProduk();
-        };
-        container.appendChild(btn);
-    });
-}
             renderCardsProduk();
         }
     } else {
@@ -366,21 +258,15 @@ function fiturDeteksiOtomatisDanCariProvider(noHp) {
     }
 }
 
-/**
- * 4. KONTROL MULTI-TAB SEAMLESS
- */
 function gantiTabUtama(jenisTab) {
     tabUtamaAktif = jenisTab;
-    
     const tabs = ['PULSA', 'KUOTA', 'TOKEN'];
     tabs.forEach(t => {
         const btn = document.getElementById(`tab-${t.toLowerCase()}`);
         if(btn) {
-            if (t === jenisTab) {
-                btn.className = "py-3 text-[9px] font-black uppercase rounded-xl transition-all bg-blue-600 text-white shadow-sm flex flex-col items-center justify-center gap-1";
-            } else {
-                btn.className = "py-3 text-[9px] font-black uppercase rounded-xl transition-all text-gray-500 flex flex-col items-center justify-center gap-1";
-            }
+            btn.className = (t === jenisTab) 
+                ? "py-3 text-[9px] font-black uppercase rounded-xl transition-all bg-blue-600 text-white shadow-sm flex flex-col items-center justify-center gap-1"
+                : "py-3 text-[9px] font-black uppercase rounded-xl transition-all text-gray-500 flex flex-col items-center justify-center gap-1";
         }
     });
 
@@ -394,11 +280,7 @@ function renderAutoOperatorSliders() {
     if (!container) return;
     container.innerHTML = "";
 
-    let databaseTarget = {};
-    if (tabUtamaAktif === "PULSA") databaseTarget = masterPulsaGroup;
-    else if (tabUtamaAktif === "KUOTA") databaseTarget = masterKuotaGroup;
-    else if (tabUtamaAktif === "TOKEN") databaseTarget = masterTokenGroup;
-
+    let databaseTarget = (tabUtamaAktif === "PULSA") ? masterPulsaGroup : ((tabUtamaAktif === "KUOTA") ? masterKuotaGroup : masterTokenGroup);
     const listOperatorTerdeteksi = Object.keys(databaseTarget);
 
     if (listOperatorTerdeteksi.length > 0) {
@@ -415,12 +297,9 @@ function renderPilihanTombolSliderAktif() {
     const container = document.getElementById('category-container');
     if(!container) return;
     container.innerHTML = "";
+    container.className = "flex flex-row overflow-x-auto snap-x snap-mandatory whitespace-nowrap gap-2 py-2 w-full max-w-full";
 
-    let databaseTarget = {};
-    if (tabUtamaAktif === "PULSA") databaseTarget = masterPulsaGroup;
-    else if (tabUtamaAktif === "KUOTA") databaseTarget = masterKuotaGroup;
-    else if (tabUtamaAktif === "TOKEN") databaseTarget = masterTokenGroup;
-
+    let databaseTarget = (tabUtamaAktif === "PULSA") ? masterPulsaGroup : ((tabUtamaAktif === "KUOTA") ? masterKuotaGroup : masterTokenGroup);
     const listOperatorTerdeteksi = Object.keys(databaseTarget);
 
     listOperatorTerdeteksi.forEach(op => {
@@ -452,11 +331,7 @@ function renderCardsProduk() {
     gridRegular.innerHTML = "";
     if (gridFlash) gridFlash.innerHTML = "";
 
-    let databaseTarget = {};
-    if (tabUtamaAktif === "PULSA") databaseTarget = masterPulsaGroup;
-    else if (tabUtamaAktif === "KUOTA") databaseTarget = masterKuotaGroup;
-    else if (tabUtamaAktif === "TOKEN") databaseTarget = masterTokenGroup;
-
+    let databaseTarget = (tabUtamaAktif === "PULSA") ? masterPulsaGroup : ((tabUtamaAktif === "KUOTA") ? masterKuotaGroup : masterTokenGroup);
     const items = databaseTarget[operatorAktif] || [];
     if (badgeCount) badgeCount.innerText = `${items.length} Item`;
 
@@ -472,7 +347,7 @@ function renderCardsProduk() {
             const diskon = Math.round(((item.priceNormal - item.priceFlash) / item.priceNormal) * 100);
 
             const card = document.createElement('div');
-            card.className = "flash-card border-2 border-red-200 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer";
+            card.className = "flash-card border-2 border-red-200 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden";
             card.onclick = () => tambahKeKeranjang(item.nama, item.priceFlash, `FLASH SALE (-${diskon}%)`);
             card.innerHTML = `
                 <div class="absolute top-0 right-0 bg-red-600 text-white font-black text-[8px] px-2 py-0.5 rounded-bl-xl uppercase">-${diskon}%</div>
@@ -482,8 +357,7 @@ function renderCardsProduk() {
                 <div class="text-[12px] font-black text-red-600">Rp ${item.priceFlash.toLocaleString('id-ID')}</div>
             `;
             if (gridFlash) gridFlash.appendChild(card);
-        } 
-        else if (item.pricePromo > 0) {
+        } else if (item.pricePromo > 0) {
             const diskonPromo = Math.round(((item.priceNormal - item.pricePromo) / item.priceNormal) * 100);
 
             const card = document.createElement('div');
@@ -497,8 +371,7 @@ function renderCardsProduk() {
                 <div class="text-[11px] font-black text-orange-600">Rp ${item.pricePromo.toLocaleString('id-ID')}</div>
             `;
             gridRegular.appendChild(card);
-        } 
-        else {
+        } else {
             const card = document.createElement('div');
             card.className = "product-card border border-gray-200 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer shadow-sm";
             card.onclick = () => tambahKeKeranjang(item.nama, item.priceNormal, "REGULAR");
@@ -523,52 +396,33 @@ function renderCardsProduk() {
 
 function jalankanTimerMundurDinamis(targetString) {
     let targetDate = null;
-    
     if (targetString && targetString.trim() !== "") {
         try {
-            // SISTEM PENGAMAN: Bersihkan teks jika admin salah input di spreadsheet
-            let formatBersih = targetString
-                .replace(/WITA|WIB|WIT|jam/gi, '') // Hapus tulisan WITA/WIB/Jam
-                .replace(/\./g, ':')               // Ubah paksa titik (.) menjadi titik dua (:)
-                .trim();
-                
+            let formatBersih = targetString.replace(/WITA|WIB|WIT|jam/gi, '').replace(/\./g, ':').trim();
             targetDate = new Date(formatBersih);
-            
-            // Jika hasilnya tetap rusak (NaN), gunakan pengaman waktu default (Jam 12 malam ini)
-            if (isNaN(targetDate.getTime())) {
-                throw new Error("Format tanggal spreadsheet tidak valid.");
-            }
+            if (isNaN(targetDate.getTime())) throw new Error("Format tanggal salah.");
         } catch (e) {
-            console.warn("Koreksi otomatis aktif: ", e.message);
             const skrg = new Date();
             targetDate = new Date(skrg.getFullYear(), skrg.getMonth(), skrg.getDate(), 23, 59, 59);
         }
     } else {
-        // Jika kolom waktu di spreadsheet dikosongkan, otomatis hitung mundur ke jam 12 malam hari ini
         const skrg = new Date();
         targetDate = new Date(skrg.getFullYear(), skrg.getMonth(), skrg.getDate(), 23, 59, 59);
     }
 
-    // Interval pemicu perubahan teks angka di halaman index.html
     intervalMainTimer = setInterval(() => {
         const kini = new Date();
         const selisih = targetDate - kini;
 
         if (selisih <= 0) {
-    document.getElementById('timer-hour').innerText = "00";
-    document.getElementById('timer-min').innerText = "00";
-    document.getElementById('timer-sec').innerText = "00";
-    clearInterval(intervalMainTimer);
-    
-    // TAMBAHAN KEAMANAN: Otomatis sembunyikan area Flash Sale di Web NK JAYA CELL
-    const sectionFlash = document.getElementById('main-flash-section');
-    if (sectionFlash) {
-        sectionFlash.classList.add('hidden'); // Menyembunyikan etalase promo dari mata pembeli
-    }
-    
-    return;
-}
-
+            document.getElementById('timer-hour').innerText = "00";
+            document.getElementById('timer-min').innerText = "00";
+            document.getElementById('timer-sec').innerText = "00";
+            clearInterval(intervalMainTimer);
+            const sectionFlash = document.getElementById('main-flash-section');
+            if (sectionFlash) sectionFlash.classList.add('hidden');
+            return;
+        }
 
         const h = Math.floor(selisih / (1000 * 60 * 60));
         const m = Math.floor((selisih / (1000 * 60)) % 60);
@@ -580,10 +434,6 @@ function jalankanTimerMundurDinamis(targetString) {
     }, 1000);
 }
 
-
-/**
- * 5. PENGELOLAAN KERANJANG/DRAF TRANSAKSI
- */
 function tambahKeKeranjang(nama, harga, label, kategoriOtomatis = null, targetOtomatis = null) {
     keranjangBelanja = {
         kategori: kategoriOtomatis || `${tabUtamaAktif} - ${operatorAktif}`,
@@ -594,10 +444,7 @@ function tambahKeKeranjang(nama, harga, label, kategoriOtomatis = null, targetOt
     const cartCountEl = document.getElementById('cart-count');
     if (cartCountEl) cartCountEl.innerText = "1";
 
-    // Tentukan nomor target yang akan diisi di modal
-    // Jika dari halaman game, gunakan targetOtomatis. Jika dari index, gunakan input utama.
     const nomorTargetFinal = targetOtomatis || document.getElementById('search-phone-input')?.value.trim() || "";
-
     bukaModalKeranjang(nomorTargetFinal);
 }
 
@@ -612,14 +459,11 @@ function bukaModalKeranjang(nomorTargetOtomatis = "") {
     const historySection = document.getElementById('history-view-section');
 
     if (!modal) return;
-    
     if (checkoutSection) checkoutSection.classList.remove('hidden');
     if (historySection) historySection.classList.add('hidden');
 
-    // Otomatis isi nomor target di modal jika ada
     if (inputModalPhone) {
         inputModalPhone.value = nomorTargetOtomatis;
-        // Kunci input jika nomor sudah terisi otomatis (baik dari game atau index)
         inputModalPhone.readOnly = !!nomorTargetOtomatis;
     }
 
@@ -663,12 +507,6 @@ function bukaModalKeranjang(nomorTargetOtomatis = "") {
     }, 10);
 }
 
-/**
- * 6. LOG HISTORI RIWAYAT
- */
-/**
- * 6. MENAMPILKAN TRANSAKSI DARI LOCALSTORAGE (INSTANT & AKURAT)
- */
 function bukaModalRiwayatLangsung() {
     const modal = document.getElementById('cart-modal');
     const titleModal = document.getElementById('modal-title-dynamic');
@@ -676,8 +514,6 @@ function bukaModalRiwayatLangsung() {
     const historySection = document.getElementById('history-view-section');
 
     if (!modal) return;
-
-    // Switch View Section
     if (checkoutSection) checkoutSection.classList.add('hidden');
     if (historySection) historySection.classList.remove('hidden');
 
@@ -689,16 +525,12 @@ function bukaModalRiwayatLangsung() {
         modal.querySelector('div').classList.remove('translate-y-full');
     }, 10);
 
-    // Langsung ambil data dari LocalStorage
     listCacheRiwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
-
-    // KODE TAMBAHAN: Pastikan database dari lokal/Google Sheet dipetakan ulang sebelum merender status
     const cacheLokalProduk = localStorage.getItem('nk_cache_produk_csv');
     if (cacheLokalProduk && rawDatabaseRows.length === 0) {
         uraiDanProsesTeksCSV(cacheLokalProduk);
     }
 
-    // Jalankan render list dengan filter default 'SEMUA'
     filterRiwayatStatus('SEMUA');
 }
 
@@ -706,7 +538,6 @@ function filterRiwayatStatus(filterType) {
     const itemsContainer = document.getElementById('history-items-container');
     if (!itemsContainer) return;
 
-    // Atur Aktif Tombol Filter Tab UI
     const filterButtons = {
         'SEMUA': 'btn-fltr-all', 'SUKSES': 'btn-fltr-sukses', 'PROSES': 'btn-fltr-proses', 'GAGAL': 'btn-fltr-gagal'
     };
@@ -714,55 +545,42 @@ function filterRiwayatStatus(filterType) {
     Object.keys(filterButtons).forEach(key => {
         const btn = document.getElementById(filterButtons[key]);
         if (btn) {
-            if (key === filterType) {
-                btn.className = "shrink-0 text-[10px] font-black px-3 py-1.5 rounded-full bg-blue-600 text-white shadow-sm transition-all";
-            } else {
-                btn.className = "shrink-0 text-[10px] font-black px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 transition-all hover:bg-gray-200";
-            }
+            btn.className = (key === filterType)
+                ? "shrink-0 text-[10px] font-black px-3 py-1.5 rounded-full bg-blue-600 text-white shadow-sm transition-all"
+                : "shrink-0 text-[10px] font-black px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 transition-all hover:bg-gray-200";
         }
     });
 
-    // Buat peta (map) status terupdate berdasarkan "Nomor/ID Target" dari sheet ARSIP
     let statusTerupdateMap = {};
-    
     rawArsipRows.forEach(row => {
         if (!row.trim()) return;
         const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
         
-        // PENTING: Sesuaikan indeks di bawah ini sesuai urutan kolom pada Sheet "ARSIP" Anda!
-        // Contoh di bawah berasumsi: Kolom 2 (indeks 1) adalah Nomor HP Target, dan Kolom 6 (indeks 5) adalah Statusnya.
-        const noHpTargetSheet = cols[1] ? cols[1].trim().replace(/"/g, "").replace(/'/g, "") : "";
-        const statusTransaksiSheet = cols[5] ? cols[5].trim().replace(/"/g, "").toUpperCase() : "";
+        // Disesuaikan untuk struktur Sheet ARSIP dengan Kolom ID Transaksi
+        const idTxTargetSheet = cols[1] ? cols[1].trim().replace(/"/g, "") : "";
+        const noHpTargetSheet = cols[2] ? cols[2].trim().replace(/"/g, "").replace(/'/g, "") : "";
+        const statusTransaksiSheet = cols[6] ? cols[6].trim().replace(/"/g, "").toUpperCase() : "";
 
-        if (noHpTargetSheet && statusTransaksiSheet) {
-            statusTerupdateMap[noHpTargetSheet] = statusTransaksiSheet;
+        if (statusTransaksiSheet) {
+            if (noHpTargetSheet) statusTerupdateMap[noHpTargetSheet] = statusTransaksiSheet;
+            if (idTxTargetSheet) statusTerupdateMap[idTxTargetSheet] = statusTransaksiSheet;
         }
     });
 
-    // Proses data riwayat dan perbarui statusnya berdasarkan pencocokan nomor HP target
     let riwayatDiproses = listCacheRiwayat.map(item => {
         let noHpKey = item.target ? item.target.trim() : "";
-        // Jika ditemukan status terbaru di sheet ARSIP berdasarkan nomor HP, pakai status itu.
-        let statusFinal = statusTerupdateMap[noHpKey] || item.statusAwal || item.status || "PROSES";
+        let idKey = item.id_transaksi ? item.id_transaksi.trim() : "";
         
-        // Standarisasi kata status dari Google Sheet ke sistem UI aplikasi Anda
+        let statusFinal = statusTerupdateMap[idKey] || statusTerupdateMap[noHpKey] || item.statusAwal || item.status || "PROSES";
+        
         if (statusFinal.includes("LUNAS") || statusFinal === "SUCCESS") statusFinal = "SUKSES";
         if (statusFinal.includes("PENDING")) statusFinal = "PROSES";
         if (statusFinal.includes("FAILED")) statusFinal = "GAGAL";
 
-        return {
-            ...item,
-            status: statusFinal
-        };
+        return { ...item, status: statusFinal };
     });
 
-    // Filter berdasarkan tipe status yang dipilih pengguna
-    let dataTerfilter = riwayatDiproses;
-    if (filterType !== 'SEMUA') {
-        dataTerfilter = riwayatDiproses.filter(item => item.status === filterType);
-    }
-
-    // Batasi maksimal 20 riwayat teranyar
+    let dataTerfilter = (filterType !== 'SEMUA') ? riwayatDiproses.filter(item => item.status === filterType) : riwayatDiproses;
     const dataFinal = dataTerfilter.slice(0, 20);
 
     if (dataFinal.length === 0) {
@@ -777,8 +595,8 @@ function filterRiwayatStatus(filterType) {
 
     let htmlOutput = "";
     dataFinal.forEach(item => {
-        let badgeStyle = "";
-        let iconStyle = "";
+        let badgeStyle = "bg-amber-50 text-amber-700 border border-amber-100 animate-pulse";
+        let iconStyle = "fa-spinner animate-spin text-amber-500";
         
         if (item.status === "SUKSES") {
             badgeStyle = "bg-emerald-50 text-emerald-700 border border-emerald-100";
@@ -786,35 +604,27 @@ function filterRiwayatStatus(filterType) {
         } else if (item.status === "GAGAL") {
             badgeStyle = "bg-rose-50 text-rose-700 border border-rose-100";
             iconStyle = "fa-times-circle text-rose-500";
-        } else {
-            badgeStyle = "bg-amber-50 text-amber-700 border border-amber-100 animate-pulse";
-            iconStyle = "fa-spinner animate-spin text-amber-500";
         }
 
         let formatTarget = item.target;
-        // PERBAIKAN: Gunakan label produk yang lebih deskriptif dari data riwayat
-        let produkLabelTampil = item.produkLengkap || // Gunakan field baru jika ada
-                                (item.kategoriLengkap ? `[${item.kategoriLengkap}] ${item.produk}` : item.produk) || // Fallback ke format lama
-                                "Produk Tidak Dikenal";
-
-        // Amankan objek item menjadi string JSON yang valid untuk atribut HTML
+        let produkLabelTampil = item.produkLengkap || (item.kategoriLengkap ? `[${item.kategoriLengkap}] ${item.produk}` : item.produk) || "Produk Tidak Dikenal";
         const itemJson = JSON.stringify(item).replace(/"/g, "'");
 
         htmlOutput += `
             <div class="p-3.5 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-2.5 text-left relative overflow-hidden">
                 <div class="flex justify-between items-center">
-                    <div class="flex items-center gap-1.5 text-[9px] text-gray-400 font-bold">
-                        <i class="far fa-clock text-indigo-500"></i>
-                        <span>${item.tanggal}</span>
+                    <div class="flex items-center gap-2">
+                        <div class="text-[9px] text-gray-400 font-bold">ID: <span class="text-indigo-500">${item.id_transaksi || '-'}</span></div>
+                        <button onclick="copyToClipboard(this, '${item.id_transaksi || ''}')" class="text-gray-400 hover:text-blue-600 text-xs p-1 rounded-full bg-gray-100 active:scale-90 transition-all" title="Salin ID">
+                            <i class="far fa-copy"></i>
+                        </button>
                     </div>
                     <span class="${badgeStyle} px-2 py-0.5 rounded-lg font-black text-[9px] tracking-wide flex items-center gap-1 uppercase">
                         <i class="fas ${iconStyle}"></i> ${item.status}
                     </span>
                 </div>
                 
-                <div class="font-extrabold text-gray-900 text-xs tracking-tight leading-snug uppercase">
-                    ${produkLabelTampil}
-                </div>
+                <div class="font-extrabold text-gray-900 text-xs tracking-tight leading-snug uppercase">${produkLabelTampil}</div>
                 
                 <div class="flex justify-between items-end pt-1 border-t border-gray-50">
                     <div class="text-[10px] text-gray-400 font-semibold">
@@ -825,9 +635,14 @@ function filterRiwayatStatus(filterType) {
                         <p class="text-xs font-black text-blue-600 mt-0.5">Rp ${item.biaya.toLocaleString('id-ID')}</p>
                     </div>
                 </div>
-                <button onclick="orderUlangDariRiwayat(${itemJson})" class="w-full text-center bg-blue-600/10 text-blue-600 text-[10px] font-bold py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all mt-1 flex items-center justify-center gap-1.5">
-                    <i class="fas fa-redo-alt"></i> Beli Lagi
-                </button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="orderUlangDariRiwayat(${itemJson})" class="w-full text-center bg-blue-600/10 text-blue-600 text-[10px] font-bold py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all mt-1 flex items-center justify-center gap-1.5">
+                        <i class="fas fa-redo-alt"></i> Beli Lagi
+                    </button>
+                    <button onclick="tampilkanStrukDariRiwayat(${itemJson})" class="w-full text-center bg-emerald-600/10 text-emerald-600 text-[10px] font-bold py-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all mt-1 flex items-center justify-center gap-1.5">
+                        <i class="fas fa-receipt"></i> Lihat Struk
+                    </button>
+                </div>
             </div>
         `;
     });
@@ -842,36 +657,21 @@ function filterRiwayatStatus(filterType) {
     `;
 }
 
-/**
- * Fungsi untuk mengisi ulang form dari data riwayat untuk transaksi baru
- */
 function orderUlangDariRiwayat(itemRiwayat) {
-    // PERBAIKAN: Gunakan properti `gameName` yang sudah ada di riwayat untuk mendeteksi item game.
-    // Properti ini akan bernilai nama game (misal: "MLBB", "FF") jika itu adalah transaksi game, dan null jika bukan.
     const isGameTopup = !!itemRiwayat.gameName;
-
     if (isGameTopup) {
-        // Cek apakah kita berada di halaman topup game
         if (!window.location.pathname.includes('gameml.html')) {
-            // Jika tidak, simpan data ke session dan arahkan ke halaman game
             sessionStorage.setItem('order_ulang_game', JSON.stringify(itemRiwayat));
             window.location.href = 'gameml.html';
         } else {
-            // Jika sudah di halaman game, langsung panggil fungsi untuk mengisi form tanpa refresh
             tutupModalKeranjang();
-            // Panggil fungsi yang ada di gameml.js dengan data riwayat sebagai parameter
-            if (typeof prosesOrderUlangGame === 'function') {
-                prosesOrderUlangGame(itemRiwayat);
-            }
+            if (typeof prosesOrderUlangGame === 'function') prosesOrderUlangGame(itemRiwayat);
         }
     } else {
-        // Ini adalah item pulsa/kuota. Cek apakah kita sedang di halaman game.
         if (window.location.pathname.includes('gameml.html')) {
-            // Jika di halaman game, simpan data dan redirect ke index.html
             sessionStorage.setItem('order_ulang_non_game', JSON.stringify(itemRiwayat));
             window.location.href = 'index.html';
         } else {
-            // Jika sudah di index.html, langsung isi form.
             const elInputTujuan = document.getElementById('search-phone-input');
             if (elInputTujuan && itemRiwayat.target) {
                 elInputTujuan.value = itemRiwayat.target;
@@ -880,11 +680,9 @@ function orderUlangDariRiwayat(itemRiwayat) {
             tutupModalKeranjang();
         }
     }
-
-    // Gulir ke atas halaman agar pengguna fokus ke input
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-// Fungsi pelengkap untuk menghapus riwayat jika memori penuh
+
 function bersihkanRiwayatProduk() {
     if (confirm("Hapus permanen semua histori transaksi produk di perangkat ini?")) {
         localStorage.removeItem('nk_produk_history');
@@ -912,7 +710,6 @@ function toggleMetodePembayaranUI(metode) {
     const lblWa = document.getElementById('label-pay-wa');
     const lblQris = document.getElementById('label-pay-qris');
     const btnCheckout = document.getElementById('btn-checkout');
-
     const radioWa = document.getElementById('radio-pay-wa');
     const radioQris = document.getElementById('radio-pay-qris');
 
@@ -935,9 +732,6 @@ function toggleMetodePembayaranUI(metode) {
     }
 }
 
-/**
- * 7. PROSES CHECKOUT AKHIR (SUDAH DIOPTIMALKAN & AMAN)
- */
 function prosesCheckoutAkhir() {
     const inputHp = document.getElementById('customer-phone');
     const noHp = inputHp ? inputHp.value.trim() : "";
@@ -951,7 +745,6 @@ function prosesCheckoutAkhir() {
     if (metodePilihan === 'WA') {
         kirimTransaksiKeSheetDanWA(noHp, "Pending (WA)");
     } else {
-        // Pembuatan Kode Unik Acak 11-99 Rupiah
         const kodeUnik = Math.floor(Math.random() * 89) + 11; 
         const hargaAsli = keranjangBelanja.harga;
         const totalDenganKodeUnik = hargaAsli + kodeUnik;
@@ -959,7 +752,6 @@ function prosesCheckoutAkhir() {
         keranjangBelanja.hargaDenganKodeUnik = totalDenganKodeUnik;
         keranjangBelanja.kodeUnikTerpakai = kodeUnik;
 
-        // Tampilkan teks rincian nominal pembayaran
         const txtPriceContainer = document.getElementById('qris-price-text');
         if (txtPriceContainer) {
             txtPriceContainer.innerHTML = `
@@ -970,7 +762,6 @@ function prosesCheckoutAkhir() {
             `;
         }
 
-        // Generate QRIS Dinamis melalui API gratis goqr/qrserver
         const stringQrisFinal = buatTeksQrisDinamis(totalDenganKodeUnik);
         const qrImageElement = document.getElementById('qris-image-target'); 
         if (qrImageElement) {
@@ -988,29 +779,30 @@ function prosesCheckoutAkhir() {
 
 async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
     const btn = document.getElementById('btn-checkout');
-    const txtAsli = btn ? btn.innerHTML : "";
     if(btn) {
         btn.disabled = true;
         btn.innerHTML = `<i class="fas fa-spinner animate-spin"></i> Memproses Nota...`;
     }
 
     const waktuMks = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA';
-    
-    // Perbaikan: Standarisasi format produk untuk riwayat
     const isGame = keranjangBelanja.kategori.toUpperCase().includes('TOPUP');
     const produkUntukRiwayat = isGame ? `${keranjangBelanja.kategori.replace('TOPUP ', '').trim()} - ${keranjangBelanja.produk}` : `[${keranjangBelanja.kategori}] ${keranjangBelanja.produk}`;
     const fullProdukLabel = `${produkUntukRiwayat} (${keranjangBelanja.labelType})`;
-
-    // Ambil harga final (jika ada kode unik dari sistem QRIS sebelumnya)
     const hargaFinal = keranjangBelanja.hargaDenganKodeUnik ? keranjangBelanja.hargaDenganKodeUnik : keranjangBelanja.harga;
 
+    const idTxBaru = 'NKJ' + Date.now().toString().slice(-7);
+
     const dataSimpan = [{
-        tanggal: waktuMks, nomor: "'" + noHp, produk: fullProdukLabel,
-        harga_asli: keranjangBelanja.harga, total_transfer: hargaFinal, status: statusLabel
+        tanggal: waktuMks,
+        id_transaksi: idTxBaru,
+        nomor: "'" + noHp,
+        produk: fullProdukLabel,
+        harga_asli: keranjangBelanja.harga,
+        total_transfer: hargaFinal,
+        status: statusLabel
     }];
 
-    // --- 1. SIMPAN KE RIWAYAT LOKAL (SAMA SEPERTI TRANSAKSI TRANSFER) ---
-    simpanRiwayatProdukLokal(waktuMks, noHp, fullProdukLabel, hargaFinal, statusLabel);
+    simpanRiwayatProdukLokal(idTxBaru, waktuMks, noHp, fullProdukLabel, hargaFinal, statusLabel);
 
     try {
         await fetch(SCRIPT_URL, {
@@ -1022,6 +814,7 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
 
     const textWA = `⚡ *TRANSAKSI BARU - NK JAYA CELL* ⚡\n` +
                    `--------------------------------------------\n` +
+                   `*ID Transaksi: ${idTxBaru}*\n\n` +
                    `📱 Kategori: *${keranjangBelanja.kategori}*\n` +
                    `🎯 No HP/ID Target: \`${noHp}\`\n` +
                    `📦 Produk: ${keranjangBelanja.produk}\n` +
@@ -1033,14 +826,11 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
 
     window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(textWA)}`, '_blank');
 
-    // PERBAIKAN: Beri jeda agar pengguna melihat proses selesai sebelum modal ditutup.
     setTimeout(() => {
         const inputPencarian = document.getElementById('search-phone-input');
         if(inputPencarian) inputPencarian.value = "";
         
         const customerPhoneEl = document.getElementById('customer-phone');
-
-        // PERBAIKAN: Tambahkan pembersihan untuk input ID di halaman game.
         const gameIdEl = document.getElementById('game_id');
         const zoneIdEl = document.getElementById('zone_id');
         if (gameIdEl) gameIdEl.value = "";
@@ -1053,31 +843,27 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
         
         keranjangBelanja = null;
         document.getElementById('cart-count').innerText = "0";
-        if(btn) btn.disabled = false; // Cukup aktifkan kembali, teks akan direset saat modal dibuka lagi.
+        if(btn) btn.disabled = false;
         tutupModalKeranjang();
-    }, 1500); // Jeda 1.5 detik
+    }, 1500);
 }
 
-// FUNGSI SLIDER BANNER (KHUSUS UNTUK INDEX.HTML)
 function setupBannerSlider() {
     const slider = document.getElementById('banner-slider');
     const dotsContainer = document.getElementById('banner-dots');
-    if (!slider || !dotsContainer) return; // Jika tidak ada slider di halaman ini, hentikan
+    if (!slider || !dotsContainer) return;
 
     const slides = Array.from(slider.children).filter(el => el.classList.contains('w-full'));
     const totalSlides = slides.length;
     if (totalSlides === 0) return;
     let currentSlide = 0;
 
-    // Buat dots navigasi
-    dotsContainer.innerHTML = ''; // Kosongkan dulu jika ada
+    dotsContainer.innerHTML = '';
     for (let i = 0; i < totalSlides; i++) {
         const dot = document.createElement('button');
         dot.classList.add('w-2', 'h-2', 'rounded-full', 'transition-all', 'duration-300');
         dot.classList.add(i === 0 ? 'bg-white' : 'bg-white/50');
-        dot.addEventListener('click', () => {
-            goToSlide(i);
-        });
+        dot.addEventListener('click', () => goToSlide(i));
         dotsContainer.appendChild(dot);
     }
 
@@ -1086,41 +872,33 @@ function setupBannerSlider() {
     function goToSlide(slideIndex) {
         currentSlide = slideIndex;
         slider.style.transform = `translateX(-${currentSlide * 100}%)`;
-        
-        // Update active dot
         for (let i = 0; i < totalSlides; i++) {
             dots[i].classList.toggle('bg-white', i === currentSlide);
             dots[i].classList.toggle('bg-white/50', i !== currentSlide);
         }
     }
 
-    function nextSlide() {
-        goToSlide((currentSlide + 1) % totalSlides);
-    }
-
-    setInterval(nextSlide, 3000); // Ganti slide setiap 3 detik
+    setInterval(() => goToSlide((currentSlide + 1) % totalSlides), 3000);
 }
-// Fungsi internal baru untuk mendata ke LocalStorage
-function simpanRiwayatProdukLokal(waktu, noHp, produk, total, status) {
+
+function simpanRiwayatProdukLokal(idTransaksi, waktu, noHp, produk, total, status) {
     let riwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
-    
     const isGame = keranjangBelanja.kategori.toUpperCase().includes('TOPUP');
     const gameName = isGame ? keranjangBelanja.kategori.replace('TOPUP ', '').trim() : null;
-
-    // PENYEMPURNAAN: Buat satu field baru yang menyimpan deskripsi lengkap produk
     const produkLengkap = `[${keranjangBelanja.kategori}] ${keranjangBelanja.produk} (${keranjangBelanja.labelType})`;
 
     const transaksiBaru = {
+        id_transaksi: idTransaksi,
         tanggal: waktu,
         target: noHp,
-        produk: keranjangBelanja.produk, // Gunakan nama produk bersih
+        produk: keranjangBelanja.produk,
         biaya: total,
-        status: status.toUpperCase().includes("LUNAS") ? "SUKSES" : "PROSES", // Tetap 'PROSES' jika bukan LUNAS
-        produkLengkap: produkLengkap, // Simpan deskripsi lengkap ke dalam satu field
-        gameName: gameName // Properti baru untuk menyimpan nama game yang bersih
+        status: status.toUpperCase().includes("LUNAS") ? "SUKSES" : "PROSES",
+        produkLengkap: produkLengkap,
+        gameName: gameName
     };
 
-    riwayat.unshift(transaksiBaru); // Masukkan ke urutan paling atas
+    riwayat.unshift(transaksiBaru);
     localStorage.setItem('nk_produk_history', JSON.stringify(riwayat));
 }
 
@@ -1133,8 +911,6 @@ function tutupModalQris() {
 }
 
 function konfirmasiSudahBayarQris() {
-    // Perbaikan: Ambil nomor target dari input yang benar.
-    // Input ini sudah diisi otomatis baik dari halaman game maupun index.
     const inputTarget = document.getElementById('customer-phone');
     const noHp = inputTarget ? inputTarget.value.trim() : "";
     tutupModalQris();
@@ -1146,24 +922,132 @@ function konfirmasiSudahBayarQris() {
     kirimTransaksiKeSheetDanWA(noHp, "Lunas (Scan QRIS Dinamis)");
 }
 
-/**
- * Fungsi Tambahan: Menjalankan Input Suara (Speech Recognition) Real-Time
- * Khusus untuk file script.js (Mengisi No HP Pelanggan)
- */
-function aktifkanInputSuaraScript(elemenInput) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.warn("Browser ini tidak mendukung Web Speech API (Input Suara).");
-        return;
+function tampilkanStrukDariRiwayat(item) {
+    tampilkanStruk({
+        id: item.id_transaksi,
+        tanggal: item.tanggal,
+        target: item.target,
+        produkLengkap: item.produkLengkap,
+        total: item.biaya,
+        status: item.status
+    });
+}
+
+function tampilkanStruk(data) {
+    const modal = document.getElementById('struk-modal');
+    if (!modal) return;
+
+    const judulEl = document.getElementById('struk-status-judul');
+    if (data.status === 'SUKSES') {
+        judulEl.innerText = 'TRANSAKSI BERHASIL';
+        judulEl.className = 'font-black text-green-600 text-lg';
+    } else if (data.status === 'GAGAL') {
+        judulEl.innerText = 'TRANSAKSI GAGAL';
+        judulEl.className = 'font-black text-red-600 text-lg';
+    } else {
+        judulEl.innerText = 'TRANSAKSI DIPROSES';
+        judulEl.className = 'font-black text-amber-600 text-lg';
     }
 
+    document.getElementById('struk-waktu').innerText = data.tanggal || new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
+    document.getElementById('struk-penerima').innerText = data.produkLengkap;
+    document.getElementById('struk-total').innerText = 'Rp ' + data.total.toLocaleString('id-ID');
+
+    const targetDetailEl = document.getElementById('struk-target-detail');
+    targetDetailEl.innerHTML = `
+        <div class="flex justify-between">
+            <span class="text-gray-500 font-medium">ID Transaksi:</span>
+            <span class="font-bold text-gray-800">${data.id || '-'}</span>
+        </div>
+        <div class="flex justify-between">
+            <span class="text-gray-500 font-medium">ID/No. Target:</span>
+            <span class="font-bold text-gray-800">${data.target}</span>
+        </div>
+    `;
+
+    document.getElementById('struk-rincian-biaya').classList.add('hidden');
+
+    const actionsContainer = document.getElementById('struk-actions');
+    actionsContainer.innerHTML = `
+        <button onclick="downloadStruk('${data.id}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
+            <i class="fas fa-download"></i> Download
+        </button>
+        <button onclick="shareStruk('${data.id}')" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+            <i class="fab fa-whatsapp"></i> Bagikan
+        </button>
+        <button onclick="tutupModalStruk()" class="col-span-2 w-full py-2 bg-transparent text-gray-500 font-bold text-xs rounded-xl active:scale-95 transition-all">
+            Tutup
+        </button>
+    `;
+
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('div').classList.remove('scale-95');
+    }, 10);
+}
+
+function tutupModalStruk() {
+    const modal = document.getElementById('struk-modal');
+    if (modal) {
+        modal.classList.add('opacity-0');
+        modal.querySelector('div').classList.add('scale-95');
+        setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+}
+
+async function downloadStruk(ref) {
+    const strukElement = document.getElementById('struk-content');
+    try {
+        const canvas = await html2canvas(strukElement, { scale: 3, backgroundColor: '#ffffff' });
+        const link = document.createElement('a');
+        link.download = `struk-pembelian-${ref}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    } catch (error) { console.error('Gagal gambar struk:', error); }
+}
+
+async function shareStruk(ref) {
+    const strukElement = document.getElementById('struk-content');
+    const originalBg = strukElement.style.backgroundColor;
+    strukElement.style.backgroundColor = 'white';
+
+    try {
+        const canvas = await html2canvas(strukElement, { scale: 2 });
+        canvas.toBlob(async (blob) => {
+            const file = new File([blob], `struk-pembelian-${ref}.png`, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: `Bukti Pembelian ${ref}` });
+            } else {
+                alert('Gagal berbagi. Silakan download struk secara manual.');
+            }
+        }, 'image/png');
+    } catch (error) { console.error('Gagal berbagi:', error); } 
+    finally { strukElement.style.backgroundColor = originalBg; }
+}
+
+function copyToClipboard(button, text) {
+    navigator.clipboard.writeText(text).then(() => {
+        const icon = button.querySelector('i');
+        const originalIconClass = icon.className;
+        icon.className = 'fas fa-check text-green-500';
+        button.disabled = true;
+        setTimeout(() => {
+            icon.className = originalIconClass;
+            button.disabled = false;
+        }, 1500);
+    }).catch(err => { console.error('Gagal salin:', err); });
+}
+
+function aktifkanInputSuaraScript(elemenInput, tipeInput = "angka") {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
     if (elemenInput.dataset.sedangMerekam === "true") return;
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'id-ID'; 
-    recognition.interimResults = true; // Ketikan langsung muncul real-time
+    recognition.interimResults = true;
     recognition.continuous = false;   
-
     const placeholderAsli = elemenInput.placeholder || "";
 
     recognition.onstart = function() {
@@ -1181,8 +1065,6 @@ function aktifkanInputSuaraScript(elemenInput) {
         if (tipeInput === "angka") {
             let angkaBersih = hasilSuara.replace(/[^0-9]/g, '');
             elemenInput.value = angkaBersih;
-            
-            // 🟢 TAMBAHAN: Langsung pemicu deteksi operator otomatis NK JAYA CELL saat sedang berbicara
             if (typeof fiturDeteksiOtomatisDanCariProvider === "function") {
                 fiturDeteksiOtomatisDanCariProvider(angkaBersih);
             }
@@ -1193,59 +1075,36 @@ function aktifkanInputSuaraScript(elemenInput) {
         elemenInput.dispatchEvent(new Event('input'));
     };
 
-    recognition.onerror = function(event) {
-        console.error("Kesalahan input suara:", event.error);
-    };
-
+    recognition.onerror = function(event) { console.error("Error input suara:", event.error); };
     recognition.onend = function() {
         elemenInput.dataset.sedangMerekam = "false";
         elemenInput.placeholder = placeholderAsli;
         elemenInput.style.backgroundColor = ""; 
-        
-        // Trigger pencarian produk terakhir kali saat mic mati
         elemenInput.dispatchEvent(new Event('input'));
     };
 
     recognition.start();
 }
 
-
-
-// ==========================================================
-// LOGIKA INSTALASI APLIKASI (PWA FLOATING BUTTON)
-// ==========================================================
 let deferredPrompt;
 const btnInstallFloating = document.getElementById('btn-install-floating');
 
 window.addEventListener('beforeinstallprompt', (e) => {
-    // Mencegah browser menampilkan prompt bawaan secara otomatis
     e.preventDefault();
-    // Simpan event agar bisa dipicu nanti
     deferredPrompt = e;
-    // Munculkan tombol melayang dari persembunyian
-    if (btnInstallFloating) {
-        btnInstallFloating.classList.remove('hidden');
-    }
+    if (btnInstallFloating) btnInstallFloating.classList.remove('hidden');
 });
 
 if (btnInstallFloating) {
     btnInstallFloating.addEventListener('click', async () => {
         if (!deferredPrompt) return;
-        // Tampilkan prompt instalasi ke pengguna
         deferredPrompt.prompt();
-        // Tunggu jawaban pengguna
         const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
-        // Reset variabel prompt karena hanya bisa digunakan sekali
         deferredPrompt = null;
-        // Sembunyikan kembali tombolnya
         btnInstallFloating.classList.add('hidden');
     });
 }
 
 window.addEventListener('appinstalled', () => {
-    console.log('Aplikasi NK JAYA CELL berhasil diinstal!');
-    if (btnInstallFloating) {
-        btnInstallFloating.classList.add('hidden');
-    }
+    if (btnInstallFloating) btnInstallFloating.classList.add('hidden');
 });

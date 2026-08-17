@@ -5,7 +5,7 @@
 // [NEW] Konfigurasi yang dipindahkan dari config.js
 const WA_ADMIN = "6285847909692";
 const ADMIN_BANK_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=1584396032&single=true&output=csv"; 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQKdBfsrmlEBlKlVZiY02jx8HeIW2AtTQrE4_tcXThibDH6X9py965fHMRj--QBiH-/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuXWWh7RyCB-r2CZRyypdsaGDAUzhG6sf4vNQMGN292vbWzHtuJgNnNYF7AvGjgZwp/exec";
 const SHEET_REKENING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=1939084256&single=true&output=csv";
 const SHEET_ARSIP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=53248706&single=true&output=csv";
 
@@ -432,13 +432,11 @@ function renderRiwayatUI() {
         return `
         <div class="p-3.5 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-2.5 text-left relative overflow-hidden">
             <div class="flex justify-between items-center">
-                <div class="text-[9px] text-gray-400 font-bold">ID: <span class="text-indigo-500">${item.id || '-'}</span></div>
-                <span class="${badgeClass} px-2 py-0.5 rounded-lg font-black text-[9px] tracking-wide flex items-center gap-1 uppercase">
-                    <i class="fas ${iconClass}"></i> ${statusFinal}
-                </span>
-                <div class="flex items-center gap-1.5 text-[9px] text-gray-400 font-bold">
-                    <i class="far fa-clock text-indigo-500"></i>
-                    <span>${item.tanggal} - ${item.waktu}</span>
+                <div class="flex items-center gap-2">
+                    <div class="text-[9px] text-gray-400 font-bold">ID: <span class="text-indigo-500">${item.id || '-'}</span></div>
+                    <button onclick="copyToClipboard(this, '${item.id || ''}')" class="text-gray-400 hover:text-blue-600 text-xs p-1 rounded-full bg-gray-100 active:scale-90 transition-all" title="Salin ID">
+                        <i class="far fa-copy"></i>
+                    </button>
                 </div>
                 <span class="${badgeClass} px-2 py-0.5 rounded-lg font-black text-[9px] tracking-wide flex items-center gap-1 uppercase">
                     <i class="fas ${iconClass}"></i> ${statusFinal}
@@ -545,7 +543,7 @@ function prosesTransfer() {
         btnTransfer.style.cursor = "not-allowed";
     }
 
-    const idTransaksi = 'NKJ-TRF-' + Date.now().toString().slice(-7);
+    const idTransaksi = 'NKJTRF' + Date.now().toString().slice(-7);
 
            let pesan = `✨ *NK JAYA CELL - TRANSFER BANK* ✨
 ==================================
@@ -657,24 +655,29 @@ function tampilkanStruk(data) {
     }
 
     // Isi data ke elemen struk
-    const ref = 'NKJ' + Date.now().toString().slice(-8);
-    document.getElementById('struk-id').innerText = data.id || '-';
     document.getElementById('struk-waktu').innerText = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
-    document.getElementById('struk-ref').innerText = ref;
     document.getElementById('struk-penerima').innerText = `${data.bank} - ${data.nama} (${data.norek})`;
     
     // [NEW] Isi rincian biaya
     document.getElementById('struk-nominal').innerText = 'Rp ' + data.nominal.toLocaleString('id-ID');
     document.getElementById('struk-admin').innerText = 'Rp ' + data.admin.toLocaleString('id-ID');
     document.getElementById('struk-total').innerText = 'Rp ' + data.total.toLocaleString('id-ID');
+    
+    // [MODIFIKASI] Tambahkan ID Transaksi dengan tombol copy
+    document.getElementById('struk-id-container').innerHTML = `
+        <div class="flex justify-between">
+            <span class="text-gray-500 font-medium">ID Transaksi:</span>
+            <span class="font-bold text-gray-800">${data.id || '-'}</span>
+        </div>
+    `;
 
     // Siapkan tombol aksi
     const actionsContainer = document.getElementById('struk-actions');
     actionsContainer.innerHTML = `
-        <button onclick="downloadStruk('${ref}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
+        <button onclick="downloadStruk('${data.id}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
             <i class="fas fa-download"></i> Download
         </button>
-        <button onclick="shareStruk('${ref}')" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+        <button onclick="shareStruk('${data.id}')" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
             <i class="fab fa-whatsapp"></i> Bagikan
         </button>
         <button onclick="tutupModalStruk()" class="col-span-2 w-full py-2 bg-transparent text-gray-500 font-bold text-xs rounded-xl active:scale-95 transition-all">
@@ -776,6 +779,26 @@ async function shareStruk(ref) {
     } finally {
         strukElement.style.backgroundColor = originalBg;
     }
+}
+
+/**
+ * [BARU] Fungsi untuk menyalin teks ke clipboard
+ */
+function copyToClipboard(button, text) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        const icon = button.querySelector('i');
+        const originalIconClass = icon.className;
+        icon.className = 'fas fa-check text-green-500';
+        button.disabled = true;
+        setTimeout(() => {
+            icon.className = originalIconClass;
+            button.disabled = false;
+        }, 1500);
+    }).catch(err => {
+        console.error('Gagal menyalin teks: ', err);
+        alert('Gagal menyalin ID Transaksi.');
+    });
 }
 
 /**
