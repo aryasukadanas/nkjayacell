@@ -43,16 +43,30 @@ function parseCSVRow(row) {
  * Mengambil data tarif admin dan data riwayat/pelanggan dari Google Sheets
  */
 async function fetchTarifAdminBank() {
-    console.log("Memulai sinkronisasi database transfer...");
+    console.log("Memulai sinkronisasi database transfer (V2 Caching)...");
+
+    // [OPTIMASI] 1. Muat data bank dari cache lokal terlebih dahulu untuk tampilan instan
+    const cacheBankAdmin = localStorage.getItem('nk_cache_bank_admin');
+    if (cacheBankAdmin) {
+        console.log("Memuat daftar bank dari cache lokal...");
+        const rowsBank = cacheBankAdmin.split(/\r?\n/);
+        databaseAdminBank = rowsBank.map(row => {
+            if (!row.trim()) return null;
+            const cols = parseCSVRow(row);
+            return { bank: cols[0]?.toUpperCase(), min: parseInt(cols[1]) || 0, max: parseInt(cols[2]) || 0, fee: parseInt(cols[3]) || 0 };
+        }).filter(item => item && item.bank);
+        renderDaftarBank(); // Render dropdown secepatnya
+    }
+
+    // 2. Lanjutkan mengambil data terbaru dari Google Sheets di latar belakang
     try {
-        // Ambil semua data dari Google Sheets secara bersamaan (paralel) untuk efisiensi
         const [resBank, resPelanggan, resArsip] = await Promise.all([
             fetch(ADMIN_BANK_URL + '&_v=' + Date.now()),
             fetch(SHEET_REKENING_URL + '&_v=' + Date.now()),
             fetch(SHEET_ARSIP_URL + '&_v=' + Date.now()) // [FIX] Tambahkan cache buster
         ]);
 
-        // 1. Proses Data Aturan Bank
+        // [OPTIMASI] 3. Proses dan perbarui data bank jika ada perubahan
         const textBank = await resBank.text();
         const rowsBank = textBank.split(/\r?\n/).slice(1);
         
@@ -66,10 +80,16 @@ async function fetchTarifAdminBank() {
                 fee: parseInt(cols[3]) || 0 
             };
         }).filter(item => item !== null && item.bank !== "" && item.bank !== undefined);
-        console.log("Database Bank Admin dimuat:", databaseAdminBank.length, "aturan.");
-        renderDaftarBank();
+        
+        const newBankDataString = rowsBank.join('\n');
+        if (newBankDataString !== localStorage.getItem('nk_cache_bank_admin_raw')) {
+            console.log("Pembaruan data bank terdeteksi. Menyimpan ke cache dan me-render ulang.");
+            localStorage.setItem('nk_cache_bank_admin_raw', newBankDataString); // Simpan data mentah untuk perbandingan
+            localStorage.setItem('nk_cache_bank_admin', rowsBank.join('\n')); // Simpan data bersih untuk render
+            renderDaftarBank(); // Render ulang jika ada data baru
+        }
 
-        // 2. Proses Data Riwayat Pelanggan
+        // 4. Proses data lainnya seperti biasa
         const textPelanggan = await resPelanggan.text();
         const rowsPelanggan = textPelanggan.split(/\r?\n/).slice(1);
         databasePelangganSheet = rowsPelanggan.map(row => {
@@ -82,7 +102,7 @@ async function fetchTarifAdminBank() {
         }).filter(item => item !== null && item.norek && item.nama);
         console.log("Database Nama Rekening dimuat:", databasePelangganSheet.length, "entri.");
 
-        // 3. [NEW] Proses Data Arsip Status Transaksi
+        // 5. [NEW] Proses Data Arsip Status Transaksi
         const textArsip = await resArsip.text();
         databaseArsip = textArsip.split(/\r?\n/).slice(1).map(row => {
             if (!row.trim()) return null;
@@ -90,7 +110,7 @@ async function fetchTarifAdminBank() {
         }).filter(Boolean);
         console.log("Database Arsip Status dimuat:", databaseArsip.length, "transaksi.");
 
-    } catch (e) { 
+    } catch (e) {
         console.error("Gagal sinkron database bank/pelanggan:", e); 
     }
 }
@@ -326,7 +346,7 @@ function hitungTotal() {
 /**
  * Menyimpan transaksi sukses ke riwayat lokal browser
  */
-function simpanKeRiwayat(bank, norek, nama, nominal, admin) {
+function simpanKeRiwayat(idTransaksi, bank, norek, nama, nominal, admin) {
     let riwayat = JSON.parse(localStorage.getItem('nk_transfer_history')) || [];
     
     const waktuHariIni = new Date();
@@ -334,6 +354,7 @@ function simpanKeRiwayat(bank, norek, nama, nominal, admin) {
     const jamFormat = waktuHariIni.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WITA';
 
     const transaksiBaru = {
+        id: idTransaksi,
         nama: nama,
         bank: bank,
         norek: norek,
@@ -370,8 +391,9 @@ function renderRiwayatUI() {
     // [NEW] Buat peta status terbaru dari databaseArsip
     const statusMap = {};
     databaseArsip.forEach(row => {
-        // Asumsi: Kolom 4 (indeks 3) adalah rekening, Kolom 8 (indeks 7) adalah status
-        const noRek = row[3]?.replace(/\D/g, '').trim(); // [FIX] Hapus SEMUA karakter selain angka agar formatnya bersih dan konsisten.
+        // Asumsi: Kolom 1 (indeks 0) adalah ID, Kolom 4 (indeks 3) adalah rekening, Kolom 8 (indeks 7) adalah status
+        const idTransaksi = row[0]?.trim();
+        const noRek = row[3]?.replace(/\D/g, '').trim();
         const status = row[8]?.trim().toUpperCase(); // [FIX] Kolom I (indeks 8) untuk Status
         if (noRek && status) {
             // Simpan status terbaru untuk setiap nomor rekening
@@ -381,7 +403,7 @@ function renderRiwayatUI() {
 
     const riwayatHTML = riwayat.map(item => {
         const noRekRiwayat = item.norek.replace(/\D/g, ''); // [FIX] Hapus SEMUA karakter selain angka agar formatnya bersih dan konsisten.
-        let statusFinal = statusMap[noRekRiwayat] || "PROSES"; // Default "PROSES" jika tidak ditemukan
+        let statusFinal = statusMap[item.id] || statusMap[noRekRiwayat] || "PROSES"; // Prioritaskan pencocokan via ID Transaksi
 
         // Standarisasi label status
         if (statusFinal.includes("LUNAS") || statusFinal.includes("SUKSES")) statusFinal = "SUKSES";
@@ -410,6 +432,10 @@ function renderRiwayatUI() {
         return `
         <div class="p-3.5 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-2.5 text-left relative overflow-hidden">
             <div class="flex justify-between items-center">
+                <div class="text-[9px] text-gray-400 font-bold">ID: <span class="text-indigo-500">${item.id || '-'}</span></div>
+                <span class="${badgeClass} px-2 py-0.5 rounded-lg font-black text-[9px] tracking-wide flex items-center gap-1 uppercase">
+                    <i class="fas ${iconClass}"></i> ${statusFinal}
+                </span>
                 <div class="flex items-center gap-1.5 text-[9px] text-gray-400 font-bold">
                     <i class="far fa-clock text-indigo-500"></i>
                     <span>${item.tanggal} - ${item.waktu}</span>
@@ -479,8 +505,20 @@ function prosesTransfer() {
     const admin = hitungAdminSpesifik();
     const total = nominal + admin;
 
-    if (!bank || norekTanpaSpasi.length < 5 || nominal < 10000) {
-        alert("⚠️ Data tidak lengkap! Pastikan Bank dipilih, No. Rekening diisi minimal 5 digit, dan nominal minimal Rp 10.000");
+    // [MODIFIKASI] Validasi input satu per satu untuk pesan error yang spesifik
+    const pesanError = [];
+    if (!bank) {
+        pesanError.push("Pastikan Bank/E-wallet telah dipilih.");
+    }
+    if (norekTanpaSpasi.length < 5) {
+        pesanError.push("No. Rekening Tujuan harus diisi (minimal 5 digit).");
+    }
+    if (nominal < 10000) {
+        pesanError.push("Jumlah kirim minimal Rp 10.000.");
+    }
+
+    if (pesanError.length > 0) {
+        showAlert("VERIFIKASI GAGAL", "DATA BELUM LENGKAP!", pesanError);
         return;
     }
 
@@ -491,7 +529,7 @@ function prosesTransfer() {
     if (namaBaruBox && !namaBaruBox.classList.contains('hidden')) {
         const namaKetik = inputNamaBaruEl ? inputNamaBaruEl.value.trim().toUpperCase() : "";
         if (!namaKetik) {
-            alert("⚠️ Rekening baru terdeteksi! Silakan isi kolom Nama Pemilik terlebih dahulu.");
+            showAlert("NAMA WAJIB DIISI", "REKENING BARU TERDETEKSI!", ["Silakan isi kolom Nama Pemilik sesuai buku tabungan."]);
             if(inputNamaBaruEl) inputNamaBaruEl.focus();
             return;
         }
@@ -507,9 +545,11 @@ function prosesTransfer() {
         btnTransfer.style.cursor = "not-allowed";
     }
 
+    const idTransaksi = 'NKJ-TRF-' + Date.now().toString().slice(-7);
+
            let pesan = `✨ *NK JAYA CELL - TRANSFER BANK* ✨
 ==================================
-
+*ID Transaksi: ${idTransaksi}*
 Halo Admin, saya ingin melakukan transfer dengan rincian berikut:
 
 📝 *DETAIL TRANSAKSI*
@@ -527,9 +567,9 @@ Halo Admin, saya ingin melakukan transfer dengan rincian berikut:
 
 _Mohon segera diproses ya, terima kasih!_ 🙏✨`;
     // PROSES PENYIMPANAN DATA
-    simpanKeRiwayat(bank, norekDenganSpasi, namaPemilik, nominal, admin);
+    simpanKeRiwayat(idTransaksi, bank, norekDenganSpasi, namaPemilik, nominal, admin);
     // Kirim data yang valid (termasuk nama baru yang diketik) ke Google Sheets
-    simpanKeSpreadsheet(namaPemilik);
+    simpanKeSpreadsheet(idTransaksi, namaPemilik);
 
  // KUNCI UTAMA: Menggunakan encodeURIComponent agar Emoji & Enter di atas tidak rusak/hilang
 const url = `https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(pesan)}`;
@@ -555,6 +595,48 @@ window.open(url, '_blank');
 }
 
 /**
+ * [NEW] Menampilkan modal peringatan kustom yang baru
+ * @param {string} title - Judul utama modal.
+ * @param {string} header - Judul di dalam kotak peringatan.
+ * @param {string[]} listItems - Array berisi pesan-pesan yang akan ditampilkan sebagai daftar.
+ */
+function showAlert(title, header, listItems) {
+    // [ANIMASI] Logika untuk memunculkan modal dengan animasi
+    const modal = document.getElementById('customModal');
+    const modalTitle = modal.querySelector('.modal-title');
+    const alertHeader = modal.querySelector('.alert-header span');
+    const alertList = modal.querySelector('.alert-list');
+
+    if (modalTitle) modalTitle.innerText = title;
+    if (alertHeader) alertHeader.innerText = header;
+
+    if (alertList) {
+        alertList.innerHTML = ''; // Kosongkan daftar sebelumnya
+        listItems.forEach(itemText => {
+            const li = document.createElement('li');
+            li.textContent = itemText;
+            alertList.appendChild(li);
+        });
+    }
+
+    modal.style.visibility = 'visible';
+    modal.style.opacity = '1';
+    if (modal.querySelector('.modal-card')) {
+        modal.querySelector('.modal-card').style.transform = 'scale(1)';
+    }
+}
+
+/**
+ * [NEW] Menutup modal peringatan kustom
+ */
+function closeAlert() {
+    // [ANIMASI] Logika untuk menutup modal dengan animasi
+    const modal = document.getElementById('customModal');
+    modal.style.opacity = '0';
+    setTimeout(() => { modal.style.visibility = 'hidden'; }, 300); // Sesuaikan dengan durasi transisi CSS
+}
+
+/**
  * [NEW] Menampilkan modal struk dengan data transaksi
  */
 function tampilkanStruk(data) {
@@ -576,6 +658,7 @@ function tampilkanStruk(data) {
 
     // Isi data ke elemen struk
     const ref = 'NKJ' + Date.now().toString().slice(-8);
+    document.getElementById('struk-id').innerText = data.id || '-';
     document.getElementById('struk-waktu').innerText = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
     document.getElementById('struk-ref').innerText = ref;
     document.getElementById('struk-penerima').innerText = `${data.bank} - ${data.nama} (${data.norek})`;
@@ -611,6 +694,7 @@ function tampilkanStruk(data) {
  */
 function tampilkanStrukDariRiwayat(item, status) {
     tampilkanStruk({
+        id: item.id,
         bank: item.bank,
         norek: item.norek,
         nama: item.nama,
@@ -697,7 +781,7 @@ async function shareStruk(ref) {
 /**
  * Fungsi Rekam Data Transaksi ke Google Sheets
  */
-function simpanKeSpreadsheet(namaFinalDariForm) {
+function simpanKeSpreadsheet(idTransaksi, namaFinalDariForm) {
     const bankEl = document.getElementById('bank-tujuan');
     const norekEl = document.getElementById('no-rekening');
     const nominalEl = document.getElementById('nominal-transfer');
@@ -717,6 +801,7 @@ function simpanKeSpreadsheet(namaFinalDariForm) {
     if (!bank || norekBersih.length < 5 || nominal < 10000) return; 
 
     const formData = new FormData();
+    formData.append('id_transaksi', idTransaksi);
     formData.append('tanggal', new Date().toLocaleString('id-ID'));
     formData.append('kategori', 'KIRIM UANG');
     formData.append('bank', bank);

@@ -237,6 +237,10 @@
 
                 <div class="border-t border-dashed border-gray-200 py-3 text-xs space-y-2.5">
                     <div class="flex justify-between">
+                        <span class="text-gray-500 font-medium">ID Transaksi:</span>
+                        <span id="struk-id" class="font-bold text-gray-800"></span>
+                    </div>
+                    <div class="flex justify-between">
                         <span class="text-gray-500 font-medium">No. Referensi:</span>
                         <span id="struk-ref" class="font-bold text-gray-800"></span>
                     </div>
@@ -268,6 +272,43 @@
             </div>
         </div>
     </div>
+
+    <!-- Custom Alert Modal -->
+<div id="customModal" class="modal-overlay">
+  <div class="modal-card">
+    <!-- Emblem Shield Icon -->
+    <div class="modal-shield">
+      <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#60a5fa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        <polyline points="9 12 11 14 15 10"/>
+      </svg>
+    </div>
+
+    <h3 class="modal-title">VERIFIKASI GAGAL</h3>
+
+    <div class="modal-body">
+      <div class="alert-box">
+        <div class="alert-header">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#f59e0b" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span>DATA TIDAK LENGKAP!</span>
+        </div>
+        <ul class="alert-list">
+          <li>Pastikan Bank dipilih,</li>
+          <li>No. Rekening diisi minimal 5 digit,</li>
+          <li>Nominal minimal Rp 10.000</li>
+        </ul>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-confirm" onclick="closeAlert()">OKE, SAYA MENGERTI</button>
+      </div>
+    </div>
+  </div>
+</div>
 
     <!-- Tombol Instal Aplikasi Melayang -->
     <button id="btn-install-floating" class="hidden fixed bottom-24 right-4 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-black text-xs px-4 py-3 rounded-full shadow-2xl z-50 flex items-center gap-2 animate-bounce hover:scale-105 active:scale-95 transition-all border-2 border-white">
