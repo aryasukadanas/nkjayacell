@@ -62,6 +62,7 @@ let operatorAktif = "";
 let keranjangBelanja = null; 
 let intervalMainTimer = null;
 let listCacheRiwayat = []; 
+let petaNamaPelangganPLN = {};
 
   // ==========================================================
 // 1. DEKLARASI FUNGSI INPUT SUARA (TARUH DI ATAS)
@@ -135,6 +136,7 @@ recognition.onresult = function(event) {
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Jalankan fungsi bawaan aplikasi
     muatDataDanPisahKategori();
+    muatNamaPelangganPLN();
 
     // 2. Ambil elemen input nomor HP utama berdasarkan ID yang benar
     const inputNoHp = document.getElementById('search-phone-input') || document.getElementById('no-hp') || document.getElementById('input-tujuan');
@@ -150,6 +152,44 @@ document.addEventListener('DOMContentLoaded', () => {
     // 4. Jalankan banner slider khusus untuk halaman index.html
     setupBannerSlider();
 });
+
+async function muatNamaPelangganPLN() {
+    try {
+        const response = await fetch(SHEET_NAMA_PLN_URL + '&_v=' + Date.now());
+        if (!response.ok) throw new Error('Gagal mengambil data nama PLN');
+
+        const rows = (await response.text()).split(/\r?\n/);
+        const headerIndex = rows.findIndex(row => row.toUpperCase().includes('ID PLN') && row.toUpperCase().includes('NAMA'));
+        if (headerIndex < 0) throw new Error('Header data nama PLN tidak ditemukan');
+
+        rows.slice(headerIndex + 1).forEach(row => {
+            const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(value => value.trim().replace(/^"|"$/g, ''));
+            const idPln = (cols[1] || '').replace(/\D/g, '');
+            const nama = cols[2] || '';
+            if (idPln && nama && !petaNamaPelangganPLN[idPln]) petaNamaPelangganPLN[idPln] = nama;
+        });
+
+        tampilkanNamaPelangganPLN(document.getElementById('search-phone-input')?.value || '');
+    } catch (error) {
+        console.warn('Data nama pelanggan PLN tidak dapat dimuat:', error);
+    }
+}
+
+function tampilkanNamaPelangganPLN(idPln) {
+    const helperNama = document.getElementById('helper-nama-pln');
+    if (!helperNama) return;
+
+    const idBersih = idPln.replace(/\D/g, '');
+    const nama = petaNamaPelangganPLN[idBersih];
+    if (tabUtamaAktif === 'TOKEN' && nama) {
+        helperNama.innerHTML = '<i class="fas fa-user-check"></i> Nama ID PLN: <span class="text-gray-800"></span>';
+        helperNama.querySelector('span').textContent = nama;
+        helperNama.classList.remove('hidden');
+    } else {
+        helperNama.classList.add('hidden');
+        helperNama.textContent = '';
+    }
+}
 
 /**
  * 1. AMBIL KONTAK HP NATIVE (CONTACT PICKER API)
@@ -296,7 +336,10 @@ function dapatkanOperatorKey(upperKat, upperNama) {
  * 3. ENGINE DETEKSI PROVIDER NOMOR HP (SUDAH DIPERBAIKI)
  */
 function fiturDeteksiOtomatisDanCariProvider(noHp) {
-    if (tabUtamaAktif === "TOKEN") return; 
+    if (tabUtamaAktif === "TOKEN") {
+        tampilkanNamaPelangganPLN(noHp);
+        return;
+    }
     const helper = document.getElementById('helper-deteksi-operator');
     if (!noHp || noHp.length < 4) {
         if(helper) helper.classList.add('hidden');
@@ -385,7 +428,8 @@ function gantiTabUtama(jenisTab) {
 
     const currentPhone = document.getElementById('search-phone-input')?.value || "";
     renderAutoOperatorSliders();
-    if(currentPhone && jenisTab !== "TOKEN") fiturDeteksiOtomatisDanCariProvider(currentPhone);
+    if (jenisTab === "TOKEN") tampilkanNamaPelangganPLN(currentPhone);
+    else if(currentPhone) fiturDeteksiOtomatisDanCariProvider(currentPhone);
 }
 
 function renderAutoOperatorSliders() {

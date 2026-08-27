@@ -103,6 +103,7 @@
     <p id="helper-deteksi-operator" class="text-[10px] text-blue-600 font-bold px-1 hidden animate-pulse">
         <i class="fas fa-robot"></i> Sistem mendeteksi nomor...
     </p>
+    <p id="helper-nama-pln" class="text-[11px] text-emerald-600 font-bold px-1 hidden"></p>
 </div>
         <div class="space-y-1.5">
             <label class="block text-xs font-black text-gray-400 uppercase tracking-widest px-1">Pilih Kategori Layanan</label>
@@ -263,37 +264,6 @@
                 <button onclick="konfirmasiSudahBayarQris()" class="w-1/2 py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all">Saya Sudah Bayar</button>
             </div>
         </div>
-    </div>
-
-    <!-- [BARU] Custom Alert Modal (disalin dari index2.html) -->
-    <div id="customModal" class="modal-overlay">
-      <div class="modal-card">
-        <div class="modal-shield">
-          <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#60a5fa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            <polyline points="9 12 11 14 15 10"/>
-          </svg>
-        </div>
-        <h3 class="modal-title">VERIFIKASI GAGAL</h3>
-        <div class="modal-body">
-          <div class="alert-box">
-            <div class="alert-header">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#f59e0b" stroke-width="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              <span>DATA TIDAK LENGKAP!</span>
-            </div>
-            <ul class="alert-list">
-              <li>Item ini memerlukan data tambahan.</li>
-            </ul>
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="btn-confirm" onclick="closeAlert()">OKE, SAYA MENGERTI</button>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Tombol Instal Aplikasi Melayang -->
