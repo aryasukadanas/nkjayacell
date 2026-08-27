@@ -1,10 +1,8 @@
 // ==========================================================
 // CORE ENGINE SYSTEM APPS V3.6 - NK JAYA CELL
 // ==========================================================
-const WA_ADMIN = "6285847909692";
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=0&single=true&output=csv";
-const SHEET_ARSIP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=702573697&single=true&output=csv"
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwh0lE_0ebqn2ScCWvxioXBJYwLl2qT3aGVHk_W0QHTRP21lWb88djzWMCrihY0ZkHj/exec";
+// [FIX] Hapus semua deklarasi URL dan WA_ADMIN. Mereka akan diambil dari config.js.
+// Pastikan config.js dimuat sebelum script.js di file HTML.
 
 const iconMap = {
     'PULSA': 'PULSA.png', 'INDOSAT': 'logo_indosat.png', 'XL': 'logo_xl.png', 'TELKOMSEL': 'logo_telkomsel.png',
@@ -64,6 +62,7 @@ let operatorAktif = "";
 let keranjangBelanja = null; 
 let intervalMainTimer = null;
 let listCacheRiwayat = []; 
+let petaNamaPelangganPLN = {};
 
   // ==========================================================
 // 1. DEKLARASI FUNGSI INPUT SUARA (TARUH DI ATAS)
@@ -137,6 +136,7 @@ recognition.onresult = function(event) {
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Jalankan fungsi bawaan aplikasi
     muatDataDanPisahKategori();
+    muatNamaPelangganPLN();
 
     // 2. Ambil elemen input nomor HP utama berdasarkan ID yang benar
     const inputNoHp = document.getElementById('search-phone-input') || document.getElementById('no-hp') || document.getElementById('input-tujuan');
@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. Pasangkan fitur input suara real-time saat kolom diklik
     if (inputNoHp) {
         inputNoHp.addEventListener('click', function() {
-            // Memanggil fungsi real-time yang sudah Anda deklarasikan di bagian atas
+            // [FIX] Panggil fungsi input suara real-time yang sudah disentralisasi
             aktifkanInputSuaraRealTime(this, "angka");
         });
     }
@@ -152,6 +152,44 @@ document.addEventListener('DOMContentLoaded', () => {
     // 4. Jalankan banner slider khusus untuk halaman index.html
     setupBannerSlider();
 });
+
+async function muatNamaPelangganPLN() {
+    try {
+        const response = await fetch(SHEET_NAMA_PLN_URL + '&_v=' + Date.now());
+        if (!response.ok) throw new Error('Gagal mengambil data nama PLN');
+
+        const rows = (await response.text()).split(/\r?\n/);
+        const headerIndex = rows.findIndex(row => row.toUpperCase().includes('ID PLN') && row.toUpperCase().includes('NAMA'));
+        if (headerIndex < 0) throw new Error('Header data nama PLN tidak ditemukan');
+
+        rows.slice(headerIndex + 1).forEach(row => {
+            const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(value => value.trim().replace(/^"|"$/g, ''));
+            const idPln = (cols[1] || '').replace(/\D/g, '');
+            const nama = cols[2] || '';
+            if (idPln && nama && !petaNamaPelangganPLN[idPln]) petaNamaPelangganPLN[idPln] = nama;
+        });
+
+        tampilkanNamaPelangganPLN(document.getElementById('search-phone-input')?.value || '');
+    } catch (error) {
+        console.warn('Data nama pelanggan PLN tidak dapat dimuat:', error);
+    }
+}
+
+function tampilkanNamaPelangganPLN(idPln) {
+    const helperNama = document.getElementById('helper-nama-pln');
+    if (!helperNama) return;
+
+    const idBersih = idPln.replace(/\D/g, '');
+    const nama = petaNamaPelangganPLN[idBersih];
+    if (tabUtamaAktif === 'TOKEN' && nama) {
+        helperNama.innerHTML = '<i class="fas fa-user-check"></i> Nama ID PLN: <span class="text-gray-800"></span>';
+        helperNama.querySelector('span').textContent = nama;
+        helperNama.classList.remove('hidden');
+    } else {
+        helperNama.classList.add('hidden');
+        helperNama.textContent = '';
+    }
+}
 
 /**
  * 1. AMBIL KONTAK HP NATIVE (CONTACT PICKER API)
@@ -175,7 +213,7 @@ async function bukaDaftarKontakHP() {
             console.log("Akses kontak ditolak atau dibatalkan.", err);
         }
     } else {
-        alert("Browser Anda tidak mendukung Contact Picker. Silakan ketik nomor secara manual.");
+        showAlert("FITUR TIDAK DIDUKUNG", "Browser Tidak Kompatibel", ["Fitur ambil kontak tidak didukung di browser ini.", "Silakan ketik nomor secara manual."]);
     }
 }
 
@@ -203,7 +241,8 @@ async function muatDataDanPisahKategori() {
     try {
        // Ambil data dari kedua sheet secara paralel (bersamaan)
         const [resProduk, resArsip] = await Promise.all([
-            fetch(SHEET_CSV_URL),
+            // [UPDATE] Tambahkan cache buster untuk memastikan data produk selalu terbaru.
+            fetch(SHEET_PRODUK_URL + '&_v=' + Date.now()),
             fetch(SHEET_ARSIP_URL)
         ]);
 
@@ -297,7 +336,10 @@ function dapatkanOperatorKey(upperKat, upperNama) {
  * 3. ENGINE DETEKSI PROVIDER NOMOR HP (SUDAH DIPERBAIKI)
  */
 function fiturDeteksiOtomatisDanCariProvider(noHp) {
-    if (tabUtamaAktif === "TOKEN") return; 
+    if (tabUtamaAktif === "TOKEN") {
+        tampilkanNamaPelangganPLN(noHp);
+        return;
+    }
     const helper = document.getElementById('helper-deteksi-operator');
     if (!noHp || noHp.length < 4) {
         if(helper) helper.classList.add('hidden');
@@ -386,7 +428,8 @@ function gantiTabUtama(jenisTab) {
 
     const currentPhone = document.getElementById('search-phone-input')?.value || "";
     renderAutoOperatorSliders();
-    if(currentPhone && jenisTab !== "TOKEN") fiturDeteksiOtomatisDanCariProvider(currentPhone);
+    if (jenisTab === "TOKEN") tampilkanNamaPelangganPLN(currentPhone);
+    else if(currentPhone) fiturDeteksiOtomatisDanCariProvider(currentPhone);
 }
 
 function renderAutoOperatorSliders() {
@@ -585,6 +628,35 @@ function jalankanTimerMundurDinamis(targetString) {
  * 5. PENGELOLAAN KERANJANG/DRAF TRANSAKSI
  */
 function tambahKeKeranjang(nama, harga, label, kategoriOtomatis = null, targetOtomatis = null) {
+    // [VALIDASI TERPUSAT] Validasi khusus untuk halaman game.
+    if (window.location.pathname.includes('gameml.html')) {
+        const gameIdEl = document.getElementById('game_id');
+        const zoneIdEl = document.getElementById('zone_id');
+        const gameId = gameIdEl ? gameIdEl.value.trim() : "";
+        const zoneId = zoneIdEl ? zoneIdEl.value.trim() : "";
+
+        const applyShake = (el) => {
+            if (!el) return;
+            el.classList.add('shake-effect');
+            el.focus();
+            setTimeout(() => el.classList.remove('shake-effect'), 600);
+        };
+
+        if (!gameId) {
+            applyShake(gameIdEl);
+            return; // Hentikan proses jika ID Game kosong
+        }
+
+        const gameName = kategoriOtomatis.replace('TOPUP ', '').trim().toUpperCase();
+        if ((gameName === 'MLBB' || gameName === 'MOBILE LEGENDS' || gameName === 'MOBILE LEGEND') && !zoneId) {
+            applyShake(zoneIdEl);
+            return; // Hentikan proses jika Zone ID MLBB kosong
+        }
+
+        // Jika validasi lolos, gabungkan ID untuk ditampilkan di modal
+        targetOtomatis = zoneId ? `${gameId} (${zoneId})` : gameId;
+    }
+
     keranjangBelanja = {
         kategori: kategoriOtomatis || `${tabUtamaAktif} - ${operatorAktif}`,
         produk: nama,
@@ -729,10 +801,11 @@ function filterRiwayatStatus(filterType) {
         if (!row.trim()) return;
         const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
         
-        // PENTING: Sesuaikan indeks di bawah ini sesuai urutan kolom pada Sheet "ARSIP" Anda!
-        // Contoh di bawah berasumsi: Kolom 2 (indeks 1) adalah Nomor HP Target, dan Kolom 6 (indeks 5) adalah Statusnya.
-        const noHpTargetSheet = cols[1] ? cols[1].trim().replace(/"/g, "").replace(/'/g, "") : "";
-        const statusTransaksiSheet = cols[5] ? cols[5].trim().replace(/"/g, "").toUpperCase() : "";
+        // [KONFIRMASI] Logika ini sudah benar sesuai permintaan.
+        // Mengambil Nomor HP/ID Target dari Kolom C (indeks 2).
+        // Mengambil Status Transaksi dari Kolom G (indeks 6).
+        const noHpTargetSheet = cols[2] ? cols[2].trim().replace(/"/g, "").replace(/'/g, "") : "";
+        const statusTransaksiSheet = cols[6] ? cols[6].trim().replace(/"/g, "").toUpperCase() : "";
 
         if (noHpTargetSheet && statusTransaksiSheet) {
             statusTerupdateMap[noHpTargetSheet] = statusTransaksiSheet;
@@ -778,7 +851,7 @@ function filterRiwayatStatus(filterType) {
     let htmlOutput = "";
     dataFinal.forEach(item => {
         let badgeStyle = "";
-        let iconStyle = "";
+        let iconStyle = "fa-spinner animate-spin text-amber-500";
         
         if (item.status === "SUKSES") {
             badgeStyle = "bg-emerald-50 text-emerald-700 border border-emerald-100";
@@ -800,12 +873,21 @@ function filterRiwayatStatus(filterType) {
         // Amankan objek item menjadi string JSON yang valid untuk atribut HTML
         const itemJson = JSON.stringify(item).replace(/"/g, "'");
 
+        // [BARU] Tambahkan tombol lihat struk, meniru transfer.js
+        const tombolStrukHTML = `
+            <button onclick="tampilkanStrukDariRiwayat(${itemJson})" class="w-full text-center bg-emerald-600/10 text-emerald-600 text-[10px] font-bold py-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all mt-1 flex items-center justify-center gap-1.5">
+                <i class="fas fa-receipt"></i> Lihat Struk
+            </button>
+        `;
+
         htmlOutput += `
             <div class="p-3.5 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-2.5 text-left relative overflow-hidden">
                 <div class="flex justify-between items-center">
-                    <div class="flex items-center gap-1.5 text-[9px] text-gray-400 font-bold">
-                        <i class="far fa-clock text-indigo-500"></i>
-                        <span>${item.tanggal}</span>
+                    <div class="flex items-center gap-2">
+                        <div class="text-[9px] text-gray-400 font-bold">ID: <span class="text-indigo-500">${item.id_transaksi || '-'}</span></div>
+                        <button onclick="copyToClipboard(this, '${item.id_transaksi || ''}')" class="text-gray-400 hover:text-blue-600 text-xs p-1 rounded-full bg-gray-100 active:scale-90 transition-all" title="Salin ID">
+                            <i class="far fa-copy"></i>
+                        </button>
                     </div>
                     <span class="${badgeStyle} px-2 py-0.5 rounded-lg font-black text-[9px] tracking-wide flex items-center gap-1 uppercase">
                         <i class="fas ${iconStyle}"></i> ${item.status}
@@ -814,6 +896,9 @@ function filterRiwayatStatus(filterType) {
                 
                 <div class="font-extrabold text-gray-900 text-xs tracking-tight leading-snug uppercase">
                     ${produkLabelTampil}
+                </div>
+                <div class="text-[9px] text-gray-400 font-semibold">
+                    ${item.tanggal || ''}
                 </div>
                 
                 <div class="flex justify-between items-end pt-1 border-t border-gray-50">
@@ -825,9 +910,12 @@ function filterRiwayatStatus(filterType) {
                         <p class="text-xs font-black text-blue-600 mt-0.5">Rp ${item.biaya.toLocaleString('id-ID')}</p>
                     </div>
                 </div>
-                <button onclick="orderUlangDariRiwayat(${itemJson})" class="w-full text-center bg-blue-600/10 text-blue-600 text-[10px] font-bold py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all mt-1 flex items-center justify-center gap-1.5">
-                    <i class="fas fa-redo-alt"></i> Beli Lagi
-                </button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="orderUlangDariRiwayat(${itemJson})" class="w-full text-center bg-blue-600/10 text-blue-600 text-[10px] font-bold py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all mt-1 flex items-center justify-center gap-1.5">
+                        <i class="fas fa-redo-alt"></i> Beli Lagi
+                    </button>
+                    ${tombolStrukHTML}
+                </div>
             </div>
         `;
     });
@@ -942,8 +1030,14 @@ function prosesCheckoutAkhir() {
     const inputHp = document.getElementById('customer-phone');
     const noHp = inputHp ? inputHp.value.trim() : "";
 
-    if (!noHp) return alert("Masukkan Nomor HP / ID Pelanggan!");
-    if (!keranjangBelanja) return alert("Draf Transaksi Kosong!");
+    if (!noHp) {
+        showAlert("DATA KURANG", "Lengkapi Nomor Tujuan", ["Anda harus memasukkan Nomor HP atau ID Pelanggan di kolom yang tersedia."]);
+        return;
+    }
+    if (!keranjangBelanja) {
+        showAlert("KERANJANG KOSONG", "Pilih Produk Dahulu", ["Keranjang belanja Anda masih kosong.", "Silakan pilih produk yang ingin dibeli."]);
+        return;
+    }
 
     const radioTerpilih = document.querySelector('input[name="payment-method"]:checked');
     const metodePilihan = radioTerpilih ? radioTerpilih.value : "WA";
@@ -1004,24 +1098,47 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
     // Ambil harga final (jika ada kode unik dari sistem QRIS sebelumnya)
     const hargaFinal = keranjangBelanja.hargaDenganKodeUnik ? keranjangBelanja.hargaDenganKodeUnik : keranjangBelanja.harga;
 
-    const dataSimpan = [{
-        tanggal: waktuMks, nomor: "'" + noHp, produk: fullProdukLabel,
-        harga_asli: keranjangBelanja.harga, total_transfer: hargaFinal, status: statusLabel
-    }];
+    // [FIX] Susun data sesuai format yang diharapkan oleh Apps Script doPost
+    const idTransaksi = 'NKJ' + Date.now().toString().slice(-7);
+    const dataSimpan = {
+        id_transaksi: idTransaksi,
+        tanggal: waktuMks,
+        // [FIX] Hapus tanda kutip. Ini menyebabkan ketidakcocokan saat mengambil status riwayat.
+        nomor: noHp,
+        produk: fullProdukLabel,
+        harga_asli: keranjangBelanja.harga,
+        total_transfer: hargaFinal,
+        status: statusLabel
+    };
 
     // --- 1. SIMPAN KE RIWAYAT LOKAL (SAMA SEPERTI TRANSAKSI TRANSFER) ---
-    simpanRiwayatProdukLokal(waktuMks, noHp, fullProdukLabel, hargaFinal, statusLabel);
+    simpanRiwayatProdukLokal(idTransaksi, waktuMks, noHp, fullProdukLabel, hargaFinal, statusLabel);
 
+    // [UPDATE] Gunakan metode FormData yang sama dengan transfer.js untuk pengiriman data yang lebih andal.
     try {
-        await fetch(SCRIPT_URL, {
-            method: 'POST', mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
+        // Kirim sebagai JSON, karena Apps Script untuk 'ARSIP' mengharapkan e.postData.contents
+        const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            // Hapus 'mode: no-cors' agar bisa membaca respons
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8', // Gunakan text/plain untuk menghindari preflight CORS
+            },
             body: JSON.stringify(dataSimpan)
         });
-    } catch (e) { console.error(e); }
+
+        const textResponse = await response.text();
+        if (textResponse.trim().toLowerCase() === 'sukses') {
+            console.log(`✅ Data produk (ID: ${idTransaksi}) berhasil terekam di Google Sheets.`);
+        } else {
+            throw new Error(`Server merespons dengan pesan tak terduga: ${textResponse}`);
+        }
+    } catch (e) { 
+        console.error(`❌ Gagal mengirim data produk (ID: ${idTransaksi}) ke Google Sheets:`, e);
+    }
 
     const textWA = `⚡ *TRANSAKSI BARU - NK JAYA CELL* ⚡\n` +
                    `--------------------------------------------\n` +
+                   `*ID Transaksi: ${idTransaksi}*\n\n` +
                    `📱 Kategori: *${keranjangBelanja.kategori}*\n` +
                    `🎯 No HP/ID Target: \`${noHp}\`\n` +
                    `📦 Produk: ${keranjangBelanja.produk}\n` +
@@ -1100,17 +1217,19 @@ function setupBannerSlider() {
 
     setInterval(nextSlide, 3000); // Ganti slide setiap 3 detik
 }
-// Fungsi internal baru untuk mendata ke LocalStorage
-function simpanRiwayatProdukLokal(waktu, noHp, produk, total, status) {
+
+function simpanRiwayatProdukLokal(idTransaksi, waktu, noHp, produk, total, status) {
     let riwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
     
     const isGame = keranjangBelanja.kategori.toUpperCase().includes('TOPUP');
     const gameName = isGame ? keranjangBelanja.kategori.replace('TOPUP ', '').trim() : null;
 
+
     // PENYEMPURNAAN: Buat satu field baru yang menyimpan deskripsi lengkap produk
     const produkLengkap = `[${keranjangBelanja.kategori}] ${keranjangBelanja.produk} (${keranjangBelanja.labelType})`;
 
     const transaksiBaru = {
+        id_transaksi: idTransaksi,
         tanggal: waktu,
         target: noHp,
         produk: keranjangBelanja.produk, // Gunakan nama produk bersih
@@ -1147,66 +1266,148 @@ function konfirmasiSudahBayarQris() {
 }
 
 /**
- * Fungsi Tambahan: Menjalankan Input Suara (Speech Recognition) Real-Time
- * Khusus untuk file script.js (Mengisi No HP Pelanggan)
+ * ==========================================================
+ * [BARU] FUNGSI-FUNGSI STRUK (DIADAPTASI DARI TRANSFER.JS)
+ * ==========================================================
  */
-function aktifkanInputSuaraScript(elemenInput) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.warn("Browser ini tidak mendukung Web Speech API (Input Suara).");
-        return;
+
+/**
+ * Fungsi jembatan untuk menampilkan struk dari data riwayat produk
+ */
+function tampilkanStrukDariRiwayat(item) {
+    tampilkanStruk({
+        id: item.id_transaksi,
+        tanggal: item.tanggal,
+        target: item.target,
+        produkLengkap: item.produkLengkap,
+        total: item.biaya,
+        status: item.status
+    });
+}
+
+/**
+ * Menampilkan modal struk dengan data transaksi
+ */
+function tampilkanStruk(data) {
+    const modal = document.getElementById('struk-modal');
+    if (!modal) return;
+
+    const judulEl = document.getElementById('struk-status-judul');
+    if (data.status === 'SUKSES') {
+        judulEl.innerText = 'TRANSAKSI BERHASIL';
+        judulEl.className = 'font-black text-green-600 text-lg';
+    } else if (data.status === 'GAGAL') {
+        judulEl.innerText = 'TRANSAKSI GAGAL';
+        judulEl.className = 'font-black text-red-600 text-lg';
+    } else {
+        judulEl.innerText = 'TRANSAKSI DIPROSES';
+        judulEl.className = 'font-black text-amber-600 text-lg';
     }
 
-    if (elemenInput.dataset.sedangMerekam === "true") return;
+    document.getElementById('struk-waktu').innerText = data.tanggal || new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
+    document.getElementById('struk-penerima').innerText = data.produkLengkap;
+    document.getElementById('struk-total').innerText = 'Rp ' + data.total.toLocaleString('id-ID');
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'id-ID'; 
-    recognition.interimResults = true; // Ketikan langsung muncul real-time
-    recognition.continuous = false;   
+    // Menampilkan detail target (No HP/ID Game)
+    const targetDetailEl = document.getElementById('struk-target-detail');
+    targetDetailEl.innerHTML = `
+        <div class="flex justify-between">
+            <span class="text-gray-500 font-medium">ID Transaksi:</span>
+            <span class="font-bold text-gray-800">${data.id || '-'}</span>
+        </div>
+        <div class="flex justify-between">
+            <span class="text-gray-500 font-medium">ID/No. Target:</span>
+            <span class="font-bold text-gray-800">${data.target}</span>
+        </div>
+    `;
 
-    const placeholderAsli = elemenInput.placeholder || "";
+    // Sembunyikan rincian admin yang tidak relevan untuk produk
+    document.getElementById('struk-rincian-biaya').classList.add('hidden');
 
-    recognition.onstart = function() {
-        elemenInput.dataset.sedangMerekam = "true";
-        elemenInput.placeholder = "🎙️ Mendengarkan nomor...";
-        elemenInput.style.backgroundColor = "#1e293b"; 
-    };
+    const actionsContainer = document.getElementById('struk-actions');
+    actionsContainer.innerHTML = `
+        <button onclick="downloadStruk('${data.id}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
+            <i class="fas fa-download"></i> Download
+        </button>
+        <button onclick="shareStruk('${data.id}')" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+            <i class="fab fa-whatsapp"></i> Bagikan
+        </button>
+        <button onclick="tutupModalStruk()" class="col-span-2 w-full py-2 bg-transparent text-gray-500 font-bold text-xs rounded-xl active:scale-95 transition-all">
+            Tutup
+        </button>
+    `;
 
-    recognition.onresult = function(event) {
-        let hasilSuara = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            hasilSuara += event.results[i][0].transcript;
-        }
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('div').classList.remove('scale-95');
+    }, 10);
+}
 
-        if (tipeInput === "angka") {
-            let angkaBersih = hasilSuara.replace(/[^0-9]/g, '');
-            elemenInput.value = angkaBersih;
-            
-            // 🟢 TAMBAHAN: Langsung pemicu deteksi operator otomatis NK JAYA CELL saat sedang berbicara
-            if (typeof fiturDeteksiOtomatisDanCariProvider === "function") {
-                fiturDeteksiOtomatisDanCariProvider(angkaBersih);
+function tutupModalStruk() {
+    const modal = document.getElementById('struk-modal');
+    if (modal) {
+        modal.classList.add('opacity-0');
+        modal.querySelector('div').classList.add('scale-95');
+        setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+}
+
+async function downloadStruk(ref) {
+    const strukElement = document.getElementById('struk-content');
+    try {
+        const canvas = await html2canvas(strukElement, { scale: 3, backgroundColor: '#ffffff' });
+        const link = document.createElement('a');
+        link.download = `struk-pembelian-${ref}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    } catch (error) {
+        console.error('Gagal membuat gambar struk:', error);
+    }
+}
+
+async function shareStruk(ref) {
+    const strukElement = document.getElementById('struk-content');
+    const originalBg = strukElement.style.backgroundColor;
+    strukElement.style.backgroundColor = 'white'; // Pastikan background putih untuk gambar
+
+    try {
+        const canvas = await html2canvas(strukElement, { scale: 2 });
+        canvas.toBlob(async (blob) => {
+            const file = new File([blob], `struk-pembelian-${ref}.png`, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: `Bukti Pembelian ${ref}`
+                });
+            } else {
+                alert('Gagal berbagi. Silakan download struk dan bagikan manual.');
             }
-        } else {
-            elemenInput.value = hasilSuara.toUpperCase();
-        }
+        }, 'image/png');
+    } catch (error) {
+        console.error('Gagal berbagi struk:', error);
+    } finally {
+        strukElement.style.backgroundColor = originalBg; // Kembalikan background
+    }
+}
 
-        elemenInput.dispatchEvent(new Event('input'));
-    };
-
-    recognition.onerror = function(event) {
-        console.error("Kesalahan input suara:", event.error);
-    };
-
-    recognition.onend = function() {
-        elemenInput.dataset.sedangMerekam = "false";
-        elemenInput.placeholder = placeholderAsli;
-        elemenInput.style.backgroundColor = ""; 
-        
-        // Trigger pencarian produk terakhir kali saat mic mati
-        elemenInput.dispatchEvent(new Event('input'));
-    };
-
-    recognition.start();
+/**
+ * [BARU] Fungsi untuk menyalin teks ke clipboard
+ */
+function copyToClipboard(button, text) {
+    navigator.clipboard.writeText(text).then(() => {
+        const icon = button.querySelector('i');
+        const originalIconClass = icon.className;
+        icon.className = 'fas fa-check text-green-500';
+        button.disabled = true;
+        setTimeout(() => {
+            icon.className = originalIconClass;
+            button.disabled = false;
+        }, 1500);
+    }).catch(err => {
+        console.error('Gagal menyalin teks: ', err);
+        showAlert("GAGAL MENYALIN", "Terjadi Kesalahan", ["Gagal menyalin ID Transaksi ke clipboard."]);
+    });
 }
 
 

@@ -236,14 +236,7 @@
                 </div>
 
                 <div class="border-t border-dashed border-gray-200 py-3 text-xs space-y-2.5">
-                    <div class="flex justify-between">
-                        <span class="text-gray-500 font-medium">ID Transaksi:</span>
-                        <span id="struk-id" class="font-bold text-gray-800"></span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-gray-500 font-medium">No. Referensi:</span>
-                        <span id="struk-ref" class="font-bold text-gray-800"></span>
-                    </div>
+                    <div id="struk-id-container"></div>
                     <div class="flex justify-between">
                         <span class="text-gray-500 font-medium">Penerima:</span>
                         <span id="struk-penerima" class="font-bold text-gray-800 text-right uppercase"></span>
@@ -320,7 +313,9 @@
     <!-- [NEW] Tambahkan JS html2canvas untuk fitur download struk -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
-    <!-- [FIX] Hapus script.js yang tidak relevan dan memperlambat loading -->
+    <!-- [REFACTOR] Pastikan config.js dimuat SEBELUM transfer.js -->
+    <script src="config.js"></script>
+    <!-- [STANDALONE] Hapus script.js karena transfer.js sudah mandiri -->
     <script src="transfer.js"></script>
 
 </body>

@@ -103,6 +103,7 @@
     <p id="helper-deteksi-operator" class="text-[10px] text-blue-600 font-bold px-1 hidden animate-pulse">
         <i class="fas fa-robot"></i> Sistem mendeteksi nomor...
     </p>
+    <p id="helper-nama-pln" class="text-[11px] text-emerald-600 font-bold px-1 hidden"></p>
 </div>
         <div class="space-y-1.5">
             <label class="block text-xs font-black text-gray-400 uppercase tracking-widest px-1">Pilih Kategori Layanan</label>
@@ -271,6 +272,39 @@
     <span>Instal Aplikasi NK JAYA CELL</span>
 </button>
 
+    <!-- [BARU] Modal Struk (Diadaptasi dari index2.html) -->
+    <div id="struk-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-300 flex items-center justify-center p-4">
+        <div class="bg-gray-100 w-full max-w-sm rounded-3xl shadow-2xl transform scale-95 transition-transform duration-300">
+            <div id="struk-content" class="bg-white p-6 rounded-t-3xl">
+                <div class="text-center mb-4">
+                    <img src="icon.png" alt="Logo" class="w-16 h-16 mx-auto mb-2 rounded-full shadow-md border-4 border-white">
+                    <h2 id="struk-status-judul" class="font-black text-blue-600 text-lg"></h2>
+                    <p id="struk-waktu" class="text-xs text-gray-500 font-medium"></p>
+                </div>
+
+                <div class="border-t border-dashed border-gray-200 py-3 text-xs space-y-2.5">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 font-medium">Produk:</span>
+                        <span id="struk-penerima" class="font-bold text-gray-800 text-right uppercase"></span>
+                    </div>
+                    <div id="struk-target-detail" class="text-xs"></div>
+                </div>
+
+                <div id="struk-rincian-biaya" class="border-t border-dashed border-gray-200 py-3 text-xs space-y-2"></div>
+
+                <div class="border-t-2 border-gray-300 pt-3 mt-1 text-center">
+                    <p class="text-xs text-gray-500 font-bold">TOTAL BAYAR</p>
+                    <p id="struk-total" class="text-3xl font-black text-gray-900 tracking-tight mt-1"></p>
+                </div>
+                <p class="text-center text-[10px] text-gray-400 font-semibold mt-2">Terima kasih telah menggunakan layanan NK JAYA CELL.</p>
+            </div>
+            <div id="struk-actions" class="p-4 grid grid-cols-2 gap-3"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- [SINKRONISASI] Pindahkan config.js ke atas agar variabel global tersedia untuk semua skrip -->
+    <script src="config.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

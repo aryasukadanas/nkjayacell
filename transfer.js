@@ -2,19 +2,10 @@
 // LOGIKA TRANSFER BANK - NK JAYA CELL (V3.1 LIVE DATABASES)
 // ==========================================
 
-// [NEW] Konfigurasi yang dipindahkan dari config.js
-const WA_ADMIN = "6285847909692";
-const ADMIN_BANK_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=1584396032&single=true&output=csv"; 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQKdBfsrmlEBlKlVZiY02jx8HeIW2AtTQrE4_tcXThibDH6X9py965fHMRj--QBiH-/exec";
-const SHEET_REKENING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=1939084256&single=true&output=csv";
-const SHEET_ARSIP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT6mOnYdR8MGwIusehg_plQJHoAVALhdcXNpbgOatMEkuipIoUDfECd5KWe0KAUNl8QTyaKz7PeeigA/pub?gid=53248706&single=true&output=csv";
-
+// [FIX] Hapus deklarasi URL yang berulang. Semua URL akan diambil dari config.js.
 let databaseAdminBank = [];
 let databasePelangganSheet = []; // Menampung data nama pemilik rekening dari spreadsheet
 let databaseArsip = []; // [NEW] Menampung data status transaksi dari sheet arsip
-
-// Variabel Global untuk menampung URL Web App Google Apps Script Anda
-const URL_APPS_SCRIPT = SCRIPT_URL; // Menggunakan SCRIPT_URL yang sudah dipindahkan
 
 /**
  * Fungsi pembantu untuk memecah baris CSV dengan aman meskipun ada tanda koma di dalam nama/teks
@@ -347,6 +338,7 @@ function hitungTotal() {
  * Menyimpan transaksi sukses ke riwayat lokal browser
  */
 function simpanKeRiwayat(idTransaksi, bank, norek, nama, nominal, admin) {
+    // [STANDALONE] Kembalikan logika riwayat transfer ke file ini.
     let riwayat = JSON.parse(localStorage.getItem('nk_transfer_history')) || [];
     
     const waktuHariIni = new Date();
@@ -360,19 +352,23 @@ function simpanKeRiwayat(idTransaksi, bank, norek, nama, nominal, admin) {
         norek: norek,
         tanggal: tanggalFormat,
         nominal: nominal,
-        admin: admin,
-        waktu: jamFormat
+        admin: admin, // Biaya admin juga disimpan
+        waktu: jamFormat // Waktu juga disimpan
     };
 
     riwayat.unshift(transaksiBaru);
+    // Simpan maksimal 20 riwayat terakhir untuk menjaga performa
+    if (riwayat.length > 20) {
+        riwayat = riwayat.slice(0, 20);
+    }
     localStorage.setItem('nk_transfer_history', JSON.stringify(riwayat));
-    renderRiwayatUI();
 }
 
 /**
  * Merender daftar riwayat ke HTML
  */
 function renderRiwayatUI() {
+    // [STANDALONE] Kembalikan fungsi render UI riwayat.
     const containerDaftar = document.getElementById('daftar-riwayat');
     if (!containerDaftar) return;
 
@@ -390,14 +386,13 @@ function renderRiwayatUI() {
 
     // [NEW] Buat peta status terbaru dari databaseArsip
     const statusMap = {};
-    databaseArsip.forEach(row => {
-        // Asumsi: Kolom 1 (indeks 0) adalah ID, Kolom 4 (indeks 3) adalah rekening, Kolom 8 (indeks 7) adalah status
-        const idTransaksi = row[0]?.trim();
-        const noRek = row[3]?.replace(/\D/g, '').trim();
-        const status = row[8]?.trim().toUpperCase(); // [FIX] Kolom I (indeks 8) untuk Status
-        if (noRek && status) {
-            // Simpan status terbaru untuk setiap nomor rekening
-            statusMap[noRek] = status;
+    databaseArsip.forEach(cols => {
+        // [FIX] Sesuaikan dengan struktur sheet "Transfer"
+        // Kolom A (indeks 0) adalah ID, Kolom J (indeks 9) adalah Status
+        const idTransaksi = cols[0]?.trim();
+        const status = cols[9]?.trim().toUpperCase();
+        if (idTransaksi && status) {
+            statusMap[idTransaksi] = status;
         }
     });
 
@@ -405,7 +400,7 @@ function renderRiwayatUI() {
         const noRekRiwayat = item.norek.replace(/\D/g, ''); // [FIX] Hapus SEMUA karakter selain angka agar formatnya bersih dan konsisten.
         let statusFinal = statusMap[item.id] || statusMap[noRekRiwayat] || "PROSES"; // Prioritaskan pencocokan via ID Transaksi
 
-        // Standarisasi label status
+        // [FIX] Standarisasi label status
         if (statusFinal.includes("LUNAS") || statusFinal.includes("SUKSES")) statusFinal = "SUKSES";
         if (statusFinal.includes("PENDING")) statusFinal = "PROSES";
         if (statusFinal.includes("GAGAL") || statusFinal.includes("FAILED")) statusFinal = "GAGAL";
@@ -432,13 +427,11 @@ function renderRiwayatUI() {
         return `
         <div class="p-3.5 bg-white border border-gray-100 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] space-y-2.5 text-left relative overflow-hidden">
             <div class="flex justify-between items-center">
-                <div class="text-[9px] text-gray-400 font-bold">ID: <span class="text-indigo-500">${item.id || '-'}</span></div>
-                <span class="${badgeClass} px-2 py-0.5 rounded-lg font-black text-[9px] tracking-wide flex items-center gap-1 uppercase">
-                    <i class="fas ${iconClass}"></i> ${statusFinal}
-                </span>
-                <div class="flex items-center gap-1.5 text-[9px] text-gray-400 font-bold">
-                    <i class="far fa-clock text-indigo-500"></i>
-                    <span>${item.tanggal} - ${item.waktu}</span>
+                <div class="flex items-center gap-2">
+                    <div class="text-[9px] text-gray-400 font-bold">ID: <span class="text-indigo-500">${item.id || '-'}</span></div>
+                    <button onclick="copyToClipboard(this, '${item.id || ''}')" class="text-gray-400 hover:text-blue-600 text-xs p-1 rounded-full bg-gray-100 active:scale-90 transition-all" title="Salin ID">
+                        <i class="far fa-copy"></i>
+                    </button>
                 </div>
                 <span class="${badgeClass} px-2 py-0.5 rounded-lg font-black text-[9px] tracking-wide flex items-center gap-1 uppercase">
                     <i class="fas ${iconClass}"></i> ${statusFinal}
@@ -446,6 +439,9 @@ function renderRiwayatUI() {
             </div>
             <div class="font-extrabold text-gray-900 text-xs tracking-tight leading-snug uppercase">
                 ${item.bank} - ${item.nama}
+            </div>
+            <div class="text-[9px] text-gray-400 font-semibold">
+                ${item.tanggal || ''} - ${item.waktu || ''}
             </div>
             <div class="flex justify-between items-end pt-1 border-t border-gray-50">
                 <div class="text-[10px] text-gray-400 font-semibold">
@@ -479,119 +475,11 @@ function renderRiwayatUI() {
  * Menghapus seluruh isi riwayat
  */
 function bersihkanRiwayat() {
+    // [STANDALONE] Kembalikan logika pembersihan riwayat transfer.
     if (confirm("Apakah Anda yakin ingin menghapus semua riwayat transfer?")) {
         localStorage.removeItem('nk_transfer_history');
-        renderRiwayatUI();
+        renderRiwayatUI(); // Render ulang UI untuk menampilkan keadaan kosong
     }
-}
-
-/**
- * Memproses transaksi dan mengirimkan data akhir ke WhatsApp Admin (ANTI DOUBLE-CLICK + ANIMASI)
- */
-function prosesTransfer() {
-    const bankEl = document.getElementById('bank-tujuan');
-    const norekEl = document.getElementById('no-rekening');
-    const nominalEl = document.getElementById('nominal-transfer');
-    const namaPelangganEl = document.getElementById('nama-pemilik-terdeteksi');
-    const inputNamaBaruEl = document.getElementById('nama-pelanggan-baru');
-    const namaBaruBox = document.getElementById('input-nama-baru-box');
-
-    const bank = bankEl ? bankEl.value : "";
-    const norekDenganSpasi = norekEl ? norekEl.value : "";
-    const norekTanpaSpasi = norekDenganSpasi.replace(/\s+/g, '');
-    
-    const nominalRaw = nominalEl ? nominalEl.value.replace(/\./g, '') : "0";
-    const nominal = parseInt(nominalRaw) || 0;
-    const admin = hitungAdminSpesifik();
-    const total = nominal + admin;
-
-    // [MODIFIKASI] Validasi input satu per satu untuk pesan error yang spesifik
-    const pesanError = [];
-    if (!bank) {
-        pesanError.push("Pastikan Bank/E-wallet telah dipilih.");
-    }
-    if (norekTanpaSpasi.length < 5) {
-        pesanError.push("No. Rekening Tujuan harus diisi (minimal 5 digit).");
-    }
-    if (nominal < 10000) {
-        pesanError.push("Jumlah kirim minimal Rp 10.000.");
-    }
-
-    if (pesanError.length > 0) {
-        showAlert("VERIFIKASI GAGAL", "DATA BELUM LENGKAP!", pesanError);
-        return;
-    }
-
-    // Tentukan nama pemilik akhir yang akan dipakai
-    let namaPemilik = namaPelangganEl ? namaPelangganEl.innerText : "PELANGGAN BARU";
-    
-    // VALIDASI: Jika kolom input nama baru sedang aktif, user wajib mengisi nama!
-    if (namaBaruBox && !namaBaruBox.classList.contains('hidden')) {
-        const namaKetik = inputNamaBaruEl ? inputNamaBaruEl.value.trim().toUpperCase() : "";
-        if (!namaKetik) {
-            showAlert("NAMA WAJIB DIISI", "REKENING BARU TERDETEKSI!", ["Silakan isi kolom Nama Pemilik sesuai buku tabungan."]);
-            if(inputNamaBaruEl) inputNamaBaruEl.focus();
-            return;
-        }
-        namaPemilik = namaKetik; // Setel nama hasil ketikan manual pelanggan
-    }
-
-    // --- MULAI KUNCI TOMBOL & ANIMASI ---
-    const btnTransfer = document.getElementById('btn-proses-transfer') || document.querySelector('button[onclick="prosesTransfer()"]');
-    if (btnTransfer) {
-        btnTransfer.disabled = true;
-        btnTransfer.innerHTML = `<i class="fas fa-spinner animate-spin mr-2"></i> Memproses Transfer...`;
-        btnTransfer.style.opacity = "0.6";
-        btnTransfer.style.cursor = "not-allowed";
-    }
-
-    const idTransaksi = 'NKJ-TRF-' + Date.now().toString().slice(-7);
-
-           let pesan = `✨ *NK JAYA CELL - TRANSFER BANK* ✨
-==================================
-*ID Transaksi: ${idTransaksi}*
-Halo Admin, saya ingin melakukan transfer dengan rincian berikut:
-
-📝 *DETAIL TRANSAKSI*
-•💸*Kategori* : KIRIM UANG
-•🏛️*Bank Tujuan* : ${bank}
-•💳*No. Rekening* : \`${norekTanpaSpasi}\`
-•👤*Nama Pemilik* : *${namaPemilik}*
-
-💵 *RINCIAN BIAYA*
-•💰*Nominal* : Rp ${nominal.toLocaleString('id-ID')}
-•⚡*Biaya Admin* : Rp ${admin.toLocaleString('id-ID')}
------------------------------------
-💰 *TOTAL BAYAR : Rp ${total.toLocaleString('id-ID')}*
-==================================
-
-_Mohon segera diproses ya, terima kasih!_ 🙏✨`;
-    // PROSES PENYIMPANAN DATA
-    simpanKeRiwayat(idTransaksi, bank, norekDenganSpasi, namaPemilik, nominal, admin);
-    // Kirim data yang valid (termasuk nama baru yang diketik) ke Google Sheets
-    simpanKeSpreadsheet(idTransaksi, namaPemilik);
-
- // KUNCI UTAMA: Menggunakan encodeURIComponent agar Emoji & Enter di atas tidak rusak/hilang
-const url = `https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(pesan)}`;
-window.open(url, '_blank');
-   
-    // Reset Form Input
-    if(norekEl) norekEl.value = "";
-    if(nominalEl) nominalEl.value = "";
-    if(inputNamaBaruEl) inputNamaBaruEl.value = "";
-    if(namaBaruBox) namaBaruBox.classList.add('hidden');
-    if(namaPelangganEl) namaPelangganEl.innerText = "-";
-    
-    hitungTotal();
-
-    setTimeout(() => {
-        if (btnTransfer) {
-            btnTransfer.disabled = false;
-            btnTransfer.innerHTML = `KIRIM DATA TRANSFER KE ADMIN`; 
-            btnTransfer.style.opacity = "1";
-            btnTransfer.style.cursor = "pointer";
-        }
-    }, 2000);
 }
 
 /**
@@ -637,9 +525,115 @@ function closeAlert() {
 }
 
 /**
+ * [FIX] Memproses transaksi dan mengirimkan data akhir ke WhatsApp Admin (ANTI DOUBLE-CLICK + ANIMASI)
+ */
+async function prosesTransfer() {
+    const bankEl = document.getElementById('bank-tujuan');
+    const norekEl = document.getElementById('no-rekening');
+    const nominalEl = document.getElementById('nominal-transfer');
+    const namaPelangganEl = document.getElementById('nama-pemilik-terdeteksi');
+    const inputNamaBaruEl = document.getElementById('nama-pelanggan-baru');
+    const namaBaruBox = document.getElementById('input-nama-baru-box');
+
+    const bank = bankEl ? bankEl.value : "";
+    const norekDenganSpasi = norekEl ? norekEl.value : "";
+    const norekTanpaSpasi = norekDenganSpasi.replace(/\s+/g, '');
+    
+    const nominalRaw = nominalEl ? nominalEl.value.replace(/\./g, '') : "0";
+    const nominal = parseInt(nominalRaw) || 0;
+    const admin = hitungAdminSpesifik();
+    const total = nominal + admin;
+
+    // Validasi input satu per satu untuk pesan error yang spesifik
+    const pesanError = [];
+    if (!bank) {
+        pesanError.push("Pastikan Bank/E-wallet telah dipilih.");
+    }
+    if (norekTanpaSpasi.length < 5) {
+        pesanError.push("No. Rekening Tujuan harus diisi (minimal 5 digit).");
+    }
+    if (nominal < 10000) {
+        pesanError.push("Jumlah kirim minimal Rp 10.000.");
+    }
+
+    if (pesanError.length > 0) {
+        showAlert("VERIFIKASI GAGAL", "DATA BELUM LENGKAP!", pesanError);
+        return;
+    }
+
+    // Tentukan nama pemilik akhir yang akan dipakai
+    let namaPemilik = namaPelangganEl ? namaPelangganEl.innerText : "PELANGGAN BARU";
+    
+    // VALIDASI: Jika kolom input nama baru sedang aktif, user wajib mengisi nama!
+    if (namaBaruBox && !namaBaruBox.classList.contains('hidden')) {
+        const namaKetik = inputNamaBaruEl ? inputNamaBaruEl.value.trim().toUpperCase() : "";
+        if (!namaKetik) {
+            showAlert("NAMA WAJIB DIISI", "REKENING BARU TERDETEKSI!", ["Silakan isi kolom Nama Pemilik sesuai buku tabungan."]);
+            if(inputNamaBaruEl) inputNamaBaruEl.focus();
+            return;
+        }
+        namaPemilik = namaKetik; // Setel nama hasil ketikan manual pelanggan
+    }
+
+    // --- MULAI KUNCI TOMBOL & ANIMASI ---
+    const btnTransfer = document.querySelector('button[onclick="prosesTransfer()"]');
+    if (btnTransfer) {
+        btnTransfer.disabled = true;
+        btnTransfer.innerHTML = `<i class="fas fa-spinner animate-spin mr-2"></i> Memproses Transfer...`;
+        btnTransfer.style.opacity = "0.6";
+        btnTransfer.style.cursor = "not-allowed";
+    }
+
+    const idTransaksi = 'TRF' + Date.now().toString().slice(-7);
+    let pesan = `✨ *NK JAYA CELL - TRANSFER BANK* ✨
+==================================
+*ID Transaksi: ${idTransaksi}*
+Halo Admin, saya ingin melakukan transfer dengan rincian berikut:
+
+📝 *DETAIL TRANSAKSI*
+•💸*Kategori* : KIRIM UANG
+•🏛️*Bank Tujuan* : ${bank}
+•💳*No. Rekening* : \`${norekTanpaSpasi}\`
+•👤*Nama Pemilik* : *${namaPemilik}*
+
+💵 *RINCIAN BIAYA*
+•💰*Nominal* : Rp ${nominal.toLocaleString('id-ID')}
+•⚡*Biaya Admin* : Rp ${admin.toLocaleString('id-ID')}
+-----------------------------------
+💰 *TOTAL BAYAR : Rp ${total.toLocaleString('id-ID')}*
+==================================
+
+_Mohon segera diproses ya, terima kasih!_ 🙏✨`;
+    
+    // PROSES PENYIMPANAN DATA
+    await simpanKeSpreadsheet(idTransaksi, namaPemilik);
+    simpanKeRiwayat(idTransaksi, bank, norekDenganSpasi, namaPemilik, nominal, admin);
+
+    const url = `https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(pesan)}`;
+    window.open(url, '_blank');
+   
+    // Reset Form Input
+    if(norekEl) norekEl.value = "";
+    if(nominalEl) nominalEl.value = "";
+    if(inputNamaBaruEl) inputNamaBaruEl.value = "";
+    if(namaBaruBox) namaBaruBox.classList.add('hidden');
+    if(namaPelangganEl) namaPelangganEl.innerText = "-";
+    hitungTotal();
+
+    setTimeout(() => {
+        if (btnTransfer) {
+            btnTransfer.disabled = false;
+            btnTransfer.innerHTML = `<i class="fab fa-whatsapp text-lg"></i> KIRIM DATA TRANSFER KE ADMIN`; 
+            btnTransfer.style.opacity = "1";
+            btnTransfer.style.cursor = "pointer";
+        }
+    }, 2000);
+}
+/**
  * [NEW] Menampilkan modal struk dengan data transaksi
  */
 function tampilkanStruk(data) {
+    // [STANDALONE] Kembalikan fungsi tampilkan struk.
     const modal = document.getElementById('struk-modal');
     if (!modal) return;
 
@@ -657,24 +651,29 @@ function tampilkanStruk(data) {
     }
 
     // Isi data ke elemen struk
-    const ref = 'NKJ' + Date.now().toString().slice(-8);
-    document.getElementById('struk-id').innerText = data.id || '-';
     document.getElementById('struk-waktu').innerText = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
-    document.getElementById('struk-ref').innerText = ref;
     document.getElementById('struk-penerima').innerText = `${data.bank} - ${data.nama} (${data.norek})`;
     
     // [NEW] Isi rincian biaya
     document.getElementById('struk-nominal').innerText = 'Rp ' + data.nominal.toLocaleString('id-ID');
     document.getElementById('struk-admin').innerText = 'Rp ' + data.admin.toLocaleString('id-ID');
     document.getElementById('struk-total').innerText = 'Rp ' + data.total.toLocaleString('id-ID');
+    
+    // [MODIFIKASI] Tambahkan ID Transaksi dengan tombol copy
+    document.getElementById('struk-id-container').innerHTML = `
+        <div class="flex justify-between">
+            <span class="text-gray-500 font-medium">ID Transaksi:</span>
+            <span class="font-bold text-gray-800">${data.id || '-'}</span>
+        </div>
+    `;
 
     // Siapkan tombol aksi
     const actionsContainer = document.getElementById('struk-actions');
     actionsContainer.innerHTML = `
-        <button onclick="downloadStruk('${ref}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
+        <button onclick="downloadStruk('${data.id}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
             <i class="fas fa-download"></i> Download
         </button>
-        <button onclick="shareStruk('${ref}')" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+        <button onclick="shareStruk('${data.id}')" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
             <i class="fab fa-whatsapp"></i> Bagikan
         </button>
         <button onclick="tutupModalStruk()" class="col-span-2 w-full py-2 bg-transparent text-gray-500 font-bold text-xs rounded-xl active:scale-95 transition-all">
@@ -693,6 +692,7 @@ function tampilkanStruk(data) {
  * [NEW] Fungsi jembatan untuk menampilkan struk dari data riwayat
  */
 function tampilkanStrukDariRiwayat(item, status) {
+    // [STANDALONE] Fungsi ini sekarang menjadi jembatan ke `tampilkanStruk` di file ini.
     tampilkanStruk({
         id: item.id,
         bank: item.bank,
@@ -709,6 +709,7 @@ function tampilkanStrukDariRiwayat(item, status) {
  * [NEW] Menutup modal struk dan mengaktifkan kembali tombol proses
  */
 function tutupModalStruk() {
+    // [STANDALONE] Kembalikan fungsi tutup modal struk.
     const modal = document.getElementById('struk-modal');
     if (modal) {
         modal.classList.add('opacity-0');
@@ -730,6 +731,7 @@ function tutupModalStruk() {
  * [NEW] Mengubah HTML struk menjadi gambar dan mengunduhnya
  */
 async function downloadStruk(ref) {
+    // [STANDALONE] Kembalikan fungsi download struk.
     const strukElement = document.getElementById('struk-content');
     const originalBg = strukElement.style.backgroundColor;
     strukElement.style.backgroundColor = 'white'; // Pastikan background putih
@@ -752,6 +754,7 @@ async function downloadStruk(ref) {
  * [NEW] Membagikan gambar struk ke aplikasi lain (terutama WhatsApp)
  */
 async function shareStruk(ref) {
+    // [STANDALONE] Kembalikan fungsi share struk.
     const strukElement = document.getElementById('struk-content');
     const originalBg = strukElement.style.backgroundColor;
     strukElement.style.backgroundColor = 'white';
@@ -779,13 +782,33 @@ async function shareStruk(ref) {
 }
 
 /**
+ * [BARU] Fungsi untuk menyalin teks ke clipboard
+ */
+function copyToClipboard(button, text) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        const icon = button.querySelector('i');
+        const originalIconClass = icon.className;
+        icon.className = 'fas fa-check text-green-500';
+        button.disabled = true;
+        setTimeout(() => {
+            icon.className = originalIconClass;
+            button.disabled = false;
+        }, 1500);
+    }).catch(err => {
+        console.error('Gagal menyalin teks: ', err);
+        alert('Gagal menyalin ID Transaksi.');
+    });
+}
+
+/**
  * Fungsi Rekam Data Transaksi ke Google Sheets
  */
-function simpanKeSpreadsheet(idTransaksi, namaFinalDariForm) {
+async function simpanKeSpreadsheet(idTransaksi, namaFinalDariForm) {
     const bankEl = document.getElementById('bank-tujuan');
     const norekEl = document.getElementById('no-rekening');
     const nominalEl = document.getElementById('nominal-transfer');
-
+ 
     const bank = bankEl ? bankEl.value : "";
     const norekMentah = norekEl ? norekEl.value : "";
     const nominalRaw = nominalEl ? nominalEl.value.replace(/\./g, '') : "0";
@@ -800,24 +823,39 @@ function simpanKeSpreadsheet(idTransaksi, namaFinalDariForm) {
 
     if (!bank || norekBersih.length < 5 || nominal < 10000) return; 
 
+    // [FIX] Gunakan FormData untuk mengirim data ke e.parameter di Apps Script
     const formData = new FormData();
+    // [SINKRONISASI] Kirim ID Transaksi yang sudah dibuat di web
     formData.append('id_transaksi', idTransaksi);
-    formData.append('tanggal', new Date().toLocaleString('id-ID'));
-    formData.append('kategori', 'KIRIM UANG');
-    formData.append('bank', bank);
-    formData.append('rekening', "'" + norekBersih); // [FIX] Tambahkan tanda kutip di depan untuk menjaga angka 0
-    formData.append('nama_pemilik', namaPemilik);
-    formData.append('nominal', nominal);
-    formData.append('admin', admin);
-    formData.append('total', totalBayar);
+    formData.append('tanggal', new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }));
+    formData.append('kategori', 'KIRIM UANG'); // Sesuai dengan e.parameter.kategori
+    formData.append('bank', bank); // Sesuai dengan e.parameter.bank
+    formData.append('rekening', norekBersih); // Sesuai dengan e.parameter.rekening
+    formData.append('nama_pemilik', namaPemilik); // Sesuai dengan e.parameter.nama_pemilik
+    formData.append('nominal', nominal); // Sesuai dengan e.parameter.nominal
+    formData.append('admin', admin); // Sesuai dengan e.parameter.admin
+    formData.append('total', totalBayar); // Sesuai dengan e.parameter.total
 
-    fetch(URL_APPS_SCRIPT, {
-        method: 'POST',
-        body: formData,
-        mode: 'no-cors'
-    })
-    .then(() => console.log("✅ Berhasil terekam di Google Sheets."))
-    .catch((error) => console.error("❌ Gagal ke Google Sheets:", error));
+    try {
+        // [FIX] Hapus 'mode: no-cors' agar bisa menerima respons dari Apps Script
+        const response = await fetch(SCRIPT_URL, { // [REFACTOR] Langsung gunakan SCRIPT_URL dari config.js
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (result && result.status === "sukses") {
+            console.log(`✅ Berhasil terekam di Google Sheets dengan ID: ${result.id_transaksi}`);
+            return result.id_transaksi;
+        } else {
+            console.error("❌ Gagal ke Google Sheets (Respons Server):", result ? result.message : "Respons tidak valid");
+            return null;
+        }
+    } catch (error) {
+        console.error("❌ Gagal ke Google Sheets (Error Fetch):", error);
+        return null;
+    }
 }
 
 /**
@@ -848,15 +886,17 @@ function gunakanLagiDariRiwayat(bank, norek, nama) {
 }
 
 async function bukaModalRiwayat() {
+    // [STANDALONE] Kembalikan logika buka modal riwayat.
     const modal = document.getElementById('history-modal');
     if (!modal) return;
 
-    // [FIX] Selalu ambil data status terbaru dari spreadsheet setiap kali modal dibuka
+    // Selalu ambil data status terbaru dari spreadsheet setiap kali modal dibuka
     try {
         const loadingEl = document.getElementById('daftar-riwayat');
         if (loadingEl) loadingEl.innerHTML = `<div class="text-center py-10 text-gray-400 italic text-xs"><i class="fas fa-spinner animate-spin mr-2"></i> Memperbarui status...</div>`;
 
-        const resArsip = await fetch(SHEET_ARSIP_URL + '&_v=' + Date.now()); // [FIX] Tambahkan cache buster
+        // [UPDATE] Gunakan konstanta SHEET_TRANSFER_URL dari config.js untuk mengambil status.
+        const resArsip = await fetch(SHEET_TRANSFER_URL + '&_v=' + Date.now());
         const textArsip = await resArsip.text();
         databaseArsip = textArsip.split(/\r?\n/).slice(1).map(row => {
             if (!row.trim()) return null;
@@ -876,6 +916,7 @@ async function bukaModalRiwayat() {
 }
 
 function tutupModalRiwayat() {
+    // [STANDALONE] Kembalikan logika tutup modal riwayat.
     const modal = document.getElementById('history-modal');
     if (!modal) return;
     modal.classList.add('opacity-0');
@@ -927,7 +968,9 @@ function setupBannerSlider() {
 /**
  * Inisialisasi utama saat seluruh komponen halaman siap
  */
-window.addEventListener('load', () => {
+// [OPTIMASI] Ganti 'load' dengan 'DOMContentLoaded' agar pengambilan data bank
+// dimulai lebih awal tanpa harus menunggu semua gambar banner selesai dimuat.
+document.addEventListener('DOMContentLoaded', () => {
     const elBank = document.getElementById('bank-tujuan');
     const elNorek = document.getElementById('no-rekening');
     const elNominal = document.getElementById('nominal-transfer');
@@ -968,58 +1011,6 @@ window.addEventListener('load', () => {
         fetchTarifAdminBank();
     }
 });
-
-async function prosesTransferKeSheet() {
-  // 1. Ambil nilai data dari elemen-elemen input form Anda
-  const bankInput = document.getElementById('bank-select')?.value || 'BRI'; // Contoh id dropdown bank
-  const rekeningInput = document.getElementById('account-number')?.value || '';
-  const namaInput = document.getElementById('nama-penerima-text')?.innerText || 'PELANGGAN BARU';
-  const nominalInput = parseInt(document.getElementById('transfer-amount')?.value) || 0;
-  
-  // Validasi data minimal sebelum dikirim
-  if (!rekeningInput || nominalInput <= 0) {
-      alert("Mohon isi nomor rekening dan nominal transfer dengan benar!");
-      return;
-  }
-
-  // 计算 (Hitung rincian pembayaran)
-  const biayaAdmin = 5000; 
-  const totalBayar = nominalInput + biayaAdmin;
-  const waktuWita = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }); // Jam WITA NK Jaya Cell
-
-  // 2. Susun data menjadi format JSON paket objek
-  const dataTransfer = {
-      tanggal: waktuWita,
-      bank: bankInput,
-      rekening: "'" + rekeningInput, // Tambah tanda petik (') agar angka 0 di depan tidak hilang di Excel/Sheets
-      nama: namaInput,
-      nominal: nominalInput,
-      admin: biayaAdmin,
-      total: totalBayar,
-      status: "Pending" // Status awal sebelum dikonfirmasi admin
-  };
-
-  try {
-      // 3. Kirim data ke Google Sheets menggunakan Fetch API
-      await fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors', // Penting untuk menghindari eror CORS lintas domain
-          headers: {
-              'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(dataTransfer)
-      });
-
-      alert("Data transaksi transfer berhasil dicatat ke Sheets!");
-      
-      // Setelah data masuk ke sheet, lanjut pemicu buka WhatsApp jika diperlukan
-      bukaWhatsAppTransfer(dataTransfer);
-
-  } catch (error) {
-      console.error("Gagal mengirim data ke spreadsheet:", error);
-      alert("Gagal mencatat transaksi, tapi proses tetap dilanjutkan.");
-  }
-}
 
 /**
  * ==========================================
