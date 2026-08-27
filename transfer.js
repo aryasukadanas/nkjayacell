@@ -6,6 +6,10 @@
 let databaseAdminBank = [];
 let databasePelangganSheet = []; // Menampung data nama pemilik rekening dari spreadsheet
 let databaseArsip = []; // [NEW] Menampung data status transaksi dari sheet arsip
+const fallbackBankList = [
+    'ALLO BANK', 'BCA', 'BLU BCA', 'BNI', 'BRI', 'BSI', 'DANA', 'GOPAY',
+    'JAGO', 'JENIUS', 'LINKAJA', 'MANDIRI', 'NEOBANK', 'OVO', 'SEABANK', 'SHOPEEPAY'
+].map(bank => ({ bank, min: 0, max: 0, fee: 5000 }));
 
 /**
  * Fungsi pembantu untuk memecah baris CSV dengan aman meskipun ada tanda koma di dalam nama/teks
@@ -52,10 +56,12 @@ async function fetchTarifAdminBank() {
     // 2. Lanjutkan mengambil data terbaru dari Google Sheets di latar belakang
     try {
         const [resBank, resPelanggan, resArsip] = await Promise.all([
-            fetch(ADMIN_BANK_URL + '&_v=' + Date.now()),
-            fetch(SHEET_REKENING_URL + '&_v=' + Date.now()),
-            fetch(SHEET_ARSIP_URL + '&_v=' + Date.now()) // [FIX] Tambahkan cache buster
+            fetch(ADMIN_BANK_URL),
+            fetch(SHEET_REKENING_URL),
+            fetch(SHEET_TRANSFER_URL)
         ]);
+
+        if (!resBank.ok) throw new Error(`Daftar bank tidak dapat diakses (${resBank.status})`);
 
         // [OPTIMASI] 3. Proses dan perbarui data bank jika ada perubahan
         const textBank = await resBank.text();
@@ -102,7 +108,11 @@ async function fetchTarifAdminBank() {
         console.log("Database Arsip Status dimuat:", databaseArsip.length, "transaksi.");
 
     } catch (e) {
-        console.error("Gagal sinkron database bank/pelanggan:", e); 
+        console.error("Gagal sinkron database bank/pelanggan:", e);
+        if (databaseAdminBank.length === 0) {
+            databaseAdminBank = fallbackBankList;
+            renderDaftarBank();
+        }
     }
 }
 
@@ -121,7 +131,7 @@ function renderDaftarBank() {
     const listBank = [...new Set(databaseAdminBank.map(item => item.bank.toUpperCase()))];
 
     if (listBank.length === 0) {
-        selectEl.innerHTML = '<option value="">Gagal memuat daftar bank</option>';
+        selectEl.innerHTML = '<option value="">Daftar bank tidak tersedia</option>';
         return;
     }
 
@@ -387,12 +397,15 @@ function renderRiwayatUI() {
     // [NEW] Buat peta status terbaru dari databaseArsip
     const statusMap = {};
     databaseArsip.forEach(cols => {
-        // [FIX] Sesuaikan dengan struktur sheet "Transfer"
-        // Kolom A (indeks 0) adalah ID, Kolom J (indeks 9) adalah Status
+        // Struktur sheet Transfer: ID di kolom A, rekening di kolom E, status di kolom J.
         const idTransaksi = cols[0]?.trim();
+        const nomorTujuan = cols[4]?.replace(/\D/g, '');
         const status = cols[9]?.trim().toUpperCase();
         if (idTransaksi && status) {
             statusMap[idTransaksi] = status;
+        }
+        if (nomorTujuan && status) {
+            statusMap[nomorTujuan] = status;
         }
     });
 
@@ -895,8 +908,9 @@ async function bukaModalRiwayat() {
         const loadingEl = document.getElementById('daftar-riwayat');
         if (loadingEl) loadingEl.innerHTML = `<div class="text-center py-10 text-gray-400 italic text-xs"><i class="fas fa-spinner animate-spin mr-2"></i> Memperbarui status...</div>`;
 
-        // [UPDATE] Gunakan konstanta SHEET_TRANSFER_URL dari config.js untuk mengambil status.
-        const resArsip = await fetch(SHEET_TRANSFER_URL + '&_v=' + Date.now());
+        // Gunakan sheet Transfer yang berisi status transaksi di kolom J.
+        const resArsip = await fetch(SHEET_TRANSFER_URL);
+        if (!resArsip.ok) throw new Error(`Sheet status tidak dapat diakses (${resArsip.status})`);
         const textArsip = await resArsip.text();
         databaseArsip = textArsip.split(/\r?\n/).slice(1).map(row => {
             if (!row.trim()) return null;

@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function muatNamaPelangganPLN() {
     try {
-        const response = await fetch(SHEET_NAMA_PLN_URL + '&_v=' + Date.now());
+        const response = await fetch(SHEET_NAMA_PLN_URL);
         if (!response.ok) throw new Error('Gagal mengambil data nama PLN');
 
         const rows = (await response.text()).split(/\r?\n/);
@@ -242,7 +242,7 @@ async function muatDataDanPisahKategori() {
        // Ambil data dari kedua sheet secara paralel (bersamaan)
         const [resProduk, resArsip] = await Promise.all([
             // [UPDATE] Tambahkan cache buster untuk memastikan data produk selalu terbaru.
-            fetch(SHEET_PRODUK_URL + '&_v=' + Date.now()),
+                fetch(SHEET_PRODUK_URL),
             fetch(SHEET_ARSIP_URL)
         ]);
 
@@ -801,22 +801,34 @@ function filterRiwayatStatus(filterType) {
         if (!row.trim()) return;
         const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
         
-        // [KONFIRMASI] Logika ini sudah benar sesuai permintaan.
-        // Mengambil Nomor HP/ID Target dari Kolom C (indeks 2).
-        // Mengambil Status Transaksi dari Kolom G (indeks 6).
+        // Mengambil ID transaksi dari kolom A, target dari kolom C, dan status dari kolom G.
+        const idTransaksiSheet = cols[0] ? cols[0].trim().replace(/"/g, "").replace(/'/g, "") : "";
         const noHpTargetSheet = cols[2] ? cols[2].trim().replace(/"/g, "").replace(/'/g, "") : "";
+        const noHpTargetKey = noHpTargetSheet.replace(/\D/g, "");
         const statusTransaksiSheet = cols[6] ? cols[6].trim().replace(/"/g, "").toUpperCase() : "";
 
         if (noHpTargetSheet && statusTransaksiSheet) {
             statusTerupdateMap[noHpTargetSheet] = statusTransaksiSheet;
+        }
+        if (noHpTargetKey && statusTransaksiSheet) {
+            statusTerupdateMap[noHpTargetKey] = statusTransaksiSheet;
+        }
+        if (idTransaksiSheet && statusTransaksiSheet) {
+            statusTerupdateMap[idTransaksiSheet] = statusTransaksiSheet;
         }
     });
 
     // Proses data riwayat dan perbarui statusnya berdasarkan pencocokan nomor HP target
     let riwayatDiproses = listCacheRiwayat.map(item => {
         let noHpKey = item.target ? item.target.trim() : "";
+        let noHpDigitsKey = noHpKey.replace(/\D/g, "");
         // Jika ditemukan status terbaru di sheet ARSIP berdasarkan nomor HP, pakai status itu.
-        let statusFinal = statusTerupdateMap[noHpKey] || item.statusAwal || item.status || "PROSES";
+        let statusFinal = statusTerupdateMap[item.id_transaksi]
+            || statusTerupdateMap[noHpKey]
+            || statusTerupdateMap[noHpDigitsKey]
+            || item.statusAwal
+            || item.status
+            || "PROSES";
         
         // Standarisasi kata status dari Google Sheet ke sistem UI aplikasi Anda
         if (statusFinal.includes("LUNAS") || statusFinal === "SUCCESS") statusFinal = "SUKSES";
