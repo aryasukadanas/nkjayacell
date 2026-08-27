@@ -89,14 +89,14 @@ async function fetchTarifAdminBank() {
         // 4. Proses data lainnya seperti biasa
         const textPelanggan = await resPelanggan.text();
         const rowsPelanggan = textPelanggan.split(/\r?\n/).slice(1);
-        databasePelangganSheet = rowsPelanggan.map(row => {
+        databasePelangganSheet = rowsPelanggan.flatMap(row => {
             if (!row.trim()) return null;
             const cols = parseCSVRow(row);
-            return {
-                norek: cols[0]?.replace(/\D/g, '').trim(), 
-                nama: cols[1]?.replace(/"/g, "").trim().toUpperCase()
-            };
-        }).filter(item => item !== null && item.norek && item.nama);
+            return [[0, 1], [4, 5]].map(([nomorIndex, namaIndex]) => ({
+                norek: cols[nomorIndex]?.replace(/\D/g, '').trim(),
+                nama: cols[namaIndex]?.replace(/"/g, '').trim().toUpperCase()
+            }));
+        }).flat().filter(item => item && item.norek && item.nama);
         console.log("Database Nama Rekening dimuat:", databasePelangganSheet.length, "entri.");
 
         // 5. [NEW] Proses Data Arsip Status Transaksi
