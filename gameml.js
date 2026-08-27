@@ -48,50 +48,69 @@ document.addEventListener('DOMContentLoaded', async () => {
  */
 async function muatDataDariSpreadsheet() {
     const selectEl = document.getElementById('pilih-game');
+    const cacheProduk = localStorage.getItem('nk_cache_produk_csv');
+
     try {
-        const response = await fetch(SHEET_PRODUK_URL); // [REFACTOR] Gunakan SHEET_PRODUK_URL dari config.js
+        const response = await fetch(SHEET_PRODUK_URL + '&_v=' + Date.now());
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const text = await response.text();
-        const rows = text.split(/\r?\n/).slice(1);
-
-        dbGame = {};
-
-        rows.forEach(row => {
-            if (!row.trim()) return;
-            const cols = row.split(',');
-            if (cols.length < 3) return;
-
-            const kategori = cols[0].trim().replace(/"/g, "");
-            const namaProduk = cols[1].trim().replace(/"/g, "");
-            
-            // Baca baris kolom C, D, E, F secara berurutan
-            const hargaNormal = parseInt(cols[2]?.replace(/\D/g, '')) || 0;
-            const hargaPromo = parseInt(cols[3]?.replace(/\D/g, '')) || 0;
-            const hargaFlashSale = parseInt(cols[4]?.replace(/\D/g, '')) || 0;
-            const waktuMundur = cols[5]?.trim().replace(/"/g, "") || "";
-
-            if (!dbGame[kategori]) {
-                dbGame[kategori] = [];
-            }
-            
-            dbGame[kategori].push({ 
-                name: namaProduk, 
-                priceNormal: hargaNormal,
-                pricePromo: hargaPromo,
-                priceFlash: hargaFlashSale,
-                endTimer: waktuMundur
-            });
-        });
-
-        if (selectEl) {
-            selectEl.innerHTML = '<option value="">-- Pilih Game --</option>';
-            Object.keys(dbGame).forEach(game => {
-                const blacklistKategori = ['PULSA', 'INDOSAT', 'XL', 'TELKOMSEL', 'AXIS', 'TRI', 'SMARTFREN', 'BY.U', 'SHOPEEPAY', 'GOPAY', 'DANA','TOKEN','PLN'];
-                if(blacklistKategori.includes(game.toUpperCase())) return;
-                selectEl.innerHTML += `<option value="${game}">${game}</option>`;
-            });
-        }
+        localStorage.setItem('nk_cache_produk_csv', text);
+        isiDatabaseGameDariCSV(text);
+        isiPilihanGame(selectEl);
     } catch (error) {
-        console.error("Gagal sinkronisasi data:", error);
+        console.error("Gagal sinkronisasi data game:", error);
+        if (cacheProduk) {
+            console.warn("Memuat data game dari cache lokal.");
+            isiDatabaseGameDariCSV(cacheProduk);
+            isiPilihanGame(selectEl);
+        } else if (selectEl) {
+            selectEl.innerHTML = '<option value="">-- Data game tidak tersedia --</option>';
+        }
+    }
+}
+
+function isiDatabaseGameDariCSV(text) {
+    const rows = text.split(/\r?\n/).slice(1);
+    dbGame = {};
+
+    rows.forEach(row => {
+        if (!row.trim()) return;
+        const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+            .map(value => value.trim().replace(/^"|"$/g, ''));
+        if (cols.length < 3) return;
+
+        const kategori = cols[0];
+        const namaProduk = cols[1];
+        if (!kategori || !namaProduk) return;
+        const hargaNormal = parseInt(cols[2]?.replace(/\D/g, '')) || 0;
+        const hargaPromo = parseInt(cols[3]?.replace(/\D/g, '')) || 0;
+        const hargaFlashSale = parseInt(cols[4]?.replace(/\D/g, '')) || 0;
+        const waktuMundur = cols[5] || "";
+
+        if (!dbGame[kategori]) dbGame[kategori] = [];
+        dbGame[kategori].push({
+            name: namaProduk,
+            priceNormal: hargaNormal,
+            pricePromo: hargaPromo,
+            priceFlash: hargaFlashSale,
+            endTimer: waktuMundur
+        });
+    });
+}
+
+function isiPilihanGame(selectEl) {
+    if (!selectEl) return;
+    const blacklistKategori = ['PULSA', 'INDOSAT', 'XL', 'TELKOMSEL', 'AXIS', 'TRI', 'SMARTFREN', 'BY.U', 'SHOPEEPAY', 'GOPAY', 'DANA', 'TOKEN', 'PLN'];
+    selectEl.innerHTML = '<option value="">-- Pilih Game --</option>';
+    Object.keys(dbGame).forEach(game => {
+        if (blacklistKategori.includes(game.toUpperCase())) return;
+        const option = document.createElement('option');
+        option.value = game;
+        option.textContent = game;
+        selectEl.appendChild(option);
+    });
+    if (selectEl.options.length === 1) {
+        selectEl.innerHTML = '<option value="">-- Game belum tersedia --</option>';
     }
 }
 
@@ -101,12 +120,6 @@ async function muatDataDariSpreadsheet() {
 function gantiGame(val) {
     gameDipilih = val;
 
-    // STANDARISASI: Jika game yang dipilih adalah variasi dari Mobile Legends,
-    // paksa gameDipilih menjadi "MLBB" agar konsisten di seluruh sistem.
-    if (['MOBILE LEGENDS', 'MOBILE LEGEND'].includes(gameDipilih.toUpperCase())) {
-        gameDipilih = 'MLBB';
-    }
-    
     // Clear timer aktif sebelumnya jika ganti game
     if (intervalTimerGlobal) clearInterval(intervalTimerGlobal);
 
@@ -156,7 +169,11 @@ function gantiGame(val) {
         gridRegular.innerHTML = '';
         gridFlash.innerHTML = '';
         
-        const listProduk = dbGame[gameDipilih] || [];
+        const namaGameUpper = gameDipilih.toUpperCase();
+        const kunciGame = dbGame[gameDipilih] ? gameDipilih :
+            (namaGameUpper === 'MLBB' ? 'MOBILE LEGENDS' :
+            (namaGameUpper === 'MOBILE LEGENDS' || namaGameUpper === 'MOBILE LEGEND' ? 'MLBB' : gameDipilih));
+        const listProduk = dbGame[kunciGame] || [];
         let adaFlashSaleActive = false;
         let waktuTargetFlashSaleGlobal = "";
 
