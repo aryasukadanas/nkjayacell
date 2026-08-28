@@ -1507,7 +1507,9 @@ async function printStruk58mm() {
             return baris;
         };
         const field = (label, value) => {
-            const awalan = `${label}: `;
+            const lebarLabel = 11;
+            const labelRapi = String(label).padEnd(lebarLabel, ' ');
+            const awalan = `${labelRapi}: `;
             const barisNilai = bungkusTeks(value, 32 - awalan.length);
             return [awalan + barisNilai[0], ...barisNilai.slice(1).map(baris => ' '.repeat(awalan.length) + baris)];
         };
