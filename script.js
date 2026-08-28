@@ -1484,11 +1484,19 @@ async function printStruk58mm() {
         }
         if (!printerBluetoothCharacteristic) throw new Error('Characteristic printer tidak ditemukan.');
 
-        const canvasAsli = await html2canvas(document.getElementById('struk-content'), {
+        const sumberStruk = document.getElementById('struk-content').cloneNode(true);
+        sumberStruk.style.cssText = 'position: fixed; left: -10000px; top: 0; width: 384px; max-width: 384px; padding: 24px; background: #ffffff; color: #000000;';
+        const nomorToken = sumberStruk.querySelector('#token-serial');
+        if (nomorToken) {
+            nomorToken.style.cssText += 'font-size: 34px !important; line-height: 1.1 !important; letter-spacing: 0.08em !important; color: #000000 !important;';
+        }
+        document.body.appendChild(sumberStruk);
+        const canvasAsli = await html2canvas(sumberStruk, {
             backgroundColor: '#ffffff',
-            scale: 1,
+            scale: 2,
             useCORS: true
         });
+        sumberStruk.remove();
         const lebarPrinter = 384;
         const tinggiPrinter = Math.ceil(canvasAsli.height * lebarPrinter / canvasAsli.width);
         const canvasPrinter = document.createElement('canvas');
@@ -1511,7 +1519,7 @@ async function printStruk58mm() {
                 for (let kolom = 0; kolom < lebarPrinter; kolom++) {
                     const indeksPixel = (baris * lebarPrinter + kolom) * 4;
                     const abu = (gambar[indeksPixel] + gambar[indeksPixel + 1] + gambar[indeksPixel + 2]) / 3;
-                    if (abu < 180) bitmap[baris * (lebarPrinter / 8) + Math.floor(kolom / 8)] |= 0x80 >> (kolom % 8);
+                    if (abu < 200) bitmap[baris * (lebarPrinter / 8) + Math.floor(kolom / 8)] |= 0x80 >> (kolom % 8);
                 }
             }
             const perintahGambar = new Uint8Array(8 + bitmap.length);
