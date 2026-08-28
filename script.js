@@ -1424,6 +1424,7 @@ function tampilkanStruk(data) {
             <i class="fab fa-whatsapp"></i> Bagikan WA
         </button>
         <button onclick="printStruk()" class="col-span-2 w-full py-2.5 bg-blue-100 text-blue-700 font-black text-xs rounded-xl active:scale-95 transition-all"><i class="fas fa-print mr-1"></i> Print Struk</button>
+        <button onclick="printStrukBluetooth58mm()" class="col-span-2 w-full py-2.5 bg-slate-900 text-white font-black text-xs rounded-xl active:scale-95 transition-all"><i class="fab fa-bluetooth-b mr-1"></i> Printer Bluetooth 58mm</button>
         <button onclick="tutupModalStruk()" class="col-span-2 w-full py-2 bg-transparent text-gray-500 font-bold text-xs rounded-xl active:scale-95 transition-all">
             Tutup
         </button>
@@ -1448,6 +1449,87 @@ function nilaiStrukToken(id) {
 function bagikanStrukWA() {
     if (!dataStrukAktif) return;
     shareStruk(dataStrukAktif.id);
+}
+
+let printerBluetoothCharacteristic = null;
+
+function barisPrinter58mm(label, value) {
+    const teks = `${label}: ${value || '-'}`;
+    return teks.length > 32 ? teks.slice(0, 32) : teks;
+}
+
+async function printStrukBluetooth58mm() {
+    if (!dataStrukAktif?.isToken) {
+        alert('Printer Bluetooth 58mm saat ini khusus untuk struk token listrik.');
+        return;
+    }
+    if (!navigator.bluetooth) {
+        alert('Web Bluetooth tidak didukung. Gunakan Chrome di Android melalui HTTPS atau localhost.');
+        return;
+    }
+
+    try {
+        if (!printerBluetoothCharacteristic) {
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: [
+                    '0000ffe0-0000-1000-8000-00805f9b34fb',
+                    '0000ff00-0000-1000-8000-00805f9b34fb',
+                    '000018f0-0000-1000-8000-00805f9b34fb'
+                ]
+            });
+            const server = await device.gatt.connect();
+            const services = await server.getPrimaryServices();
+            for (const service of services) {
+                const characteristics = await service.getCharacteristics();
+                printerBluetoothCharacteristic = characteristics.find(characteristic =>
+                    characteristic.properties.write || characteristic.properties.writeWithoutResponse
+                );
+                if (printerBluetoothCharacteristic) break;
+            }
+        }
+        if (!printerBluetoothCharacteristic) throw new Error('Characteristic printer tidak ditemukan.');
+
+        const token = {
+            idTrx: nilaiStrukToken('token-id-trx'),
+            idPln: nilaiStrukToken('token-id-pln'),
+            produk: nilaiStrukToken('token-produk'),
+            nama: nilaiStrukToken('token-nama'),
+            tarifDaya: nilaiStrukToken('token-tarif-daya'),
+            jumlahDaya: nilaiStrukToken('token-jumlah-daya'),
+            harga: nilaiStrukToken('token-harga'),
+            serial: nilaiStrukToken('token-serial')
+        };
+        const esc = '\x1B';
+        const gs = '\x1D';
+        const isi = [
+            `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
+            'STRUK TOKEN LISTRIK',
+            `${esc}a\x00`, '--------------------------------',
+            barisPrinter58mm('ID TRX', token.idTrx),
+            barisPrinter58mm('ID PLN', token.idPln),
+            barisPrinter58mm('PRODUK', token.produk),
+            barisPrinter58mm('NAMA', token.nama),
+            barisPrinter58mm('TARIF/DAYA', token.tarifDaya),
+            barisPrinter58mm('JUMLAH DAYA', token.jumlahDaya),
+            barisPrinter58mm('HARGA', token.harga),
+            '--------------------------------', `${esc}a\x01`, `${esc}E\x01`, `${gs}!\x11`,
+            token.serial, `${gs}!\x00`, `${esc}E\x00`, '', 'Terima kasih', '\n\n\n'
+        ].join('\n');
+        const data = new TextEncoder().encode(isi);
+        for (let posisi = 0; posisi < data.length; posisi += 180) {
+            const potongan = data.slice(posisi, posisi + 180);
+            if (printerBluetoothCharacteristic.properties.writeWithoutResponse) {
+                await printerBluetoothCharacteristic.writeValueWithoutResponse(potongan);
+            } else {
+                await printerBluetoothCharacteristic.writeValue(potongan);
+            }
+        }
+    } catch (error) {
+        printerBluetoothCharacteristic = null;
+        console.error('Gagal mencetak ke printer Bluetooth:', error);
+        alert(`Gagal mencetak Bluetooth: ${error.message}`);
+    }
 }
 
 function printStruk() {
