@@ -1423,8 +1423,7 @@ function tampilkanStruk(data) {
         <button onclick="bagikanStrukWA()" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
             <i class="fab fa-whatsapp"></i> Bagikan WA
         </button>
-        <button onclick="printStruk()" class="col-span-2 w-full py-2.5 bg-blue-100 text-blue-700 font-black text-xs rounded-xl active:scale-95 transition-all"><i class="fas fa-print mr-1"></i> Print Struk</button>
-        <button onclick="printStrukBluetooth58mm()" class="col-span-2 w-full py-2.5 bg-slate-900 text-white font-black text-xs rounded-xl active:scale-95 transition-all"><i class="fab fa-bluetooth-b mr-1"></i> Printer Bluetooth 58mm</button>
+        <button onclick="printStruk58mm()" class="col-span-2 w-full py-2.5 bg-slate-900 text-white font-black text-xs rounded-xl active:scale-95 transition-all"><i class="fas fa-print mr-1"></i> Print Struk 58mm</button>
         <button onclick="tutupModalStruk()" class="col-span-2 w-full py-2 bg-transparent text-gray-500 font-bold text-xs rounded-xl active:scale-95 transition-all">
             Tutup
         </button>
@@ -1453,12 +1452,7 @@ function bagikanStrukWA() {
 
 let printerBluetoothCharacteristic = null;
 
-function barisPrinter58mm(label, value) {
-    const teks = `${label}: ${value || '-'}`;
-    return teks.length > 32 ? teks.slice(0, 32) : teks;
-}
-
-async function printStrukBluetooth58mm() {
+async function printStruk58mm() {
     if (!dataStrukAktif?.isToken) {
         alert('Printer Bluetooth 58mm saat ini khusus untuk struk token listrik.');
         return;
@@ -1490,45 +1484,57 @@ async function printStrukBluetooth58mm() {
         }
         if (!printerBluetoothCharacteristic) throw new Error('Characteristic printer tidak ditemukan.');
 
-        const token = {
-            idTrx: nilaiStrukToken('token-id-trx'),
-            idPln: nilaiStrukToken('token-id-pln'),
-            produk: nilaiStrukToken('token-produk'),
-            nama: nilaiStrukToken('token-nama'),
-            tarifDaya: nilaiStrukToken('token-tarif-daya'),
-            jumlahDaya: nilaiStrukToken('token-jumlah-daya'),
-            harga: nilaiStrukToken('token-harga'),
-            serial: nilaiStrukToken('token-serial')
-        };
+        const canvasAsli = await html2canvas(document.getElementById('struk-content'), {
+            backgroundColor: '#ffffff',
+            scale: 1,
+            useCORS: true
+        });
+        const lebarPrinter = 384;
+        const tinggiPrinter = Math.ceil(canvasAsli.height * lebarPrinter / canvasAsli.width);
+        const canvasPrinter = document.createElement('canvas');
+        canvasPrinter.width = lebarPrinter;
+        canvasPrinter.height = tinggiPrinter;
+        const konteks = canvasPrinter.getContext('2d', { willReadFrequently: true });
+        konteks.fillStyle = '#ffffff';
+        konteks.fillRect(0, 0, lebarPrinter, tinggiPrinter);
+        konteks.drawImage(canvasAsli, 0, 0, lebarPrinter, tinggiPrinter);
+
         const esc = '\x1B';
         const gs = '\x1D';
-        const isi = [
-            `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
-            'STRUK TOKEN LISTRIK',
-            `${esc}a\x00`, '--------------------------------',
-            barisPrinter58mm('ID TRX', token.idTrx),
-            barisPrinter58mm('ID PLN', token.idPln),
-            barisPrinter58mm('PRODUK', token.produk),
-            barisPrinter58mm('NAMA', token.nama),
-            barisPrinter58mm('TARIF/DAYA', token.tarifDaya),
-            barisPrinter58mm('JUMLAH DAYA', token.jumlahDaya),
-            barisPrinter58mm('HARGA', token.harga),
-            '--------------------------------', `${esc}a\x01`, `${esc}E\x01`, `${gs}!\x11`,
-            token.serial, `${gs}!\x00`, `${esc}E\x00`, '', 'Terima kasih', '\n\n\n'
-        ].join('\n');
-        const data = new TextEncoder().encode(isi);
-        for (let posisi = 0; posisi < data.length; posisi += 180) {
-            const potongan = data.slice(posisi, posisi + 180);
-            if (printerBluetoothCharacteristic.properties.writeWithoutResponse) {
-                await printerBluetoothCharacteristic.writeValueWithoutResponse(potongan);
-            } else {
-                await printerBluetoothCharacteristic.writeValue(potongan);
+        await kirimDataBluetooth(new TextEncoder().encode(`${esc}@${esc}a\x01`));
+        for (let y = 0; y < tinggiPrinter; y += 128) {
+            const tinggiPotongan = Math.min(128, tinggiPrinter - y);
+            const tinggiBitmap = Math.ceil(tinggiPotongan / 8) * 8;
+            const gambar = konteks.getImageData(0, y, lebarPrinter, tinggiPotongan).data;
+            const bitmap = new Uint8Array((lebarPrinter / 8) * tinggiBitmap);
+            for (let baris = 0; baris < tinggiPotongan; baris++) {
+                for (let kolom = 0; kolom < lebarPrinter; kolom++) {
+                    const indeksPixel = (baris * lebarPrinter + kolom) * 4;
+                    const abu = (gambar[indeksPixel] + gambar[indeksPixel + 1] + gambar[indeksPixel + 2]) / 3;
+                    if (abu < 180) bitmap[baris * (lebarPrinter / 8) + Math.floor(kolom / 8)] |= 0x80 >> (kolom % 8);
+                }
             }
+            const perintahGambar = new Uint8Array(8 + bitmap.length);
+            perintahGambar.set([0x1d, 0x76, 0x30, 0x00, lebarPrinter / 8, 0x00, tinggiBitmap & 0xff, (tinggiBitmap >> 8) & 0xff]);
+            perintahGambar.set(bitmap, 8);
+            await kirimDataBluetooth(perintahGambar);
         }
+        await kirimDataBluetooth(new TextEncoder().encode(`${esc}a\x01Terima kasih\n\n\n`));
     } catch (error) {
         printerBluetoothCharacteristic = null;
         console.error('Gagal mencetak ke printer Bluetooth:', error);
         alert(`Gagal mencetak Bluetooth: ${error.message}`);
+    }
+}
+
+async function kirimDataBluetooth(data) {
+    for (let posisi = 0; posisi < data.length; posisi += 180) {
+        const potongan = data.slice(posisi, posisi + 180);
+        if (printerBluetoothCharacteristic.properties.writeWithoutResponse) {
+            await printerBluetoothCharacteristic.writeValueWithoutResponse(potongan);
+        } else {
+            await printerBluetoothCharacteristic.writeValue(potongan);
+        }
     }
 }
 
