@@ -53,6 +53,7 @@ function buatTeksQrisDinamis(nominal) {
 
 let rawDatabaseRows = [];
 let rawArsipRows = [];
+let rawArsipHeaders = [];
 let masterPulsaGroup = {};
 let masterKuotaGroup = {};
 let masterTokenGroup = {}; 
@@ -63,6 +64,24 @@ let keranjangBelanja = null;
 let intervalMainTimer = null;
 let listCacheRiwayat = []; 
 let petaNamaPelangganPLN = {};
+let petaDayaPelangganPLN = {};
+let dataStrukAktif = null;
+
+function pecahBarisCSV(row) {
+    return row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(value => value.trim().replace(/^"|"$/g, ''));
+}
+
+function muatStrukturArsip(teksCSV) {
+    const rows = teksCSV.split(/\r?\n/);
+    rawArsipHeaders = rows[0] ? pecahBarisCSV(rows[0]).map(value => value.toUpperCase().replace(/[^A-Z0-9]/g, '')) : [];
+    rawArsipRows = rows.slice(1);
+}
+
+function ambilNilaiArsip(cols, aliases) {
+    const index = aliases.map(alias => alias.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+        .map(alias => rawArsipHeaders.indexOf(alias)).find(index => index >= 0);
+    return index === undefined ? '' : (cols[index] || '').trim();
+}
 
   // ==========================================================
 // 1. DEKLARASI FUNGSI INPUT SUARA (TARUH DI ATAS)
@@ -166,7 +185,9 @@ async function muatNamaPelangganPLN() {
             const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(value => value.trim().replace(/^"|"$/g, ''));
             const idPln = (cols[1] || '').replace(/\D/g, '');
             const nama = cols[2] || '';
+            const tarifDaya = cols[3] || '';
             if (idPln && nama && !petaNamaPelangganPLN[idPln]) petaNamaPelangganPLN[idPln] = nama;
+            if (idPln && tarifDaya) petaDayaPelangganPLN[idPln] = tarifDaya;
         });
 
         tampilkanNamaPelangganPLN(document.getElementById('search-phone-input')?.value || '');
@@ -234,7 +255,7 @@ async function muatDataDanPisahKategori() {
     }
 
     if (cacheLokalArsip) {
-        rawArsipRows = cacheLokalArsip.split(/\r?\n/).slice(1);
+        muatStrukturArsip(cacheLokalArsip);
     }
 
     // 2. TETAP SINKRONISASI DATA TERBARU DARI GOOGLE SHEET DI LATAR BELAKANG
@@ -260,7 +281,7 @@ async function muatDataDanPisahKategori() {
 
         // Update data arsip status transaksi harian
         localStorage.setItem('nk_cache_arsip_csv', textArsipTerbaru);
-        rawArsipRows = textArsipTerbaru.split(/\r?\n/).slice(1);
+        muatStrukturArsip(textArsipTerbaru);
         console.log("Daftar harga & status arsip berhasil diperbarui dari Google Sheets!");
 
     } catch (error) {
@@ -1287,14 +1308,46 @@ function konfirmasiSudahBayarQris() {
  * Fungsi jembatan untuk menampilkan struk dari data riwayat produk
  */
 function tampilkanStrukDariRiwayat(item) {
+    const kolomEdit = JSON.parse(localStorage.getItem('nk_token_receipt_edits') || '{}')[item.id_transaksi] || {};
+    const barisArsip = cariBarisArsipUntukStruk(item);
+    const ambilArsip = aliases => ambilNilaiArsip(barisArsip, aliases);
+    const produk = item.produkLengkap || item.produk || '';
+    const gabunganProduk = `${produk} ${ambilArsip(['PRODUK', 'NAMA PRODUK'])}`.toUpperCase();
+    const token = {
+        idTrx: kolomEdit.idTrx || item.id_transaksi || ambilArsip(['ID TRANSAKSI', 'ID TRX', 'ID']),
+        idPln: kolomEdit.idPln || item.target || ambilArsip(['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR']),
+        produk: kolomEdit.produk || ambilArsip(['PRODUK', 'NAMA PRODUK']) || produk,
+        nama: kolomEdit.nama || ambilArsip(['NAMA', 'NAMA PELANGGAN', 'PELANGGAN']) || petaNamaPelangganPLN[(item.target || '').replace(/\D/g, '')] || '-',
+        tarifDaya: kolomEdit.tarifDaya || petaDayaPelangganPLN[(item.target || '').replace(/\D/g, '')] || '-',
+        jumlahDaya: kolomEdit.jumlahDaya || ambilArsip(['JUMLAH DAYA', 'DAYA TERISI', 'JUMLAH NOMINAL', 'NOMINAL']) || '-',
+        harga: kolomEdit.harga || ambilArsip(['HARGA', 'TOTAL TRANSFER', 'TOTAL BAYAR']) || item.biaya,
+        serial: kolomEdit.serial || ambilArsip(['SERIAL NUMBER', 'NOMOR TOKEN', 'ANGKA TOKEN', 'TOKEN', 'SN']) || '-'
+    };
     tampilkanStruk({
         id: item.id_transaksi,
         tanggal: item.tanggal,
         target: item.target,
-        produkLengkap: item.produkLengkap,
+        produkLengkap: produk,
         total: item.biaya,
-        status: item.status
+        status: item.status,
+        isToken: gabunganProduk.includes('TOKEN') || gabunganProduk.includes('PLN'),
+        token
     });
+}
+
+function cariBarisArsipUntukStruk(item) {
+    const idItem = String(item.id_transaksi || '').replace(/['\s]/g, '').toUpperCase();
+    const targetItem = String(item.target || '').replace(/\D/g, '');
+    const barisArsip = rawArsipRows.map(pecahBarisCSV);
+    const barisDenganId = barisArsip.find(cols => {
+        const idArsip = ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']).replace(/['\s]/g, '').toUpperCase();
+        return idItem && idArsip === idItem;
+    });
+    if (barisDenganId) return barisDenganId;
+    return barisArsip.find(cols => {
+        const targetArsip = ambilNilaiArsip(cols, ['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR', 'TARGET']).replace(/\D/g, '');
+        return targetItem && targetArsip === targetItem;
+    }) || [];
 }
 
 /**
@@ -1303,6 +1356,7 @@ function tampilkanStrukDariRiwayat(item) {
 function tampilkanStruk(data) {
     const modal = document.getElementById('struk-modal');
     if (!modal) return;
+    dataStrukAktif = data;
 
     const judulEl = document.getElementById('struk-status-judul');
     if (data.status === 'SUKSES') {
@@ -1318,7 +1372,31 @@ function tampilkanStruk(data) {
 
     document.getElementById('struk-waktu').innerText = data.tanggal || new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
     document.getElementById('struk-penerima').innerText = data.produkLengkap;
-    document.getElementById('struk-total').innerText = 'Rp ' + data.total.toLocaleString('id-ID');
+    document.getElementById('struk-total').innerText = 'Rp ' + Number(data.total || 0).toLocaleString('id-ID');
+
+    const tokenSection = document.getElementById('struk-token');
+    const umumSection = document.getElementById('struk-umum');
+    if (data.isToken && tokenSection && umumSection) {
+        umumSection.classList.add('hidden');
+        tokenSection.classList.remove('hidden');
+        const tokenFields = {
+            'token-id-trx': data.token.idTrx,
+            'token-id-pln': data.token.idPln,
+            'token-produk': data.token.produk,
+            'token-nama': data.token.nama,
+            'token-tarif-daya': data.token.tarifDaya,
+            'token-jumlah-daya': data.token.jumlahDaya,
+            'token-harga': formatHarga(data.token.harga),
+            'token-serial': data.token.serial
+        };
+        Object.entries(tokenFields).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) element.innerText = value || '-';
+        });
+    } else if (tokenSection && umumSection) {
+        tokenSection.classList.add('hidden');
+        umumSection.classList.remove('hidden');
+    }
 
     // Menampilkan detail target (No HP/ID Game)
     const targetDetailEl = document.getElementById('struk-target-detail');
@@ -1338,12 +1416,14 @@ function tampilkanStruk(data) {
 
     const actionsContainer = document.getElementById('struk-actions');
     actionsContainer.innerHTML = `
+        ${data.isToken ? `<button onclick="aktifkanEditStrukToken('${data.id}')" class="col-span-2 w-full py-2.5 bg-amber-100 text-amber-700 font-black text-xs rounded-xl active:scale-95 transition-all"><i class="fas fa-pen mr-1"></i> Edit Struk Token</button>` : ''}
         <button onclick="downloadStruk('${data.id}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
             <i class="fas fa-download"></i> Download
         </button>
-        <button onclick="shareStruk('${data.id}')" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
-            <i class="fab fa-whatsapp"></i> Bagikan
+        <button onclick="bagikanStrukWA()" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+            <i class="fab fa-whatsapp"></i> Bagikan WA
         </button>
+        <button onclick="printStruk()" class="col-span-2 w-full py-2.5 bg-blue-100 text-blue-700 font-black text-xs rounded-xl active:scale-95 transition-all"><i class="fas fa-print mr-1"></i> Print Struk</button>
         <button onclick="tutupModalStruk()" class="col-span-2 w-full py-2 bg-transparent text-gray-500 font-bold text-xs rounded-xl active:scale-95 transition-all">
             Tutup
         </button>
@@ -1354,6 +1434,68 @@ function tampilkanStruk(data) {
         modal.classList.remove('opacity-0');
         modal.querySelector('div').classList.remove('scale-95');
     }, 10);
+}
+
+function formatHarga(value) {
+    const angka = Number(String(value || '').replace(/\D/g, ''));
+    return angka ? 'Rp ' + angka.toLocaleString('id-ID') : (value || '-');
+}
+
+function nilaiStrukToken(id) {
+    return document.getElementById(id)?.innerText.trim() || '-';
+}
+
+function bagikanStrukWA() {
+    if (!dataStrukAktif) return;
+    shareStruk(dataStrukAktif.id);
+}
+
+function printStruk() {
+    const isiStruk = document.getElementById('struk-content');
+    if (!isiStruk) return;
+    const jendelaPrint = window.open('', '_blank', 'width=420,height=760');
+    if (!jendelaPrint) {
+        alert('Pop-up print diblokir browser. Izinkan pop-up lalu coba lagi.');
+        return;
+    }
+    jendelaPrint.document.write(`<!doctype html><html lang="id"><head><base href="${window.location.href}"><meta charset="utf-8"><title>Struk NK JAYA CELL</title><style>
+        *{box-sizing:border-box}body{margin:0;padding:16px;background:#fff;color:#111;font-family:Arial,sans-serif}#struk-content{width:100%;max-width:380px;margin:auto;padding:20px;background:#fff}img{max-width:64px;display:block;margin:0 auto 8px}button{display:none!important}.hidden{display:none!important}.text-center{text-align:center}.flex{display:flex}.justify-between{justify-content:space-between}.text-right{text-align:right}.break-all{word-break:break-all}.text-2xl{font-size:24px}.text-3xl{font-size:30px}.font-black,.font-bold{font-weight:700}.text-gray-500,.text-gray-400{color:#666}.border-t,.border-t-2{border-top:1px dashed #bbb;margin-top:12px;padding-top:12px}.border-t-2{border-top:2px solid #333}.space-y-2>*+*{margin-top:8px}.space-y-2\.5>*+*{margin-top:10px}@media print{body{padding:0}}
+    </style></head><body>${isiStruk.outerHTML}</body></html>`);
+    jendelaPrint.document.close();
+    jendelaPrint.focus();
+    setTimeout(() => { jendelaPrint.print(); jendelaPrint.close(); }, 300);
+}
+
+function aktifkanEditStrukToken(id) {
+    const fields = Array.from(document.querySelectorAll('#struk-token [data-editable="true"]'));
+    const sedangEdit = fields[0]?.isContentEditable;
+    if (sedangEdit) return;
+    fields.forEach(field => {
+        field.contentEditable = 'true';
+        field.classList.toggle('rounded', !sedangEdit);
+        field.classList.toggle('bg-amber-50', !sedangEdit);
+        field.classList.toggle('outline-none', !sedangEdit);
+    });
+    const actions = document.getElementById('struk-actions');
+    actions.insertAdjacentHTML('afterbegin', `<button id="token-save-button" onclick="simpanEditStrukToken('${id}')" class="col-span-2 w-full py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl"><i class="fas fa-save mr-1"></i> Simpan Perubahan</button>`);
+}
+
+function simpanEditStrukToken(id) {
+    const edit = {};
+    const fieldMap = {
+        'token-id-trx': 'idTrx', 'token-id-pln': 'idPln', 'token-produk': 'produk', 'token-nama': 'nama',
+        'token-tarif-daya': 'tarifDaya', 'token-jumlah-daya': 'jumlahDaya', 'token-harga': 'harga', 'token-serial': 'serial'
+    };
+    Object.entries(fieldMap).forEach(([elementId, key]) => { edit[key] = document.getElementById(elementId)?.innerText.trim() || ''; });
+    const edits = JSON.parse(localStorage.getItem('nk_token_receipt_edits') || '{}');
+    edits[id] = edit;
+    localStorage.setItem('nk_token_receipt_edits', JSON.stringify(edits));
+    document.querySelectorAll('#struk-token [data-editable="true"]').forEach(field => {
+        field.contentEditable = 'false';
+        field.classList.remove('rounded', 'bg-amber-50', 'outline-none');
+    });
+    document.getElementById('token-save-button')?.remove();
+    showAlert('STRUK TERSIMPAN', 'Perubahan struk token disimpan di perangkat ini.', ['Data arsip asli tetap tidak berubah.']);
 }
 
 function tutupModalStruk() {
@@ -1385,19 +1527,17 @@ async function shareStruk(ref) {
 
     try {
         const canvas = await html2canvas(strukElement, { scale: 2 });
-        canvas.toBlob(async (blob) => {
-            const file = new File([blob], `struk-pembelian-${ref}.png`, { type: 'image/png' });
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    files: [file],
-                    title: `Bukti Pembelian ${ref}`
-                });
-            } else {
-                alert('Gagal berbagi. Silakan download struk dan bagikan manual.');
-            }
-        }, 'image/png');
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error('Gambar struk gagal dibuat.');
+        const file = new File([blob], `struk-token-${ref}.png`, { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: `Struk Token ${ref}` });
+        } else {
+            alert('Browser tidak mendukung berbagi file. Silakan gunakan tombol Download, lalu kirim gambar ke WhatsApp.');
+        }
     } catch (error) {
         console.error('Gagal berbagi struk:', error);
+        alert('Gagal membuat atau membagikan gambar struk. Silakan coba lagi.');
     } finally {
         strukElement.style.backgroundColor = originalBg; // Kembalikan background
     }
