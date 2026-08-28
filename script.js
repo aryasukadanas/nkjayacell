@@ -1487,31 +1487,43 @@ async function printStruk58mm() {
         const esc = '\x1B';
         const gs = '\x1D';
         const nilai = id => nilaiStrukToken(id);
-        const rataKanan = (label, value) => {
-            const kiri = `${label}: `;
-            const kanan = String(value || '-');
-            const tersedia = Math.max(1, 32 - kiri.length);
-            return kiri + kanan.slice(0, tersedia).padStart(tersedia, ' ');
+        const bungkusTeks = (value, lebar) => {
+            const kata = String(value || '-').split(/\s+/);
+            const baris = [];
+            let barisAktif = '';
+            kata.forEach(kataAktif => {
+                if ((barisAktif + ' ' + kataAktif).trim().length <= lebar) {
+                    barisAktif = (barisAktif + ' ' + kataAktif).trim();
+                } else {
+                    if (barisAktif) baris.push(barisAktif);
+                    while (kataAktif.length > lebar) {
+                        baris.push(kataAktif.slice(0, lebar));
+                        kataAktif = kataAktif.slice(lebar);
+                    }
+                    barisAktif = kataAktif;
+                }
+            });
+            if (barisAktif || !baris.length) baris.push(barisAktif || '-');
+            return baris;
         };
-        const tengah = teks => {
-            const bersih = String(teks || '').slice(0, 32);
-            return ' '.repeat(Math.max(0, Math.floor((32 - bersih.length) / 2))) + bersih;
+        const field = (label, value) => {
+            const awalan = `${label}: `;
+            const barisNilai = bungkusTeks(value, 32 - awalan.length);
+            return [awalan + barisNilai[0], ...barisNilai.slice(1).map(baris => ' '.repeat(awalan.length) + baris)];
         };
         const isi = [
-            `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, `${gs}!\x00`,
-            tengah('NK JAYA CELL'), `${esc}E\x00`,
-            tengah('STRUK TOKEN LISTRIK'),
-            '--------------------------------', `${esc}a\x00`,
-            rataKanan('ID TRX', nilai('token-id-trx')),
-            rataKanan('ID PLN', nilai('token-id-pln')),
-            rataKanan('PRODUK', nilai('token-produk')),
-            rataKanan('NAMA', nilai('token-nama')),
-            rataKanan('TARIF/DAYA', nilai('token-tarif-daya')),
-            rataKanan('JUMLAH DAYA', nilai('token-jumlah-daya')),
-            rataKanan('HARGA', nilai('token-harga')),
-            '--------------------------------', `${esc}a\x01`, `${esc}E\x01`,
-            `${gs}!\x11`, tengah('NOMOR TOKEN'), tengah(nilai('token-serial')), `${gs}!\x00`,
-            `${esc}E\x00`, '', tengah('Terima kasih'), '\n\n\n'
+            `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
+            'STRUK TOKEN LISTRIK', `${esc}a\x00`, '--------------------------------',
+            ...field('ID TRX', nilai('token-id-trx')),
+            ...field('ID PLN', nilai('token-id-pln')),
+            ...field('PRODUK', nilai('token-produk')),
+            ...field('NAMA', nilai('token-nama')),
+            ...field('TARIF/DAYA', nilai('token-tarif-daya')),
+            ...field('JUMLAH DAYA', nilai('token-jumlah-daya')),
+            ...field('HARGA', nilai('token-harga')),
+            '--------------------------------', `${esc}a\x01`, 'NOMOR TOKEN', `${esc}a\x00`,
+            `${gs}!\x11`, ...bungkusTeks(nilai('token-serial'), 16), `${gs}!\x00`,
+            `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '\n\n\n'
         ].join('\n');
         await kirimDataBluetooth(new TextEncoder().encode(isi));
     } catch (error) {
