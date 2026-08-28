@@ -1484,50 +1484,36 @@ async function printStruk58mm() {
         }
         if (!printerBluetoothCharacteristic) throw new Error('Characteristic printer tidak ditemukan.');
 
-        const sumberStruk = document.getElementById('struk-content').cloneNode(true);
-        sumberStruk.style.cssText = 'position: fixed; left: -10000px; top: 0; width: 384px; max-width: 384px; padding: 24px; background: #ffffff; color: #000000;';
-        const nomorToken = sumberStruk.querySelector('#token-serial');
-        if (nomorToken) {
-            nomorToken.style.cssText += 'font-size: 34px !important; line-height: 1.1 !important; letter-spacing: 0.08em !important; color: #000000 !important;';
-        }
-        document.body.appendChild(sumberStruk);
-        const canvasAsli = await html2canvas(sumberStruk, {
-            backgroundColor: '#ffffff',
-            scale: 2,
-            useCORS: true
-        });
-        sumberStruk.remove();
-        const lebarPrinter = 384;
-        const tinggiPrinter = Math.ceil(canvasAsli.height * lebarPrinter / canvasAsli.width);
-        const canvasPrinter = document.createElement('canvas');
-        canvasPrinter.width = lebarPrinter;
-        canvasPrinter.height = tinggiPrinter;
-        const konteks = canvasPrinter.getContext('2d', { willReadFrequently: true });
-        konteks.fillStyle = '#ffffff';
-        konteks.fillRect(0, 0, lebarPrinter, tinggiPrinter);
-        konteks.drawImage(canvasAsli, 0, 0, lebarPrinter, tinggiPrinter);
-
         const esc = '\x1B';
         const gs = '\x1D';
-        await kirimDataBluetooth(new TextEncoder().encode(`${esc}@${esc}a\x01`));
-        for (let y = 0; y < tinggiPrinter; y += 128) {
-            const tinggiPotongan = Math.min(128, tinggiPrinter - y);
-            const tinggiBitmap = Math.ceil(tinggiPotongan / 8) * 8;
-            const gambar = konteks.getImageData(0, y, lebarPrinter, tinggiPotongan).data;
-            const bitmap = new Uint8Array((lebarPrinter / 8) * tinggiBitmap);
-            for (let baris = 0; baris < tinggiPotongan; baris++) {
-                for (let kolom = 0; kolom < lebarPrinter; kolom++) {
-                    const indeksPixel = (baris * lebarPrinter + kolom) * 4;
-                    const abu = (gambar[indeksPixel] + gambar[indeksPixel + 1] + gambar[indeksPixel + 2]) / 3;
-                    if (abu < 200) bitmap[baris * (lebarPrinter / 8) + Math.floor(kolom / 8)] |= 0x80 >> (kolom % 8);
-                }
-            }
-            const perintahGambar = new Uint8Array(8 + bitmap.length);
-            perintahGambar.set([0x1d, 0x76, 0x30, 0x00, lebarPrinter / 8, 0x00, tinggiBitmap & 0xff, (tinggiBitmap >> 8) & 0xff]);
-            perintahGambar.set(bitmap, 8);
-            await kirimDataBluetooth(perintahGambar);
-        }
-        await kirimDataBluetooth(new TextEncoder().encode(`${esc}a\x01Terima kasih\n\n\n`));
+        const nilai = id => nilaiStrukToken(id);
+        const rataKanan = (label, value) => {
+            const kiri = `${label}: `;
+            const kanan = String(value || '-');
+            const tersedia = Math.max(1, 32 - kiri.length);
+            return kiri + kanan.slice(0, tersedia).padStart(tersedia, ' ');
+        };
+        const tengah = teks => {
+            const bersih = String(teks || '').slice(0, 32);
+            return ' '.repeat(Math.max(0, Math.floor((32 - bersih.length) / 2))) + bersih;
+        };
+        const isi = [
+            `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, `${gs}!\x00`,
+            tengah('NK JAYA CELL'), `${esc}E\x00`,
+            tengah('STRUK TOKEN LISTRIK'),
+            '--------------------------------', `${esc}a\x00`,
+            rataKanan('ID TRX', nilai('token-id-trx')),
+            rataKanan('ID PLN', nilai('token-id-pln')),
+            rataKanan('PRODUK', nilai('token-produk')),
+            rataKanan('NAMA', nilai('token-nama')),
+            rataKanan('TARIF/DAYA', nilai('token-tarif-daya')),
+            rataKanan('JUMLAH DAYA', nilai('token-jumlah-daya')),
+            rataKanan('HARGA', nilai('token-harga')),
+            '--------------------------------', `${esc}a\x01`, `${esc}E\x01`,
+            `${gs}!\x11`, tengah('NOMOR TOKEN'), tengah(nilai('token-serial')), `${gs}!\x00`,
+            `${esc}E\x00`, '', tengah('Terima kasih'), '\n\n\n'
+        ].join('\n');
+        await kirimDataBluetooth(new TextEncoder().encode(isi));
     } catch (error) {
         printerBluetoothCharacteristic = null;
         console.error('Gagal mencetak ke printer Bluetooth:', error);
