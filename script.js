@@ -1511,9 +1511,11 @@ async function printStruk58mm() {
             const barisNilai = bungkusTeks(value, 32 - awalan.length);
             return [awalan + barisNilai[0], ...barisNilai.slice(1).map(baris => ' '.repeat(awalan.length) + baris)];
         };
+        const statusCetak = dataStrukAktif.status || 'DIPROSES';
+        const waktuCetak = document.getElementById('struk-waktu')?.innerText || '-';
         const isi = [
             `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
-            'STRUK TOKEN LISTRIK', `${esc}a\x00`, '--------------------------------',
+            'STRUK TOKEN LISTRIK', statusCetak, waktuCetak, `${esc}a\x00`, '--------------------------------',
             ...field('ID TRX', nilai('token-id-trx')),
             ...field('ID PLN', nilai('token-id-pln')),
             ...field('PRODUK', nilai('token-produk')),
@@ -1521,8 +1523,9 @@ async function printStruk58mm() {
             ...field('TARIF/DAYA', nilai('token-tarif-daya')),
             ...field('JUMLAH DAYA', nilai('token-jumlah-daya')),
             ...field('HARGA', nilai('token-harga')),
-            '--------------------------------', `${esc}a\x01`, 'NOMOR TOKEN', `${esc}a\x00`,
+            '--------------------------------', `${esc}a\x01`, 'NOMOR TOKEN',
             `${gs}!\x11`, ...bungkusTeks(nilai('token-serial'), 16), `${gs}!\x00`,
+            `${esc}a\x00`, '--------------------------------', ...field('TOTAL BAYAR', document.getElementById('struk-total')?.innerText || '-'),
             `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '\n\n\n'
         ].join('\n');
         await kirimDataBluetooth(new TextEncoder().encode(isi));
