@@ -1507,9 +1507,7 @@ async function printStruk58mm() {
             return baris;
         };
         const field = (label, value) => {
-            const lebarLabel = 11;
-            const labelRapi = String(label).padEnd(lebarLabel, ' ');
-            const awalan = `${labelRapi}: `;
+            const awalan = `${label}: `;
             const barisNilai = bungkusTeks(value, 32 - awalan.length);
             return [awalan + barisNilai[0], ...barisNilai.slice(1).map(baris => ' '.repeat(awalan.length) + baris)];
         };
@@ -1528,7 +1526,7 @@ async function printStruk58mm() {
             '--------------------------------', `${esc}a\x01`, 'NOMOR TOKEN',
             `${gs}!\x11`, ...bungkusTeks(nilai('token-serial'), 16), `${gs}!\x00`,
             `${esc}a\x00`, '--------------------------------', ...field('TOTAL BAYAR', document.getElementById('struk-total')?.innerText || '-'),
-            `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '\n'
+            '', `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '', '\n'
         ].join('\n');
         await kirimDataBluetooth(new TextEncoder().encode(isi));
     } catch (error) {
