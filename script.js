@@ -1516,7 +1516,7 @@ async function printStruk58mm() {
         const statusCetak = dataStrukAktif.status || 'DIPROSES';
         const waktuCetak = document.getElementById('struk-waktu')?.innerText || '-';
         const isi = [
-            `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
+            `${esc}@`, `${esc}3\x14`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
             'STRUK TOKEN LISTRIK', statusCetak, waktuCetak, `${esc}a\x00`, '--------------------------------',
             ...field('ID TRX', nilai('token-id-trx')),
             ...field('ID PLN', nilai('token-id-pln')),
@@ -1528,7 +1528,7 @@ async function printStruk58mm() {
             '--------------------------------', `${esc}a\x01`, 'NOMOR TOKEN',
             `${gs}!\x11`, ...bungkusTeks(nilai('token-serial'), 16), `${gs}!\x00`,
             `${esc}a\x00`, '--------------------------------', ...field('TOTAL BAYAR', document.getElementById('struk-total')?.innerText || '-'),
-            `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '\n\n\n'
+            `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '\n'
         ].join('\n');
         await kirimDataBluetooth(new TextEncoder().encode(isi));
     } catch (error) {
