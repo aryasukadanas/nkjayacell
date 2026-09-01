@@ -49,9 +49,61 @@
             0% { box-shadow: 0 0 5px rgba(220, 38, 38, 0.2); }
             100% { box-shadow: 0 0 15px rgba(220, 38, 38, 0.5); }
         }
+
+        body[data-theme="dark"] {
+            background-color: #020817 !important;
+            color: #e2e8f0 !important;
+        }
+        body[data-theme="dark"] .bg-white,
+        body[data-theme="dark"] .bg-gray-50,
+        body[data-theme="dark"] .bg-gray-100,
+        body[data-theme="dark"] .bg-slate-50,
+        body[data-theme="dark"] #qris-modal > div,
+        body[data-theme="dark"] #qris-modal .bg-white,
+        body[data-theme="dark"] #qris-modal .bg-gray-50,
+        body[data-theme="dark"] #qris-modal .bg-gray-100,
+        body[data-theme="dark"] .qris-guide {
+            background-color: #111827 !important;
+            border-color: #374151 !important;
+        }
+        body[data-theme="dark"] .text-gray-700,
+        body[data-theme="dark"] .text-gray-800,
+        body[data-theme="dark"] .text-gray-900,
+        body[data-theme="dark"] .text-gray-600,
+        body[data-theme="dark"] .text-gray-500,
+        body[data-theme="dark"] .text-gray-400,
+        body[data-theme="dark"] .qris-guide p,
+        body[data-theme="dark"] .qris-guide li,
+        body[data-theme="dark"] .qris-guide ol {
+            color: #e2e8f0 !important;
+        }
+        body[data-theme="dark"] .text-blue-600,
+        body[data-theme="dark"] .text-blue-500 {
+            color: #93c5fd !important;
+        }
+        body[data-theme="dark"] .border-gray-100,
+        body[data-theme="dark"] .border-gray-200,
+        body[data-theme="dark"] .border-gray-300,
+        body[data-theme="dark"] .border-blue-100 {
+            border-color: #334155 !important;
+        }
+        body[data-theme="dark"] nav.fixed,
+        body[data-theme="dark"] .bg-white\/90 {
+            background-color: rgba(15, 23, 42, 0.9) !important;
+            border-color: #334155 !important;
+        }
+        body[data-theme="dark"] input,
+        body[data-theme="dark"] select,
+        body[data-theme="dark"] button,
+        body[data-theme="dark"] textarea {
+            color: #e2e8f0 !important;
+        }
     </style>
 </head>
 <body class="pb-12">
+    <button id="theme-toggle" type="button" aria-label="Toggle tema" class="fixed top-4 right-4 z-50 w-11 h-11 rounded-full bg-white/90 text-gray-700 shadow-lg border border-gray-200 flex items-center justify-center transition-all active:scale-95">
+        <i class="fas fa-moon"></i>
+    </button>
 
     <header class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6 rounded-b-[2.5rem] shadow-xl mb-6 max-w-md mx-auto relative overflow-hidden">
         <div class="absolute -right-6 -bottom-6 opacity-10 text-9xl">
@@ -270,19 +322,36 @@
     </div>
 
     <div id="qris-modal" class="hidden fixed inset-0 bg-black/50 z-50 transition-opacity duration-300 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl p-5 max-w-sm w-full text-center shadow-xl">
-            <h3 class="font-black text-sm mb-3 text-gray-800 tracking-wide">QRIS DIGITAL PAYMENT</h3>
+        <div class="bg-white rounded-2xl p-4 max-w-sm w-full text-center shadow-xl max-h-[92vh] overflow-y-auto relative">
+            <button onclick="tutupModalQris()" class="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl leading-none" aria-label="Tutup QRIS">
+                <i class="fas fa-times"></i>
+            </button>
+
+            <h3 class="font-black text-sm mb-2 text-gray-800 tracking-wide pr-6">QRIS DIGITAL PAYMENT</h3>
             
-            <div class="bg-white p-3 inline-block rounded-xl border border-gray-100 mx-auto shadow-sm">
-                <img id="qris-image-target" src="PULSA.png" alt="Scan QRIS" class="w-56 h-56 mx-auto object-contain">
+            <div class="bg-white p-2 inline-block rounded-xl border border-gray-100 mx-auto shadow-sm">
+                <img id="qris-image-target" src="PULSA.png" alt="Scan QRIS" class="w-52 h-52 mx-auto object-contain cursor-pointer" onclick="downloadQrCodeGambar()">
             </div>
             
-            <div id="qris-price-text" class="my-4 font-bold bg-gray-50 py-3 px-4 rounded-xl border border-gray-100"></div>
-            
-            <div class="flex gap-2">
-                <button onclick="tutupModalQris()" class="w-1/2 py-2.5 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl active:scale-95 transition-all">Batal</button>
-                <button onclick="konfirmasiSudahBayarQris()" class="w-1/2 py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all">Saya Sudah Bayar</button>
+            <div id="qris-price-text" class="my-3 font-bold bg-gray-50 py-2.5 px-3 rounded-xl border border-gray-100"></div>
+
+            <div class="mb-2 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                <span class="text-[9px] font-black uppercase tracking-[0.18em] text-amber-700">Sisa Waktu</span>
+                <span id="qris-countdown" class="text-sm font-black text-amber-700">05:00</span>
             </div>
+
+            <div class="qris-guide mb-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-left">
+                <p class="text-[9px] font-black uppercase tracking-[0.18em] text-indigo-700 mb-1.5">Cara Pembayaran QRIS</p>
+                <ol class="text-[9px] text-gray-700 space-y-1 list-decimal pl-4">
+                    <li>Buka aplikasi e-wallet atau mobile banking Anda.</li>
+                    <li>Pilih fitur Scan QR / QRIS.</li>
+                    <li>Scan kode QR di atas sesuai nominal yang muncul.</li>
+                    <li>Pastikan nominal transfer sesuai total yang tertera.</li>
+                    <li>Setelah transfer berhasil, tekan tombol “Saya Sudah Bayar”.</li>
+                </ol>
+            </div>
+            
+            <button onclick="konfirmasiSudahBayarQris()" class="w-full py-2.5 bg-emerald-600 text-white font-black text-[10px] rounded-xl shadow-md active:scale-95 transition-all">Saya Sudah Bayar</button>
         </div>
     </div>
 
@@ -323,6 +392,29 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script>
+        (function () {
+            const root = document.body;
+            const savedTheme = localStorage.getItem('nk-theme') || 'light';
+            const applyTheme = (theme) => {
+                root.dataset.theme = theme;
+                const btn = document.getElementById('theme-toggle');
+                if (btn) {
+                    btn.innerHTML = theme === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+                    btn.title = theme === 'dark' ? 'Ubah ke mode terang' : 'Ubah ke mode gelap';
+                }
+            };
+            applyTheme(savedTheme);
+            const btn = document.getElementById('theme-toggle');
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    const nextTheme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+                    localStorage.setItem('nk-theme', nextTheme);
+                    applyTheme(nextTheme);
+                });
+            }
+        })();
+    </script>
     <!-- [FIX] Muat config.js SEBELUM script lain agar variabel global (SCRIPT_URL, dll) tersedia -->
     <script src="config.js"></script>
     <script src="script.js"></script>

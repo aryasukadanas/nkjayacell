@@ -24,23 +24,55 @@
             background-size: 200% 100%;
             animation: shimmer 2s infinite;
         }
+
+        body[data-theme="dark"] {
+            background-color: #020817 !important;
+            color: #e2e8f0 !important;
+        }
+        body[data-theme="dark"] .glass-card,
+        body[data-theme="dark"] .bg-white,
+        body[data-theme="dark"] .bg-gray-50,
+        body[data-theme="dark"] .bg-gray-100,
+        body[data-theme="dark"] .bg-slate-50 {
+            background-color: #0f172a !important;
+            border-color: #334155 !important;
+        }
+        body[data-theme="dark"] .text-gray-700,
+        body[data-theme="dark"] .text-gray-800,
+        body[data-theme="dark"] .text-gray-900,
+        body[data-theme="dark"] .text-slate-500,
+        body[data-theme="dark"] .text-gray-600,
+        body[data-theme="dark"] .text-gray-500,
+        body[data-theme="dark"] .text-gray-400 {
+            color: #e2e8f0 !important;
+        }
+        body[data-theme="dark"] .text-blue-600,
+        body[data-theme="dark"] .text-blue-500 {
+            color: #93c5fd !important;
+        }
+        body[data-theme="dark"] .border-gray-100,
+        body[data-theme="dark"] .border-gray-200,
+        body[data-theme="dark"] .border-gray-300,
+        body[data-theme="dark"] .border-blue-100 {
+            border-color: #334155 !important;
+        }
+        body[data-theme="dark"] nav.fixed,
+        body[data-theme="dark"] .bg-white\/90 {
+            background-color: rgba(15, 23, 42, 0.9) !important;
+            border-color: #334155 !important;
+        }
+        body[data-theme="dark"] input,
+        body[data-theme="dark"] select,
+        body[data-theme="dark"] button,
+        body[data-theme="dark"] textarea {
+            color: #e2e8f0 !important;
+        }
     </style>
 </head>
 <body class="bg-slate-50 font-sans pb-32 overflow-x-hidden w-full relative">
-
-    <header class="bg-blue-600 p-8 rounded-b-[3.5rem] shadow-2xl relative overflow-hidden max-w-md mx-auto">
-        <div class="absolute top-0 left-0 w-full h-full opacity-10">
-            <div class="absolute transform rotate-45 bg-white w-64 h-64 -top-32 -left-32 rounded-full"></div>
-        </div>
-        
-        <div class="relative z-10 flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <div class="bg-white/20 backdrop-blur-md p-3 rounded-2xl border border-white/30 shadow-inner">
-                    <i class="fas fa-shield-alt text-white text-2xl"></i>
-                </div>
-                <div>
-                    <h1 class="text-white font-black text-xl tracking-tighter uppercase italic">Digital Transfer</h1>
-                    <p class="text-blue-100 text-[9px] font-bold uppercase tracking-[0.3em] opacity-80">Secure Gateway v2.0</p>
+    <button id="theme-toggle" type="button" aria-label="Toggle tema" class="fixed top-4 right-4 z-50 w-11 h-11 rounded-full bg-white/90 text-gray-700 shadow-lg border border-gray-200 flex items-center justify-center transition-all active:scale-95">
+        <i class="fas fa-moon"></i>
+    </button>
                 </div>
             </div>
             <div class="text-right">
@@ -313,6 +345,29 @@
     <!-- [NEW] Tambahkan JS html2canvas untuk fitur download struk -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <script>
+        (function () {
+            const root = document.body;
+            const savedTheme = localStorage.getItem('nk-theme') || 'light';
+            const applyTheme = (theme) => {
+                root.dataset.theme = theme;
+                const btn = document.getElementById('theme-toggle');
+                if (btn) {
+                    btn.innerHTML = theme === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+                    btn.title = theme === 'dark' ? 'Ubah ke mode terang' : 'Ubah ke mode gelap';
+                }
+            };
+            applyTheme(savedTheme);
+            const btn = document.getElementById('theme-toggle');
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    const nextTheme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+                    localStorage.setItem('nk-theme', nextTheme);
+                    applyTheme(nextTheme);
+                });
+            }
+        })();
+    </script>
     <!-- [REFACTOR] Pastikan config.js dimuat SEBELUM transfer.js -->
     <script src="config.js"></script>
     <!-- [STANDALONE] Hapus script.js karena transfer.js sudah mandiri -->

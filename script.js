@@ -62,6 +62,8 @@ let tabUtamaAktif = "KUOTA";
 let operatorAktif = "";     
 let keranjangBelanja = null; 
 let intervalMainTimer = null;
+let qrisCountdownTimer = null;
+let qrisCountdownDeadline = null;
 let listCacheRiwayat = []; 
 let petaNamaPelangganPLN = {};
 let petaDayaPelangganPLN = {};
@@ -309,6 +311,7 @@ function uraiDanProsesTeksCSV(teksMentah) {
         const hargaPromo = parseInt(cols[3]?.replace(/\D/g, '')) || 0;
         const hargaFlash = parseInt(cols[4]?.replace(/\D/g, '')) || 0;
         const waktuMundur = cols[5]?.trim().replace(/"/g, "") || "";
+        const keteranganProduk = cols[6]?.trim().replace(/"/g, "") || "";
 
         const upperKat = kategoriAsli.toUpperCase();
         const upperNama = namaProduk.toUpperCase();
@@ -316,7 +319,8 @@ function uraiDanProsesTeksCSV(teksMentah) {
         const itemObject = {
             nama: namaProduk, kategoriAsli: kategoriAsli,
             priceNormal: hargaNormal, pricePromo: hargaPromo, priceFlash: hargaFlash,
-            endTimer: waktuMundur
+            endTimer: waktuMundur,
+            keterangan: keteranganProduk
         };
 
         if (upperKat.includes("PLN") || upperKat.includes("TOKEN") || upperNama.includes("PLN") || upperNama.includes("TOKEN")) {
@@ -453,6 +457,17 @@ function gantiTabUtama(jenisTab) {
     else if(currentPhone) fiturDeteksiOtomatisDanCariProvider(currentPhone);
 }
 
+function pilihOperatorDefault(databaseTarget = {}) {
+    const listOperatorTerdeteksi = Object.keys(databaseTarget);
+    if (listOperatorTerdeteksi.length === 0) return "";
+
+    if (tabUtamaAktif === "KUOTA" && databaseTarget.INDOSAT) {
+        return "INDOSAT";
+    }
+
+    return listOperatorTerdeteksi[0];
+}
+
 function renderAutoOperatorSliders() {
     const container = document.getElementById('category-container');
     if (!container) return;
@@ -466,7 +481,7 @@ function renderAutoOperatorSliders() {
     const listOperatorTerdeteksi = Object.keys(databaseTarget);
 
     if (listOperatorTerdeteksi.length > 0) {
-        operatorAktif = listOperatorTerdeteksi[0];
+        operatorAktif = pilihOperatorDefault(databaseTarget);
         renderPilihanTombolSliderAktif();
         renderCardsProduk();
     } else {
@@ -537,7 +552,7 @@ function renderCardsProduk() {
 
             const card = document.createElement('div');
             card.className = "flash-card border-2 border-red-200 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer";
-            card.onclick = () => tambahKeKeranjang(item.nama, item.priceFlash, `FLASH SALE (-${diskon}%)`);
+            card.onclick = () => tambahKeKeranjang(item.nama, item.priceFlash, `FLASH SALE (-${diskon}%)`, null, null, item.keterangan);
             card.innerHTML = `
                 <div class="absolute top-0 right-0 bg-red-600 text-white font-black text-[8px] px-2 py-0.5 rounded-bl-xl uppercase">-${diskon}%</div>
                 <img src="${fileIcon}" class="w-7 h-7 object-contain mb-1.5 rounded-lg" onerror="this.src='PULSA.png'">
@@ -552,7 +567,7 @@ function renderCardsProduk() {
 
             const card = document.createElement('div');
             card.className = "product-card border border-orange-300 bg-orange-50/20 p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden shadow-sm";
-            card.onclick = () => tambahKeKeranjang(item.nama, item.pricePromo, `PROMO (-${diskonPromo}%)`);
+            card.onclick = () => tambahKeKeranjang(item.nama, item.pricePromo, `PROMO (-${diskonPromo}%)`, null, null, item.keterangan);
             card.innerHTML = `
                 <div class="absolute top-0 right-0 bg-orange-500 text-white font-black text-[7px] px-1.5 py-0.5 rounded-bl-lg">PROMO -${diskonPromo}%</div>
                 <img src="${fileIcon}" class="w-7 h-7 object-contain mb-1.5 rounded-lg" onerror="this.src='PULSA.png'">
@@ -565,7 +580,7 @@ function renderCardsProduk() {
         else {
             const card = document.createElement('div');
             card.className = "product-card border border-gray-200 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer shadow-sm";
-            card.onclick = () => tambahKeKeranjang(item.nama, item.priceNormal, "REGULAR");
+            card.onclick = () => tambahKeKeranjang(item.nama, item.priceNormal, "REGULAR", null, null, item.keterangan);
             card.innerHTML = `
                 <img src="${fileIcon}" class="w-7 h-7 object-contain mb-2 rounded-lg" onerror="this.src='PULSA.png'">
                 <div class="text-[10px] font-black text-gray-700 uppercase leading-tight">${item.nama}</div>
@@ -648,7 +663,7 @@ function jalankanTimerMundurDinamis(targetString) {
 /**
  * 5. PENGELOLAAN KERANJANG/DRAF TRANSAKSI
  */
-function tambahKeKeranjang(nama, harga, label, kategoriOtomatis = null, targetOtomatis = null) {
+function tambahKeKeranjang(nama, harga, label, kategoriOtomatis = null, targetOtomatis = null, keterangan = null) {
     // [VALIDASI TERPUSAT] Validasi khusus untuk halaman game.
     if (window.location.pathname.includes('gameml.html')) {
         const gameIdEl = document.getElementById('game_id');
@@ -682,7 +697,8 @@ function tambahKeKeranjang(nama, harga, label, kategoriOtomatis = null, targetOt
         kategori: kategoriOtomatis || `${tabUtamaAktif} - ${operatorAktif}`,
         produk: nama,
         harga: harga,
-        labelType: label
+        labelType: label,
+        keterangan: keterangan || ""
     };
     const cartCountEl = document.getElementById('cart-count');
     if (cartCountEl) cartCountEl.innerText = "1";
@@ -730,12 +746,47 @@ function bukaModalKeranjang(nomorTargetOtomatis = "") {
         if (totalPriceEl) totalPriceEl.innerText = "Rp 0";
     } else {
         if (listContainer) {
+            const normalisasiKeterangan = (value) => {
+                if (!value) return '';
+                const text = String(value).replace(/\s+/g, ' ').trim();
+                if (text.length <= 180) return text;
+                return text.slice(0, 177).trim() + '...';
+            };
+
+            const escapeHtml = (value) => {
+                if (!value) return '';
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\"/g, '&quot;');
+            };
+
+            const keteranganPenuh = keranjangBelanja.keterangan ? escapeHtml(keranjangBelanja.keterangan) : '';
+            const keteranganRingkas = normalisasiKeterangan(keranjangBelanja.keterangan || '');
+            const tampilkanDetail = (keteranganPenuh && keteranganPenuh.length > 180) || false;
+
+            const keteranganHtml = keteranganPenuh ? `
+                <div class="mt-1.5" data-keterangan-wrapper>
+                    <div class="keterangan-ringkas text-[9px] text-gray-500 leading-relaxed font-medium break-words whitespace-pre-wrap max-w-[220px] ${tampilkanDetail ? '' : 'hidden'}">${keteranganRingkas}</div>
+                    <div class="keterangan-lengkap text-[9px] text-gray-500 leading-relaxed font-medium break-words whitespace-pre-wrap max-w-[220px] ${tampilkanDetail ? 'hidden' : ''}">${keteranganPenuh}</div>
+                    ${tampilkanDetail ? `
+                        <button type="button" onclick="toggleDetailProduk(this)" class="mt-1 text-[8px] font-black text-blue-600 uppercase tracking-wide hover:text-blue-700 transition-colors">
+                            Lihat detail
+                        </button>
+                    ` : ''}
+                </div>
+            ` : '';
+
             listContainer.innerHTML = `
-                <div class="flex justify-between items-center bg-gray-50 p-3.5 rounded-2xl border border-gray-100 text-xs font-bold text-gray-700">
-                    <div>
+                <div class="flex justify-between items-start bg-gray-50 p-3.5 rounded-2xl border border-gray-100 text-xs font-bold text-gray-700 gap-3">
+                    <div class="min-w-0 flex-1">
                         <span class="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded mr-1 uppercase font-black">${keranjangBelanja.kategori}</span>
-                        <div class="text-gray-900 font-black mt-1 text-sm leading-tight">${keranjangBelanja.produk}</div>
-                        <span class="text-[9px] text-gray-400 font-medium">${keranjangBelanja.labelType}</span>
+                        <div class="text-gray-900 font-black mt-1 text-sm leading-tight break-words">${keranjangBelanja.produk}</div>
+                        <div class="mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span class="text-[9px] text-gray-400 font-medium">${keranjangBelanja.labelType}</span>
+                        </div>
+                        ${keteranganHtml}
                     </div>
                     <div class="flex items-center gap-3 shrink-0">
                         <div class="text-blue-600 font-black text-right">Rp ${keranjangBelanja.harga.toLocaleString('id-ID')}</div>
@@ -1021,12 +1072,62 @@ function hapusItemKeranjang() {
     }
 }
 
+function toggleDetailProduk(button) {
+    const wrapper = button.closest('[data-keterangan-wrapper]');
+    if (!wrapper) return;
+
+    const ringkas = wrapper.querySelector('.keterangan-ringkas');
+    const lengkap = wrapper.querySelector('.keterangan-lengkap');
+
+    if (!ringkas || !lengkap) return;
+
+    const isShowingFull = button.dataset.showing === 'full';
+
+    ringkas.classList.toggle('hidden', isShowingFull);
+    lengkap.classList.toggle('hidden', !isShowingFull);
+    button.textContent = isShowingFull ? 'Lihat detail' : 'Sembunyikan detail';
+    button.dataset.showing = isShowingFull ? 'collapsed' : 'full';
+}
+
 function tutupModalKeranjang() {
     const modal = document.getElementById('cart-modal');
     if (!modal) return;
     modal.classList.add('opacity-0');
     modal.querySelector('div').classList.add('translate-y-full');
     setTimeout(() => modal.classList.add('hidden'), 300);
+}
+
+function showAlert(title, header, listItems) {
+    const modal = document.getElementById('customModal');
+    if (!modal) return;
+
+    const modalTitle = modal.querySelector('.modal-title');
+    const alertHeader = modal.querySelector('.alert-header span');
+    const alertList = modal.querySelector('.alert-list');
+
+    if (modalTitle) modalTitle.innerText = title;
+    if (alertHeader) alertHeader.innerText = header;
+
+    if (alertList) {
+        alertList.innerHTML = '';
+        listItems.forEach(itemText => {
+            const li = document.createElement('li');
+            li.textContent = itemText;
+            alertList.appendChild(li);
+        });
+    }
+
+    modal.style.visibility = 'visible';
+    modal.style.opacity = '1';
+    const modalCard = modal.querySelector('.modal-card');
+    if (modalCard) modalCard.style.transform = 'scale(1)';
+}
+
+function closeAlert() {
+    const modal = document.getElementById('customModal');
+    if (!modal) return;
+    modal.style.opacity = '0';
+    setTimeout(() => { modal.style.visibility = 'hidden'; }, 300);
 }
 
 function toggleMetodePembayaranUI(metode) {
@@ -1064,6 +1165,18 @@ function prosesCheckoutAkhir() {
     const noHp = inputHp ? inputHp.value.trim() : "";
 
     if (!noHp) {
+        const visibleInput = document.getElementById('search-phone-input');
+        const hiddenInput = document.getElementById('customer-phone');
+
+        if (hiddenInput) hiddenInput.value = "";
+        if (visibleInput) {
+            visibleInput.value = "";
+            visibleInput.focus();
+            visibleInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => visibleInput.focus(), 100);
+        }
+
+        tutupModalKeranjang();
         showAlert("DATA KURANG", "Lengkapi Nomor Tujuan", ["Anda harus memasukkan Nomor HP atau ID Pelanggan di kolom yang tersedia."]);
         return;
     }
@@ -1110,6 +1223,7 @@ function prosesCheckoutAkhir() {
             modalQris.classList.remove('hidden');
             setTimeout(() => modalQris.classList.remove('opacity-0'), 50);
         }
+        startQrisCountdown();
     }
 }
 
@@ -1139,6 +1253,7 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
         // [FIX] Hapus tanda kutip. Ini menyebabkan ketidakcocokan saat mengambil status riwayat.
         nomor: noHp,
         produk: fullProdukLabel,
+        keterangan: keranjangBelanja.keterangan || "",
         harga_asli: keranjangBelanja.harga,
         total_transfer: hargaFinal,
         status: statusLabel
@@ -1169,12 +1284,15 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
         console.error(`❌ Gagal mengirim data produk (ID: ${idTransaksi}) ke Google Sheets:`, e);
     }
 
+    const keteranganText = keranjangBelanja.keterangan ? `📝 Keterangan: ${keranjangBelanja.keterangan}\n` : "";
+
     const textWA = `⚡ *TRANSAKSI BARU - NK JAYA CELL* ⚡\n` +
                    `--------------------------------------------\n` +
                    `*ID Transaksi: ${idTransaksi}*\n\n` +
                    `📱 Kategori: *${keranjangBelanja.kategori}*\n` +
                    `🎯 No HP/ID Target: \`${noHp}\`\n` +
                    `📦 Produk: ${keranjangBelanja.produk}\n` +
+                   `${keteranganText}` +
                    `🏷️ Jenis: *${keranjangBelanja.labelType}*\n` +
                    `💳 Pembayaran: *${statusLabel}*\n` +
                    `💰 Total Bayar: *Rp ${hargaFinal.toLocaleString('id-ID')}*\n` +
@@ -1259,7 +1377,7 @@ function simpanRiwayatProdukLokal(idTransaksi, waktu, noHp, produk, total, statu
 
 
     // PENYEMPURNAAN: Buat satu field baru yang menyimpan deskripsi lengkap produk
-    const produkLengkap = `[${keranjangBelanja.kategori}] ${keranjangBelanja.produk} (${keranjangBelanja.labelType})`;
+    const produkLengkap = `[${keranjangBelanja.kategori}] ${keranjangBelanja.produk}${keranjangBelanja.keterangan ? ` - ${keranjangBelanja.keterangan}` : ""} (${keranjangBelanja.labelType})`;
 
     const transaksiBaru = {
         id_transaksi: idTransaksi,
@@ -1269,6 +1387,7 @@ function simpanRiwayatProdukLokal(idTransaksi, waktu, noHp, produk, total, statu
         biaya: total,
         status: status.toUpperCase().includes("LUNAS") ? "SUKSES" : "PROSES", // Tetap 'PROSES' jika bukan LUNAS
         produkLengkap: produkLengkap, // Simpan deskripsi lengkap ke dalam satu field
+        keterangan: keranjangBelanja.keterangan || "",
         gameName: gameName // Properti baru untuk menyimpan nama game yang bersih
     };
 
@@ -1276,12 +1395,85 @@ function simpanRiwayatProdukLokal(idTransaksi, waktu, noHp, produk, total, statu
     localStorage.setItem('nk_produk_history', JSON.stringify(riwayat));
 }
 
+async function downloadQrCodeGambar() {
+    const img = document.getElementById('qris-image-target');
+    if (!img || !img.src) return;
+
+    try {
+        const response = await fetch(img.src);
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = `qris-nkjaya-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+        const link = document.createElement('a');
+        link.href = img.src;
+        link.download = `qris-nkjaya-${Date.now()}.png`;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+}
+
+function startQrisCountdown() {
+    const countdownEl = document.getElementById('qris-countdown');
+    if (!countdownEl) return;
+
+    clearInterval(qrisCountdownTimer);
+    qrisCountdownDeadline = Date.now() + 5 * 60 * 1000;
+
+    const updateCountdown = () => {
+        const remainingMs = qrisCountdownDeadline - Date.now();
+        if (remainingMs <= 0) {
+            clearInterval(qrisCountdownTimer);
+            countdownEl.textContent = '00:00';
+            const modal = document.getElementById('qris-modal');
+            if (modal) {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+
+            keranjangBelanja = null;
+            const cartCount = document.getElementById('cart-count');
+            if (cartCount) cartCount.innerText = '0';
+
+            showAlert(
+                'PEMBAYARAN QRIS HABIS',
+                'WAKTU TRANSAKSI SUDAH BERAKHIR!',
+                [
+                    'Anda belum menekan tombol “Saya Sudah Bayar” dalam 5 menit.',
+                    'Silakan ulangi transaksi dari awal dan buat QRIS baru.'
+                ]
+            );
+            return;
+        }
+
+        const totalSeconds = Math.ceil(remainingMs / 1000);
+        const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+        const seconds = String(totalSeconds % 60).padStart(2, '0');
+        countdownEl.textContent = `${minutes}:${seconds}`;
+    };
+
+    updateCountdown();
+    qrisCountdownTimer = setInterval(updateCountdown, 1000);
+}
+
 function tutupModalQris() {
     const modal = document.getElementById('qris-modal');
-    if(modal) {
+    if (modal) {
         modal.classList.add('opacity-0');
         setTimeout(() => modal.classList.add('hidden'), 300);
     }
+    clearInterval(qrisCountdownTimer);
+    qrisCountdownDeadline = null;
+    const countdownEl = document.getElementById('qris-countdown');
+    if (countdownEl) countdownEl.textContent = '05:00';
 }
 
 function konfirmasiSudahBayarQris() {
