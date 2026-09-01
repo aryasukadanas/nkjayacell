@@ -665,12 +665,17 @@ function tampilkanStruk(data) {
 
     // Isi data ke elemen struk
     document.getElementById('struk-waktu').innerText = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
-    document.getElementById('struk-penerima').innerText = `${data.bank} - ${data.nama} (${data.norek})`;
+    const bankTujuan = data.bank || '-';
+    const noRekening = data.norek || '-';
+    const namaPenerima = data.nama || '-';
+    document.getElementById('struk-bank-tujuan').innerText = bankTujuan;
+    document.getElementById('struk-no-rekening').innerText = noRekening;
+    document.getElementById('struk-nama-penerima').innerText = namaPenerima;
     
     // [NEW] Isi rincian biaya
-    document.getElementById('struk-nominal').innerText = 'Rp ' + data.nominal.toLocaleString('id-ID');
-    document.getElementById('struk-admin').innerText = 'Rp ' + data.admin.toLocaleString('id-ID');
-    document.getElementById('struk-total').innerText = 'Rp ' + data.total.toLocaleString('id-ID');
+    document.getElementById('struk-nominal').innerText = 'Rp ' + Number(data.nominal || 0).toLocaleString('id-ID');
+    document.getElementById('struk-admin').innerText = 'Rp ' + Number(data.admin || 0).toLocaleString('id-ID');
+    document.getElementById('struk-total').innerText = 'Rp ' + Number(data.total || 0).toLocaleString('id-ID');
     
     // [MODIFIKASI] Tambahkan ID Transaksi dengan tombol copy
     document.getElementById('struk-id-container').innerHTML = `

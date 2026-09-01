@@ -68,6 +68,99 @@ let listCacheRiwayat = [];
 let petaNamaPelangganPLN = {};
 let petaDayaPelangganPLN = {};
 let dataStrukAktif = null;
+let notifikasiPromoDikirim = new Set();
+
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('./sw.js').catch(err => {
+        console.warn('Pendaftaran service worker gagal:', err);
+    });
+}
+
+async function requestPromoNotificationPermission() {
+    if (!('Notification' in window)) {
+        console.warn('Browser ini tidak mendukung Notification API.');
+        return false;
+    }
+
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') return false;
+
+    const result = await Notification.requestPermission();
+    return result === 'granted';
+}
+
+function updateNotificationToggleUI() {
+    const toggle = document.getElementById('notification-toggle');
+    const banner = document.getElementById('notification-banner');
+    const bannerButton = document.getElementById('notification-banner-button');
+
+    if (!('Notification' in window)) {
+        if (toggle) {
+            toggle.classList.remove('is-enabled', 'is-denied');
+            toggle.title = 'Browser tidak mendukung notifikasi';
+            toggle.innerHTML = '<i class="fas fa-bell-slash"></i>';
+        }
+        if (banner) banner.classList.add('hidden');
+        return;
+    }
+
+    const permission = Notification.permission;
+    const enabled = permission === 'granted';
+    const denied = permission === 'denied';
+
+    if (toggle) {
+        toggle.classList.toggle('is-enabled', enabled);
+        toggle.classList.toggle('is-denied', denied);
+        toggle.title = enabled ? 'Notifikasi promo aktif' : denied ? 'Notifikasi diblokir' : 'Aktifkan notifikasi promo';
+        toggle.innerHTML = `<i class="fas ${enabled ? 'fa-bell' : 'fa-bell-slash'}"></i>`;
+    }
+
+    if (banner) {
+        const shouldShowBanner = !enabled && !denied;
+        banner.classList.toggle('hidden', !shouldShowBanner);
+    }
+
+    if (bannerButton) {
+        bannerButton.textContent = enabled ? 'Aktif' : 'Aktifkan';
+    }
+}
+
+function kirimPromoNotification(namaProduk, jenis, diskon, harga, operator) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const key = `${operator}|${namaProduk}|${jenis}|${diskon}|${harga}`;
+    if (notifikasiPromoDikirim.has(key)) return;
+
+    notifikasiPromoDikirim.add(key);
+    const title = jenis === 'FLASH SALE' ? '⚡ Flash Sale' : '🎉 Promo Baru';
+    const body = `${namaProduk} (${operator}) -${diskon}% · Rp ${harga.toLocaleString('id-ID')}`;
+
+    const notification = new Notification(title, {
+        body,
+        icon: 'icon.png',
+        tag: `promo-${key}`
+    });
+
+    notification.onclick = () => {
+        window.focus();
+    };
+}
+
+function kirimNotifikasiPromoAktifJikaPerlu(items = []) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (!Array.isArray(items) || items.length === 0) return;
+
+    items.forEach(item => {
+        if (item && item.priceFlash > 0) {
+            const diskon = Math.round(((item.priceNormal - item.priceFlash) / item.priceNormal) * 100);
+            kirimPromoNotification(item.nama, 'FLASH SALE', diskon, item.priceFlash, operatorAktif || 'PROMO');
+        } else if (item && item.pricePromo > 0) {
+            const diskonPromo = Math.round(((item.priceNormal - item.pricePromo) / item.priceNormal) * 100);
+            kirimPromoNotification(item.nama, 'PROMO', diskonPromo, item.pricePromo, operatorAktif || 'PROMO');
+        }
+    });
+}
 
 function pecahBarisCSV(row) {
     return row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(value => value.trim().replace(/^"|"$/g, ''));
@@ -155,6 +248,29 @@ recognition.onresult = function(event) {
 }  
 
 document.addEventListener('DOMContentLoaded', () => {
+    registerServiceWorker();
+    updateNotificationToggleUI();
+
+    const notifToggle = document.getElementById('notification-toggle');
+    const notifBannerButton = document.getElementById('notification-banner-button');
+    const handleNotificationRequest = async () => {
+        const granted = await requestPromoNotificationPermission();
+        updateNotificationToggleUI();
+
+        if (granted) {
+            window.alert('Notifikasi promo aktif. Kami akan memberi tahu saat ada diskon atau flash sale.');
+        } else if ('Notification' in window && Notification.permission === 'denied') {
+            window.alert('Notifikasi diblokir. Silakan aktifkan izin notifikasi di pengaturan browser Anda.');
+        }
+    };
+
+    if (notifToggle) {
+        notifToggle.addEventListener('click', handleNotificationRequest);
+    }
+    if (notifBannerButton) {
+        notifBannerButton.addEventListener('click', handleNotificationRequest);
+    }
+
     // 1. Jalankan fungsi bawaan aplikasi
     muatDataDanPisahKategori();
     muatNamaPelangganPLN();
@@ -549,6 +665,7 @@ function renderCardsProduk() {
             adaFlashSale = true;
             if (item.endTimer) targetTimeFlashGlobal = item.endTimer;
             const diskon = Math.round(((item.priceNormal - item.priceFlash) / item.priceNormal) * 100);
+            kirimPromoNotification(item.nama, 'FLASH SALE', diskon, item.priceFlash, operatorAktif);
 
             const card = document.createElement('div');
             card.className = "flash-card border-2 border-red-200 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer";
@@ -564,6 +681,7 @@ function renderCardsProduk() {
         } 
         else if (item.pricePromo > 0) {
             const diskonPromo = Math.round(((item.priceNormal - item.pricePromo) / item.priceNormal) * 100);
+            kirimPromoNotification(item.nama, 'PROMO', diskonPromo, item.pricePromo, operatorAktif);
 
             const card = document.createElement('div');
             card.className = "product-card border border-orange-300 bg-orange-50/20 p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer relative overflow-hidden shadow-sm";
@@ -597,6 +715,10 @@ function renderCardsProduk() {
         } else {
             sectionFlash.classList.add('hidden');
         }
+    }
+
+    if (items.length > 0) {
+        setTimeout(() => kirimNotifikasiPromoAktifJikaPerlu(items), 800);
     }
 }
 

@@ -67,6 +67,78 @@
         body[data-theme="dark"] textarea {
             color: #e2e8f0 !important;
         }
+        body[data-theme="dark"] #struk-modal > div,
+        body[data-theme="dark"] #struk-content,
+        body[data-theme="dark"] #struk-actions {
+            background-color: #111827 !important;
+            border-color: #334155 !important;
+        }
+        body[data-theme="dark"] #struk-content .text-gray-500,
+        body[data-theme="dark"] #struk-content .text-gray-400,
+        body[data-theme="dark"] #struk-content .text-gray-600,
+        body[data-theme="dark"] #struk-content .text-gray-700,
+        body[data-theme="dark"] #struk-content #struk-token span,
+        body[data-theme="dark"] #struk-content #struk-token strong,
+        body[data-theme="dark"] #struk-content #struk-token p {
+            color: #cbd5e1 !important;
+        }
+        body[data-theme="dark"] #struk-content .text-gray-800,
+        body[data-theme="dark"] #struk-content .text-gray-900,
+        body[data-theme="dark"] #struk-content #struk-total,
+        body[data-theme="dark"] #struk-content #struk-penerima,
+        body[data-theme="dark"] #struk-content #struk-waktu,
+        body[data-theme="dark"] #struk-content #token-id-trx,
+        body[data-theme="dark"] #struk-content #token-id-pln,
+        body[data-theme="dark"] #struk-content #token-produk,
+        body[data-theme="dark"] #struk-content #token-nama,
+        body[data-theme="dark"] #struk-content #token-tarif-daya,
+        body[data-theme="dark"] #struk-content #token-jumlah-daya,
+        body[data-theme="dark"] #struk-content #token-harga,
+        body[data-theme="dark"] #struk-content #token-serial,
+        body[data-theme="dark"] #struk-content #struk-token [data-editable="true"] {
+            color: #f8fafc !important;
+        }
+        body[data-theme="dark"] #struk-content #token-serial,
+        body[data-theme="dark"] #struk-content #struk-token [data-editable="true"] {
+            text-shadow: 0 0 0.3em rgba(148, 163, 184, 0.5);
+        }
+        body[data-theme="dark"] #struk-content #struk-token .bg-white,
+        body[data-theme="dark"] #struk-content #struk-token .border-gray-200 {
+            background-color: #111827 !important;
+            border-color: #475569 !important;
+        }
+        body[data-theme="dark"] #struk-content .border-gray-200,
+        body[data-theme="dark"] #struk-content .border-gray-300,
+        body[data-theme="dark"] #struk-content .border-dashed,
+        body[data-theme="dark"] #struk-actions .border-gray-200 {
+            border-color: #475569 !important;
+        }
+        body[data-theme="dark"] #struk-actions button,
+        body[data-theme="dark"] #struk-actions .bg-gray-200,
+        body[data-theme="dark"] #struk-actions .bg-amber-100,
+        body[data-theme="dark"] #struk-actions .bg-green-500,
+        body[data-theme="dark"] #struk-actions .bg-slate-900,
+        body[data-theme="dark"] #struk-actions .bg-transparent {
+            color: #f8fafc !important;
+        }
+        body[data-theme="dark"] #struk-actions .bg-gray-200 {
+            background-color: #334155 !important;
+        }
+        body[data-theme="dark"] #struk-actions .bg-amber-100 {
+            background-color: #78350f !important;
+            color: #fef3c7 !important;
+        }
+        body[data-theme="dark"] #struk-actions .bg-green-500 {
+            background-color: #16a34a !important;
+        }
+        body[data-theme="dark"] #struk-actions .bg-slate-900 {
+            background-color: #e2e8f0 !important;
+            color: #020817 !important;
+        }
+        body[data-theme="dark"] #struk-actions .bg-transparent {
+            background: transparent !important;
+            color: #cbd5e1 !important;
+        }
     </style>
 </head>
 <body class="bg-slate-50 font-sans pb-32 overflow-x-hidden w-full relative">
@@ -269,9 +341,23 @@
 
                 <div class="border-t border-dashed border-gray-200 py-3 text-xs space-y-2.5">
                     <div id="struk-id-container"></div>
-                    <div class="flex justify-between">
-                        <span class="text-gray-500 font-medium">Penerima:</span>
-                        <span id="struk-penerima" class="font-bold text-gray-800 text-right uppercase"></span>
+
+                    <div class="pt-1">
+                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-2">Data Penerima</p>
+                        <div class="space-y-2">
+                            <div class="flex justify-between gap-3">
+                                <span class="text-gray-500 font-medium">Bank Tujuan</span>
+                                <span id="struk-bank-tujuan" class="font-bold text-gray-800 text-right uppercase"></span>
+                            </div>
+                            <div class="flex justify-between gap-3">
+                                <span class="text-gray-500 font-medium">No. Rekening</span>
+                                <span id="struk-no-rekening" class="font-bold text-gray-800 text-right"></span>
+                            </div>
+                            <div class="flex justify-between gap-3">
+                                <span class="text-gray-500 font-medium">Nama</span>
+                                <span id="struk-nama-penerima" class="font-bold text-gray-800 text-right uppercase"></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
