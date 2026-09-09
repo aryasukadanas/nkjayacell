@@ -67,6 +67,7 @@ let qrisCountdownDeadline = null;
 let listCacheRiwayat = []; 
 let petaNamaPelangganPLN = {};
 let petaDayaPelangganPLN = {};
+let petaJumlahDayaPelangganPLN = {};
 let dataStrukAktif = null;
 let notifikasiPromoDikirim = new Set();
 
@@ -299,13 +300,25 @@ async function muatNamaPelangganPLN() {
         const headerIndex = rows.findIndex(row => row.toUpperCase().includes('ID PLN') && row.toUpperCase().includes('NAMA'));
         if (headerIndex < 0) throw new Error('Header data nama PLN tidak ditemukan');
 
+        const headers = pecahBarisCSV(rows[headerIndex]).map(value => value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+        const findColumn = aliases => aliases
+            .map(alias => headers.indexOf(alias.toUpperCase().replace(/[^A-Z0-9]/g, '')))
+            .find(index => index >= 0);
+        const idIndex = findColumn(['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR']);
+        const namaIndex = findColumn(['NAMA', 'NAMA PELANGGAN', 'PELANGGAN']);
+        const tarifIndex = findColumn(['TARIF/DAYA', 'TARIF DAYA', 'DAYA']);
+        const jumlahDayaIndex = findColumn(['JUMLAH DAYA', 'JUMLAH DAYA TERBARU', 'DAYA TERISI']);
+
         rows.slice(headerIndex + 1).forEach(row => {
-            const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(value => value.trim().replace(/^"|"$/g, ''));
-            const idPln = (cols[1] || '').replace(/\D/g, '');
-            const nama = cols[2] || '';
-            const tarifDaya = cols[3] || '';
+            const cols = pecahBarisCSV(row);
+            const idPln = (idIndex === undefined ? '' : cols[idIndex] || '').replace(/\D/g, '');
+            const nama = namaIndex === undefined ? '' : cols[namaIndex] || '';
+            const tarifDaya = tarifIndex === undefined ? '' : cols[tarifIndex] || '';
+            const jumlahDaya = jumlahDayaIndex === undefined ? '' : cols[jumlahDayaIndex] || '';
             if (idPln && nama && !petaNamaPelangganPLN[idPln]) petaNamaPelangganPLN[idPln] = nama;
             if (idPln && tarifDaya) petaDayaPelangganPLN[idPln] = tarifDaya;
+            // Baris yang lebih bawah dianggap data terbaru; nilai kosong tidak menimpa nilai lama.
+            if (idPln && jumlahDaya) petaJumlahDayaPelangganPLN[idPln] = jumlahDaya;
         });
 
         tampilkanNamaPelangganPLN(document.getElementById('search-phone-input')?.value || '');
@@ -1510,6 +1523,7 @@ function simpanRiwayatProdukLokal(idTransaksi, waktu, noHp, produk, total, statu
         target: noHp,
         produk: keranjangBelanja.produk, // Gunakan nama produk bersih
         biaya: total,
+        jumlahDaya: petaJumlahDayaPelangganPLN[noHp.replace(/\D/g, '')] || '',
         status: status.toUpperCase().includes("LUNAS") ? "SUKSES" : "PROSES", // Tetap 'PROSES' jika bukan LUNAS
         produkLengkap: produkLengkap, // Simpan deskripsi lengkap ke dalam satu field
         keterangan: keranjangBelanja.keterangan || "",
@@ -1627,18 +1641,28 @@ function konfirmasiSudahBayarQris() {
 function tampilkanStrukDariRiwayat(item) {
     const kolomEdit = JSON.parse(localStorage.getItem('nk_token_receipt_edits') || '{}')[item.id_transaksi] || {};
     const barisArsip = cariBarisArsipUntukStruk(item);
+    const barisArsipDenganId = cariBarisArsipDenganIdTransaksi(item.id_transaksi);
     const ambilArsip = aliases => ambilNilaiArsip(barisArsip, aliases);
+    const ambilSerialArsip = () => ambilNilaiArsip(barisArsipDenganId, ['SERIAL NUMBER', 'NOMOR TOKEN', 'ANGKA TOKEN', 'TOKEN', 'SN']);
     const produk = item.produkLengkap || item.produk || '';
+    const nominalPesanan = ambilArsip(['NOMINAL TOKEN', 'JUMLAH NOMINAL', 'NOMINAL'])
+        || String(item.produk || '').match(/(?:RP\.?\s*)?([\d.]+)/i)?.[1]
+        || item.biaya;
+    const produkToken = nominalPesanan ? `TOKEN PLN - ${formatHarga(nominalPesanan)}` : 'TOKEN PLN';
     const gabunganProduk = `${produk} ${ambilArsip(['PRODUK', 'NAMA PRODUK'])}`.toUpperCase();
     const token = {
         idTrx: kolomEdit.idTrx || item.id_transaksi || ambilArsip(['ID TRANSAKSI', 'ID TRX', 'ID']),
         idPln: kolomEdit.idPln || item.target || ambilArsip(['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR']),
-        produk: kolomEdit.produk || ambilArsip(['PRODUK', 'NAMA PRODUK']) || produk,
+        produk: produkToken,
         nama: kolomEdit.nama || ambilArsip(['NAMA', 'NAMA PELANGGAN', 'PELANGGAN']) || petaNamaPelangganPLN[(item.target || '').replace(/\D/g, '')] || '-',
         tarifDaya: kolomEdit.tarifDaya || petaDayaPelangganPLN[(item.target || '').replace(/\D/g, '')] || '-',
-        jumlahDaya: kolomEdit.jumlahDaya || ambilArsip(['JUMLAH DAYA', 'DAYA TERISI', 'JUMLAH NOMINAL', 'NOMINAL']) || '-',
+        jumlahDaya: kolomEdit.jumlahDaya
+            || item.jumlahDaya
+            || ambilArsip(['JUMLAH DAYA', 'DAYA TERISI', 'JUMLAH NOMINAL', 'NOMINAL'])
+            || petaJumlahDayaPelangganPLN[(item.target || '').replace(/\D/g, '')]
+            || '-',
         harga: kolomEdit.harga || ambilArsip(['HARGA', 'TOTAL TRANSFER', 'TOTAL BAYAR']) || item.biaya,
-        serial: kolomEdit.serial || ambilArsip(['SERIAL NUMBER', 'NOMOR TOKEN', 'ANGKA TOKEN', 'TOKEN', 'SN']) || '-'
+        serial: ambilSerialArsip() || '-'
     };
     tampilkanStruk({
         id: item.id_transaksi,
@@ -1650,6 +1674,17 @@ function tampilkanStrukDariRiwayat(item) {
         isToken: gabunganProduk.includes('TOKEN') || gabunganProduk.includes('PLN'),
         token
     });
+}
+
+function cariBarisArsipDenganIdTransaksi(idTransaksi) {
+    const idItem = String(idTransaksi || '').replace(/[\s']/g, '').toUpperCase();
+    if (!idItem) return [];
+
+    return rawArsipRows.map(pecahBarisCSV).find(cols => {
+        const idArsip = ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID'])
+            .replace(/[\s']/g, '').toUpperCase();
+        return idArsip === idItem;
+    }) || [];
 }
 
 function cariBarisArsipUntukStruk(item) {
