@@ -971,8 +971,16 @@ function bukaModalRiwayatLangsung() {
         modal.querySelector('div').classList.remove('translate-y-full');
     }, 10);
 
-    // Langsung ambil data dari LocalStorage
-    listCacheRiwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
+    // Halaman game hanya menampilkan transaksi topup game.
+    const semuaRiwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
+    const isRiwayatGame = item => Boolean(
+        item.gameName
+        || String(item.produkLengkap || '').toUpperCase().includes('TOPUP')
+        || String(item.kategori || '').toUpperCase().includes('TOPUP')
+    );
+    listCacheRiwayat = window.location.pathname.includes('gameml.html')
+        ? semuaRiwayat.filter(isRiwayatGame)
+        : semuaRiwayat;
 
     // KODE TAMBAHAN: Pastikan database dari lokal/Google Sheet dipetakan ulang sebelum merender status
     const cacheLokalProduk = localStorage.getItem('nk_cache_produk_csv');
@@ -1146,7 +1154,7 @@ function filterRiwayatStatus(filterType) {
         <div class="space-y-2.5">${htmlOutput}</div>
         <div class="pt-2">
             <button onclick="bersihkanRiwayatProduk()" class="w-full py-2 bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-600 text-[10px] font-bold rounded-xl transition-colors border border-dashed">
-                <i class="fas fa-trash-alt mr-1"></i> Bersihkan Semua Histori Produk
+                <i class="fas fa-trash-alt mr-1"></i> Bersihkan Histori ${window.location.pathname.includes('gameml.html') ? 'Game' : 'Produk'}
             </button>
         </div>
     `;
@@ -1197,7 +1205,17 @@ function orderUlangDariRiwayat(itemRiwayat) {
 // Fungsi pelengkap untuk menghapus riwayat jika memori penuh
 function bersihkanRiwayatProduk() {
     if (confirm("Hapus permanen semua histori transaksi produk di perangkat ini?")) {
-        localStorage.removeItem('nk_produk_history');
+        if (window.location.pathname.includes('gameml.html')) {
+            const semuaRiwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
+            const riwayatNonGame = semuaRiwayat.filter(item => !(
+                item.gameName
+                || String(item.produkLengkap || '').toUpperCase().includes('TOPUP')
+                || String(item.kategori || '').toUpperCase().includes('TOPUP')
+            ));
+            localStorage.setItem('nk_produk_history', JSON.stringify(riwayatNonGame));
+        } else {
+            localStorage.removeItem('nk_produk_history');
+        }
         bukaModalRiwayatLangsung();
     }
 }
