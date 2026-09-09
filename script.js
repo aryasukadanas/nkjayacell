@@ -400,6 +400,9 @@ async function muatDataDanPisahKategori() {
         // Update data arsip status transaksi harian
         localStorage.setItem('nk_cache_arsip_csv', textArsipTerbaru);
         muatStrukturArsip(textArsipTerbaru);
+        if (!document.getElementById('history-view-section')?.classList.contains('hidden')) {
+            filterRiwayatStatus('SEMUA');
+        }
         console.log("Daftar harga & status arsip berhasil diperbarui dari Google Sheets!");
 
     } catch (error) {
@@ -993,13 +996,12 @@ function filterRiwayatStatus(filterType) {
     
     rawArsipRows.forEach(row => {
         if (!row.trim()) return;
-        const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        const cols = pecahBarisCSV(row);
         
-        // Mengambil ID transaksi dari kolom A, target dari kolom C, dan status dari kolom G.
-        const idTransaksiSheet = cols[0] ? cols[0].trim().replace(/"/g, "").replace(/'/g, "") : "";
-        const noHpTargetSheet = cols[2] ? cols[2].trim().replace(/"/g, "").replace(/'/g, "") : "";
+        const idTransaksiSheet = ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']).replace(/'/g, '');
+        const noHpTargetSheet = ambilNilaiArsip(cols, ['NOMOR', 'NOMOR HP', 'ID PLN', 'IDPEL', 'TARGET']).replace(/'/g, '');
         const noHpTargetKey = noHpTargetSheet.replace(/\D/g, "");
-        const statusTransaksiSheet = cols[6] ? cols[6].trim().replace(/"/g, "").toUpperCase() : "";
+        const statusTransaksiSheet = ambilNilaiArsip(cols, ['STATUS', 'STATUS TRANSAKSI']).replace(/'/g, '').toUpperCase();
 
         if (noHpTargetSheet && statusTransaksiSheet) {
             statusTerupdateMap[noHpTargetSheet] = statusTransaksiSheet;
@@ -1025,9 +1027,10 @@ function filterRiwayatStatus(filterType) {
             || "PROSES";
         
         // Standarisasi kata status dari Google Sheet ke sistem UI aplikasi Anda
-        if (statusFinal.includes("LUNAS") || statusFinal === "SUCCESS") statusFinal = "SUKSES";
-        if (statusFinal.includes("PENDING")) statusFinal = "PROSES";
-        if (statusFinal.includes("FAILED")) statusFinal = "GAGAL";
+        statusFinal = String(statusFinal).trim().toUpperCase();
+        if (statusFinal.includes("LUNAS") || statusFinal.includes("SUCCESS") || statusFinal.includes("SUKSES")) statusFinal = "SUKSES";
+        if (statusFinal.includes("PENDING") || statusFinal.includes("PROSES") || statusFinal.includes("DIPROSES")) statusFinal = "PROSES";
+        if (statusFinal.includes("FAILED") || statusFinal.includes("GAGAL")) statusFinal = "GAGAL";
 
         return {
             ...item,
