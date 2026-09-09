@@ -1662,6 +1662,7 @@ function tampilkanStrukDariRiwayat(item) {
     const barisArsip = cariBarisArsipUntukStruk(item);
     const barisArsipDenganId = cariBarisArsipDenganIdTransaksi(item.id_transaksi);
     const ambilArsip = aliases => ambilNilaiArsip(barisArsip, aliases);
+    const ambilArsipDenganId = aliases => ambilNilaiArsip(barisArsipDenganId, aliases);
     const ambilSerialArsip = () => ambilNilaiArsip(barisArsipDenganId, ['SERIAL NUMBER', 'NOMOR TOKEN', 'ANGKA TOKEN', 'TOKEN', 'SN']);
     const produk = item.produkLengkap || item.produk || '';
     const nominalPesanan = ambilArsip(['NOMINAL TOKEN', 'JUMLAH NOMINAL', 'NOMINAL'])
@@ -1676,9 +1677,9 @@ function tampilkanStrukDariRiwayat(item) {
         nama: kolomEdit.nama || ambilArsip(['NAMA', 'NAMA PELANGGAN', 'PELANGGAN']) || petaNamaPelangganPLN[(item.target || '').replace(/\D/g, '')] || '-',
         tarifDaya: kolomEdit.tarifDaya || petaDayaPelangganPLN[(item.target || '').replace(/\D/g, '')] || '-',
         jumlahDaya: kolomEdit.jumlahDaya
-            || item.jumlahDaya
-            || ambilArsip(['JUMLAH DAYA', 'DAYA TERISI', 'JUMLAH NOMINAL', 'NOMINAL'])
+            || ambilArsipDenganId(['JUMLAH DAYA', 'DAYA TERISI', 'JUMLAH NOMINAL', 'NOMINAL'])
             || petaJumlahDayaPelangganPLN[(item.target || '').replace(/\D/g, '')]
+            || item.jumlahDaya
             || '-',
         harga: kolomEdit.harga || ambilArsip(['HARGA', 'TOTAL TRANSFER', 'TOTAL BAYAR']) || item.biaya,
         serial: ambilSerialArsip() || '-'
