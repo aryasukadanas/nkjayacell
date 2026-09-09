@@ -906,6 +906,7 @@ function bukaModalKeranjang(nomorTargetOtomatis = "") {
 
             const keteranganHtml = keteranganPenuh ? `
                 <div class="mt-1.5" data-keterangan-wrapper>
+                    <div class="text-[8px] font-black uppercase tracking-wider text-gray-400 mb-0.5">Rincian Produk</div>
                     <div class="keterangan-ringkas text-[9px] text-gray-500 leading-relaxed font-medium break-words whitespace-pre-wrap max-w-[220px] ${tampilkanDetail ? '' : 'hidden'}">${keteranganRingkas}</div>
                     <div class="keterangan-lengkap text-[9px] text-gray-500 leading-relaxed font-medium break-words whitespace-pre-wrap max-w-[220px] ${tampilkanDetail ? 'hidden' : ''}">${keteranganPenuh}</div>
                     ${tampilkanDetail ? `

@@ -86,6 +86,7 @@ function isiDatabaseGameDariCSV(text) {
         const hargaPromo = parseInt(cols[3]?.replace(/\D/g, '')) || 0;
         const hargaFlashSale = parseInt(cols[4]?.replace(/\D/g, '')) || 0;
         const waktuMundur = cols[5] || "";
+        const keterangan = cols[6] || "";
 
         if (!dbGame[kategori]) dbGame[kategori] = [];
         dbGame[kategori].push({
@@ -93,7 +94,8 @@ function isiDatabaseGameDariCSV(text) {
             priceNormal: hargaNormal,
             pricePromo: hargaPromo,
             priceFlash: hargaFlashSale,
-            endTimer: waktuMundur
+            endTimer: waktuMundur,
+            keterangan
         });
     });
 }
@@ -190,7 +192,7 @@ function gantiGame(val) {
 
                 const card = document.createElement('div');
                 card.className = "flash-card border-2 border-red-200 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer active:scale-95";
-                card.onclick = () => tambahKeKeranjang(item.name, item.priceFlash, `FLASH SALE (-${persenPotongan}% OFF)`, `TOPUP ${gameDipilih}`);
+                card.onclick = () => tambahKeKeranjang(item.name, item.priceFlash, `FLASH SALE (-${persenPotongan}% OFF)`, `TOPUP ${gameDipilih}`, null, item.keterangan);
                 card.innerHTML = `
                     <div class="absolute top-0 right-0 bg-red-600 text-white font-black text-[8px] px-2 py-0.5 rounded-bl-xl tracking-wider uppercase">-${persenPotongan}%</div>
                     <i class="fas fa-bolt text-amber-500 mb-1.5 text-base"></i>
@@ -208,7 +210,7 @@ function gantiGame(val) {
 
                 const card = document.createElement('div');
                 card.className = "diamond-card border border-orange-300 bg-orange-50/30 p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer active:scale-95 relative overflow-hidden";
-                card.onclick = () => tambahKeKeranjang(item.name, item.pricePromo, `PROMO (${persenPotonganPromo}% OFF)`, `TOPUP ${gameDipilih}`);
+                card.onclick = () => tambahKeKeranjang(item.name, item.pricePromo, `PROMO (${persenPotonganPromo}% OFF)`, `TOPUP ${gameDipilih}`, null, item.keterangan);
                 card.innerHTML = `
                     <div class="absolute top-0 right-0 bg-orange-500 text-white font-black text-[7px] px-1.5 py-0.5 rounded-bl-lg tracking-wider">PROMO -${persenPotonganPromo}%</div>
                     <i class="fas fa-tags text-orange-500 mb-2 text-xs"></i>
@@ -223,7 +225,7 @@ function gantiGame(val) {
             else if (item.priceNormal > 0) {
                 const card = document.createElement('div');
                 card.className = "diamond-card border border-gray-200 bg-white p-4 rounded-2xl flex flex-col items-center text-center cursor-pointer active:scale-95";
-                card.onclick = () => tambahKeKeranjang(item.name, item.priceNormal, "REGULAR", `TOPUP ${gameDipilih}`);
+                card.onclick = () => tambahKeKeranjang(item.name, item.priceNormal, "REGULAR", `TOPUP ${gameDipilih}`, null, item.keterangan);
                 card.innerHTML = `
                     <i class="fas fa-gem ${warnaIcon} mb-2 text-xs"></i>
                     <div class="text-[10px] font-black text-gray-700 uppercase leading-tight">${item.name}</div>
