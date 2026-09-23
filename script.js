@@ -995,6 +995,11 @@ function bukaModalRiwayatLangsung() {
     filterRiwayatStatus('SEMUA');
 }
 
+function ambilArsipNominal(value) {
+    const nominal = Number(String(value || '').replace(/[^0-9-]/g, ''));
+    return Number.isFinite(nominal) ? nominal : 0;
+}
+
 function filterRiwayatStatus(filterType = 'SEMUA') {
     const itemsContainer = document.getElementById('history-items-container');
     if (!itemsContainer) return;
@@ -1078,6 +1083,27 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
         dataTerfilter = dataTerfilter.filter(item => {
             const idRiwayat = String(item.id_transaksi || '').replace(/[\s']/g, '').toUpperCase();
             return idRiwayat.includes(searchId) && (!idArsip.size || idArsip.has(idRiwayat));
+        });
+
+        const idLokal = new Set(dataTerfilter.map(item => String(item.id_transaksi || '').replace(/[\s']/g, '').toUpperCase()));
+        rawArsipRows.forEach(row => {
+            if (!row.trim()) return;
+            const cols = pecahBarisCSV(row);
+            const idTransaksi = ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']);
+            const idNormal = idTransaksi.replace(/[\s']/g, '').toUpperCase();
+            if (!idNormal.includes(searchId) || idLokal.has(idNormal)) return;
+
+            const statusSheet = ambilNilaiArsip(cols, ['STATUS', 'STATUS TRANSAKSI']).toUpperCase();
+            const nominalSheet = ambilArsipNominal(ambilNilaiArsip(cols, ['HARGA', 'TOTAL BAYAR', 'TOTAL TRANSFER', 'NOMINAL']));
+            dataTerfilter.push({
+                id_transaksi: idTransaksi,
+                tanggal: ambilNilaiArsip(cols, ['TANGGAL', 'WAKTU', 'DATE']),
+                target: ambilNilaiArsip(cols, ['NOMOR', 'NOMOR HP', 'ID PLN', 'IDPEL', 'TARGET']),
+                produk: ambilNilaiArsip(cols, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']) || 'Transaksi Arsip',
+                produkLengkap: ambilNilaiArsip(cols, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']) || 'Transaksi Arsip',
+                biaya: nominalSheet,
+                status: statusSheet.includes('LUNAS') || statusSheet.includes('SUKSES') ? 'SUKSES' : statusSheet.includes('GAGAL') ? 'GAGAL' : 'PROSES'
+            });
         });
     }
 

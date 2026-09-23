@@ -6,6 +6,7 @@
 let databaseAdminBank = [];
 let databasePelangganSheet = []; // Menampung data nama pemilik rekening dari spreadsheet
 let databaseArsip = []; // [NEW] Menampung data status transaksi dari sheet arsip
+let databaseArsipHeaders = [];
 const fallbackBankList = [
     'ALLO BANK', 'BCA', 'BLU BCA', 'BNI', 'BRI', 'BSI', 'DANA', 'GOPAY',
     'JAGO', 'JENIUS', 'LINKAJA', 'MANDIRI', 'NEOBANK', 'OVO', 'SEABANK', 'SHOPEEPAY'
@@ -32,6 +33,12 @@ function parseCSVRow(row) {
     }
     entries.push(entry.trim());
     return entries;
+}
+
+function nilaiTransferSheet(cols, aliases, fallbackIndex = -1) {
+    const normalizedAliases = aliases.map(alias => alias.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+    const index = normalizedAliases.map(alias => databaseArsipHeaders.indexOf(alias)).find(index => index >= 0);
+    return String(cols[index === undefined ? fallbackIndex : index] || '').replace(/^"|"$/g, '').trim();
 }
 
 /**
@@ -101,7 +108,9 @@ async function fetchTarifAdminBank() {
 
         // 5. [NEW] Proses Data Arsip Status Transaksi
         const textArsip = await resArsip.text();
-        databaseArsip = textArsip.split(/\r?\n/).slice(1).map(row => {
+        const rowsArsip = textArsip.split(/\r?\n/);
+        databaseArsipHeaders = rowsArsip[0] ? parseCSVRow(rowsArsip[0]).map(value => value.replace(/^"|"$/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '')) : [];
+        databaseArsip = rowsArsip.slice(1).map(row => {
             if (!row.trim()) return null;
             return parseCSVRow(row);
         }).filter(Boolean);
@@ -386,7 +395,7 @@ function renderRiwayatUI() {
     const searchId = String(document.getElementById('transfer-history-search-input')?.value || '')
         .replace(/[\s'"]/g, '').toUpperCase();
 
-    if (riwayat.length === 0) {
+    if (riwayat.length === 0 && !searchId) {
         containerDaftar.innerHTML = `
             <div class="text-center py-10 text-gray-400 italic text-xs bg-gray-50 rounded-2xl border border-dashed border-gray-200">
                 <i class="fas fa-folder-open text-3xl mb-2 text-gray-300 block"></i>
@@ -419,6 +428,26 @@ function renderRiwayatUI() {
             );
         })
         : riwayat;
+
+    if (searchId) {
+        const idLokal = new Set(riwayatTerfilter.map(item => String(item.id || '').replace(/[\s'\"]/g, '').toUpperCase()));
+        databaseArsip.forEach(cols => {
+            const idTransaksi = nilaiTransferSheet(cols, ['ID TRANSAKSI', 'ID TRX', 'ID'], 0);
+            const idNormal = idTransaksi.replace(/[\s'\"]/g, '').toUpperCase();
+            if (!idNormal.includes(searchId) || idLokal.has(idNormal)) return;
+            const nominal = Number(nilaiTransferSheet(cols, ['NOMINAL', 'TOTAL BAYAR', 'TOTAL TRANSFER', 'HARGA'], 0).replace(/[^0-9-]/g, '')) || 0;
+            riwayatTerfilter.push({
+                id: idTransaksi,
+                nama: nilaiTransferSheet(cols, ['NAMA', 'NAMA PEMILIK', 'PELANGGAN'], 5) || '-',
+                bank: nilaiTransferSheet(cols, ['BANK', 'BANK TUJUAN'], 2) || '-',
+                norek: nilaiTransferSheet(cols, ['NO REKENING', 'NOMOR REKENING', 'REKENING'], 4) || '-',
+                tanggal: nilaiTransferSheet(cols, ['TANGGAL', 'WAKTU', 'DATE'], 1),
+                waktu: '',
+                nominal,
+                admin: Number(nilaiTransferSheet(cols, ['BIAYA ADMIN', 'ADMIN'], 0).replace(/[^0-9-]/g, '')) || 0
+            });
+        });
+    }
 
     if (riwayatTerfilter.length === 0) {
         containerDaftar.innerHTML = `
@@ -940,7 +969,9 @@ async function bukaModalRiwayat() {
         const resArsip = await fetch(SHEET_TRANSFER_URL);
         if (!resArsip.ok) throw new Error(`Sheet status tidak dapat diakses (${resArsip.status})`);
         const textArsip = await resArsip.text();
-        databaseArsip = textArsip.split(/\r?\n/).slice(1).map(row => {
+        const rowsArsip = textArsip.split(/\r?\n/);
+        databaseArsipHeaders = rowsArsip[0] ? parseCSVRow(rowsArsip[0]).map(value => value.replace(/^"|"$/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '')) : [];
+        databaseArsip = rowsArsip.slice(1).map(row => {
             if (!row.trim()) return null;
             return parseCSVRow(row);
         }).filter(Boolean);
