@@ -383,6 +383,8 @@ function renderRiwayatUI() {
     if (!containerDaftar) return;
 
     const riwayat = JSON.parse(localStorage.getItem('nk_transfer_history')) || [];
+    const searchId = String(document.getElementById('transfer-history-search-input')?.value || '')
+        .replace(/[\s'"]/g, '').toUpperCase();
 
     if (riwayat.length === 0) {
         containerDaftar.innerHTML = `
@@ -409,7 +411,26 @@ function renderRiwayatUI() {
         }
     });
 
-    const riwayatHTML = riwayat.map(item => {
+    const riwayatTerfilter = searchId
+        ? riwayat.filter(item => {
+            const idRiwayat = String(item.id || '').replace(/[\s'"]/g, '').toUpperCase();
+            return idRiwayat.includes(searchId) && databaseArsip.some(cols =>
+                String(cols[0] || '').replace(/[\s'"]/g, '').toUpperCase().includes(searchId)
+            );
+        })
+        : riwayat;
+
+    if (riwayatTerfilter.length === 0) {
+        containerDaftar.innerHTML = `
+            <div class="text-center py-10 text-gray-400 italic text-xs bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                <i class="fas fa-search text-3xl mb-2 text-gray-300 block"></i>
+                Tidak ada transaksi dengan ID tersebut.
+            </div>
+        `;
+        return;
+    }
+
+    const riwayatHTML = riwayatTerfilter.map(item => {
         const noRekRiwayat = item.norek.replace(/\D/g, ''); // [FIX] Hapus SEMUA karakter selain angka agar formatnya bersih dan konsisten.
         let statusFinal = statusMap[item.id] || statusMap[noRekRiwayat] || "PROSES"; // Prioritaskan pencocokan via ID Transaksi
 
@@ -907,6 +928,8 @@ async function bukaModalRiwayat() {
     // [STANDALONE] Kembalikan logika buka modal riwayat.
     const modal = document.getElementById('history-modal');
     if (!modal) return;
+    const searchInput = document.getElementById('transfer-history-search-input');
+    if (searchInput) searchInput.value = '';
 
     // Selalu ambil data status terbaru dari spreadsheet setiap kali modal dibuka
     try {

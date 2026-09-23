@@ -965,6 +965,8 @@ function bukaModalRiwayatLangsung() {
     if (historySection) historySection.classList.remove('hidden');
 
     if (titleModal) titleModal.innerHTML = `<i class="fas fa-history text-indigo-600"></i> Log Histori Toko`;
+    const searchInput = document.getElementById('history-search-input');
+    if (searchInput) searchInput.value = '';
     
     modal.classList.remove('hidden');
     setTimeout(() => {
@@ -993,9 +995,11 @@ function bukaModalRiwayatLangsung() {
     filterRiwayatStatus('SEMUA');
 }
 
-function filterRiwayatStatus(filterType) {
+function filterRiwayatStatus(filterType = 'SEMUA') {
     const itemsContainer = document.getElementById('history-items-container');
     if (!itemsContainer) return;
+    const searchId = String(document.getElementById('history-search-input')?.value || '')
+        .replace(/[\s']/g, '').toUpperCase();
 
     // Atur Aktif Tombol Filter Tab UI
     const filterButtons = {
@@ -1064,6 +1068,17 @@ function filterRiwayatStatus(filterType) {
     let dataTerfilter = riwayatDiproses;
     if (filterType !== 'SEMUA') {
         dataTerfilter = riwayatDiproses.filter(item => item.status === filterType);
+    }
+    if (searchId) {
+        const idArsip = new Set(rawArsipRows.map(row => {
+            const cols = pecahBarisCSV(row);
+            return ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID'])
+                .replace(/[\s']/g, '').toUpperCase();
+        }).filter(Boolean));
+        dataTerfilter = dataTerfilter.filter(item => {
+            const idRiwayat = String(item.id_transaksi || '').replace(/[\s']/g, '').toUpperCase();
+            return idRiwayat.includes(searchId) && (!idArsip.size || idArsip.has(idRiwayat));
+        });
     }
 
     // Batasi maksimal 20 riwayat teranyar
