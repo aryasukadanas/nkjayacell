@@ -1887,15 +1887,16 @@ async function printStruk58mm() {
         };
         const statusCetak = dataStrukAktif.status || 'DIPROSES';
         const waktuCetak = document.getElementById('struk-waktu')?.innerText || '-';
+        const jarakAntarBlok = '';
         const isi = [
             `${esc}@`, `${esc}3\x14`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
             'STRUK TOKEN LISTRIK', statusCetak, waktuCetak, `${esc}a\x00`, '--------------------------------',
-            ...field('ID TRX', nilai('token-id-trx')),
-            ...field('ID PLN', nilai('token-id-pln')),
-            ...field('PRODUK', nilai('token-produk')),
-            ...field('NAMA', nilai('token-nama')),
-            ...field('TARIF/DAYA', nilai('token-tarif-daya')),
-            ...field('JUMLAH DAYA', nilai('token-jumlah-daya')),
+            ...field('ID TRX', nilai('token-id-trx')), jarakAntarBlok,
+            ...field('ID PLN', nilai('token-id-pln')), jarakAntarBlok,
+            ...field('PRODUK', nilai('token-produk')), jarakAntarBlok,
+            ...field('NAMA', nilai('token-nama')), jarakAntarBlok,
+            ...field('TARIF/DAYA', nilai('token-tarif-daya')), jarakAntarBlok,
+            ...field('JUMLAH DAYA', nilai('token-jumlah-daya')), jarakAntarBlok,
             ...field('HARGA', nilai('token-harga')),
             '--------------------------------', `${esc}a\x01`, 'NOMOR TOKEN',
             `${gs}!\x11`, ...bungkusTeks(nilai('token-serial'), 16), `${gs}!\x00`,
