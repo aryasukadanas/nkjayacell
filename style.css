@@ -150,3 +150,96 @@ nav.fixed {
     .modal { align-items: center; }
     .modal-content { border-radius: 32px; margin: 20px; }
 }
+
+/* --- Alert Konfirmasi Riwayat --- */
+.modal-overlay {
+    visibility: visible;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(10, 15, 29, 0.75);
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.modal-overlay.is-open {
+    opacity: 1 !important;
+    pointer-events: auto;
+}
+
+.modal-card {
+    width: 100%;
+    max-width: 360px;
+    padding: 40px 20px 20px;
+    position: relative;
+    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    border-radius: 24px;
+    background: linear-gradient(180deg, #53637a 0%, #2a3447 35%, #1d2536 100%);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    text-align: center;
+    color: #fff;
+}
+
+.modal-shield {
+    position: absolute;
+    top: -32px;
+    left: 50%;
+    width: 64px;
+    height: 64px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #cbd5e1;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, #475569 100%);
+}
+
+.modal-title { margin-top: 5px; color: #f1f5f9; font-size: 1.1rem; font-weight: 800; }
+.alert-box { margin: 18px 0 20px; padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 16px; background: rgba(15,23,42,.55); text-align: left; }
+.alert-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #fbbf24; font-size: .9rem; font-weight: 700; }
+.alert-list { margin: 0; padding-left: 18px; color: #cbd5e1; font-size: .85rem; line-height: 1.5; }
+.modal-actions { display: flex; gap: 10px; }
+.modal-actions button { flex: 1; min-height: 42px; border: 0; border-radius: 12px; padding: 10px 12px; font-size: .72rem; font-weight: 800; cursor: pointer; }
+.btn-confirm { background: #2563eb; color: #fff; }
+.btn-cancel { border: 1px solid rgba(226,232,240,.2) !important; background: rgba(148,163,184,.22); color: #e2e8f0; }
+.btn-danger { background: #dc2626; }
+
+/* Keep the confirmation alert isolated from the checkout modal styles. */
+#customModal.modal-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 20px !important;
+}
+
+#customModal .modal-card {
+    width: 100% !important;
+    max-width: 360px !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 40px 20px 20px !important;
+    position: relative !important;
+    transform: scale(0.9);
+}
+
+#customModal.is-open .modal-card {
+    transform: scale(1) !important;
+}
+
+#customModal .modal-body,
+#customModal .alert-box,
+#customModal .modal-actions {
+    width: 100% !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+}

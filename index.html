@@ -9,6 +9,7 @@
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
@@ -378,8 +379,8 @@
         </button>
     </nav>
 
-    <div id="cart-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden opacity-0 transition-all duration-300 flex items-end justify-center">
-        <div class="bg-white w-full max-w-md rounded-t-[2.5rem] p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto transform translate-y-full transition-transform duration-300 no-scrollbar">
+    <div id="cart-modal" onclick="if (event.target === this) tutupModalKeranjang()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden opacity-0 transition-all duration-300 flex items-end justify-center">
+        <div class="bg-white w-full max-w-md rounded-t-[2.5rem] p-6 pb-24 shadow-2xl space-y-4 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain scroll-pb-24 transform translate-y-full transition-transform duration-300 no-scrollbar">
             
             <div class="flex justify-between items-center pb-3 border-b border-gray-100">
                 <h3 id="modal-title-dynamic" class="font-black text-gray-900 text-base flex items-center gap-2"></h3>
@@ -438,7 +439,7 @@
                     <button onclick="filterRiwayatStatus('GAGAL')" id="btn-fltr-gagal" class="shrink-0 text-[10px] font-black px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 transition-all">Gagal</button>
                 </div>
                 
-                <div id="history-items-container" class="space-y-2.5 max-h-[55vh] overflow-y-auto no-scrollbar pr-0.5"></div>
+                <div id="history-items-container" class="space-y-2.5 pr-0.5"></div>
                 
                 <div class="text-center pt-2">
                     <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider"><i class="fas fa-sync-alt"></i> Data diperbarui secara real-time</p>
@@ -531,6 +532,22 @@
                 <p class="text-center text-[10px] text-gray-400 font-semibold mt-2">Terima kasih telah menggunakan layanan NK JAYA CELL.</p>
             </div>
             <div id="struk-actions" class="p-4 grid grid-cols-2 gap-3"></div>
+        </div>
+    </div>
+
+    <div id="customModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-shield"><i class="fas fa-shield-alt text-blue-400 text-2xl"></i></div>
+            <h3 class="modal-title">VERIFIKASI GAGAL</h3>
+            <div class="modal-body">
+                <div class="alert-box">
+                    <div class="alert-header"><i class="fas fa-exclamation-triangle"></i><span>DATA TIDAK LENGKAP!</span></div>
+                    <ul class="alert-list"></ul>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-confirm" onclick="closeAlert()">OKE, SAYA MENGERTI</button>
+                </div>
+            </div>
         </div>
     </div>
 

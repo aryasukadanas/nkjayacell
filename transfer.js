@@ -538,11 +538,18 @@ function renderRiwayatUI() {
  * Menghapus seluruh isi riwayat
  */
 function bersihkanRiwayat() {
-    // [STANDALONE] Kembalikan logika pembersihan riwayat transfer.
-    if (confirm("Apakah Anda yakin ingin menghapus semua riwayat transfer?")) {
-        localStorage.removeItem('nk_transfer_history');
-        renderRiwayatUI(); // Render ulang UI untuk menampilkan keadaan kosong
-    }
+    showAlert(
+        'BERSIHKAN RIWAYAT',
+        'KONFIRMASI PENGHAPUSAN',
+        ['Semua riwayat transfer di perangkat ini akan dihapus.'],
+        true
+    );
+}
+
+function konfirmasiBersihkanRiwayat() {
+    localStorage.removeItem('nk_transfer_history');
+    closeAlert();
+    renderRiwayatUI();
 }
 
 /**
@@ -551,7 +558,7 @@ function bersihkanRiwayat() {
  * @param {string} header - Judul di dalam kotak peringatan.
  * @param {string[]} listItems - Array berisi pesan-pesan yang akan ditampilkan sebagai daftar.
  */
-function showAlert(title, header, listItems) {
+function showAlert(title, header, listItems, isDeleteConfirmation = false) {
     // [ANIMASI] Logika untuk memunculkan modal dengan animasi
     const modal = document.getElementById('customModal');
     const modalTitle = modal.querySelector('.modal-title');
@@ -570,7 +577,16 @@ function showAlert(title, header, listItems) {
         });
     }
 
-    modal.style.visibility = 'visible';
+    const actions = modal.querySelector('.modal-actions');
+    if (actions) {
+        actions.innerHTML = isDeleteConfirmation
+            ? `<button type="button" class="btn-cancel" onclick="closeAlert()">BATAL</button><button type="button" class="btn-confirm btn-danger" onclick="konfirmasiBersihkanRiwayat()">BERSIHKAN</button>`
+            : `<button type="button" class="btn-confirm" onclick="closeAlert()">OKE, SAYA MENGERTI</button>`;
+    }
+
+    modal.classList.add('is-open');
+    modal.style.setProperty('transition', 'none', 'important');
+    modal.style.setProperty('opacity', '1', 'important');
     modal.style.opacity = '1';
     if (modal.querySelector('.modal-card')) {
         modal.querySelector('.modal-card').style.transform = 'scale(1)';
@@ -583,8 +599,9 @@ function showAlert(title, header, listItems) {
 function closeAlert() {
     // [ANIMASI] Logika untuk menutup modal dengan animasi
     const modal = document.getElementById('customModal');
-    modal.style.opacity = '0';
-    setTimeout(() => { modal.style.visibility = 'hidden'; }, 300); // Sesuaikan dengan durasi transisi CSS
+    modal.classList.remove('is-open');
+    modal.style.setProperty('transition', 'none', 'important');
+    modal.style.setProperty('opacity', '0', 'important');
 }
 
 /**
@@ -996,6 +1013,14 @@ function tutupModalRiwayat() {
     modal.querySelector('div').classList.add('translate-y-full');
     setTimeout(() => modal.classList.add('hidden'), 300);
 }
+
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const historyModal = document.getElementById('history-modal');
+    if (historyModal && !historyModal.classList.contains('hidden')) {
+        tutupModalRiwayat();
+    }
+});
 
 /**
  * [NEW] FUNGSI SLIDER BANNER (KHUSUS UNTUK INDEX2.HTML)

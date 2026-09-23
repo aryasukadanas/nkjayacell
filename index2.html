@@ -311,7 +311,7 @@
     </nav>
 
     <!-- [NEW] Modal Riwayat Transaksi (Meniru index.html) -->
-    <div id="history-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden opacity-0 transition-all duration-300 flex items-end justify-center">
+    <div id="history-modal" onclick="if (event.target === this) tutupModalRiwayat()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden opacity-0 transition-all duration-300 flex items-end justify-center">
         <div class="bg-white w-full max-w-md rounded-t-[2.5rem] p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto transform translate-y-full transition-transform duration-300 no-scrollbar">
             
             <div class="flex justify-between items-center pb-3 border-b border-gray-100">

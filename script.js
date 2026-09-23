@@ -1194,8 +1194,8 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
 
     itemsContainer.innerHTML = `
         <div class="space-y-2.5">${htmlOutput}</div>
-        <div class="pt-2">
-            <button onclick="bersihkanRiwayatProduk()" class="w-full py-2 bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-600 text-[10px] font-bold rounded-xl transition-colors border border-dashed">
+        <div class="pt-4 pb-4">
+            <button onclick="bersihkanRiwayatProduk()" class="w-full min-h-11 py-2 bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-600 text-[10px] font-bold rounded-xl transition-colors border border-dashed">
                 <i class="fas fa-trash-alt mr-1"></i> Bersihkan Histori ${window.location.pathname.includes('gameml.html') ? 'Game' : 'Produk'}
             </button>
         </div>
@@ -1246,20 +1246,33 @@ function orderUlangDariRiwayat(itemRiwayat) {
 }
 // Fungsi pelengkap untuk menghapus riwayat jika memori penuh
 function bersihkanRiwayatProduk() {
-    if (confirm("Hapus permanen semua histori transaksi produk di perangkat ini?")) {
-        if (window.location.pathname.includes('gameml.html')) {
-            const semuaRiwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
-            const riwayatNonGame = semuaRiwayat.filter(item => !(
-                item.gameName
-                || String(item.produkLengkap || '').toUpperCase().includes('TOPUP')
-                || String(item.kategori || '').toUpperCase().includes('TOPUP')
-            ));
-            localStorage.setItem('nk_produk_history', JSON.stringify(riwayatNonGame));
-        } else {
-            localStorage.removeItem('nk_produk_history');
-        }
-        bukaModalRiwayatLangsung();
+    const historyModal = document.getElementById('cart-modal');
+    if (historyModal) {
+        historyModal.classList.add('opacity-0');
+        historyModal.classList.add('hidden');
     }
+    showAlert(
+        'BERSIHKAN RIWAYAT',
+        'KONFIRMASI PENGHAPUSAN',
+        ['Semua riwayat transaksi di perangkat ini akan dihapus.'],
+        true
+    );
+}
+
+function konfirmasiBersihkanRiwayatProduk() {
+    if (window.location.pathname.includes('gameml.html')) {
+        const semuaRiwayat = JSON.parse(localStorage.getItem('nk_produk_history')) || [];
+        const riwayatNonGame = semuaRiwayat.filter(item => !(
+            item.gameName
+            || String(item.produkLengkap || '').toUpperCase().includes('TOPUP')
+            || String(item.kategori || '').toUpperCase().includes('TOPUP')
+        ));
+        localStorage.setItem('nk_produk_history', JSON.stringify(riwayatNonGame));
+    } else {
+        localStorage.removeItem('nk_produk_history');
+    }
+    closeAlert();
+    bukaModalRiwayatLangsung();
 }
 
 function hapusItemKeranjang() {
@@ -1295,9 +1308,18 @@ function tutupModalKeranjang() {
     setTimeout(() => modal.classList.add('hidden'), 300);
 }
 
-function showAlert(title, header, listItems) {
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const historyModal = document.getElementById('cart-modal');
+    if (historyModal && !historyModal.classList.contains('hidden')) {
+        tutupModalKeranjang();
+    }
+});
+
+function showAlert(title, header, listItems, isDeleteConfirmation = false) {
     const modal = document.getElementById('customModal');
     if (!modal) return;
+    document.body.appendChild(modal);
 
     const modalTitle = modal.querySelector('.modal-title');
     const alertHeader = modal.querySelector('.alert-header span');
@@ -1315,8 +1337,17 @@ function showAlert(title, header, listItems) {
         });
     }
 
-    modal.style.visibility = 'visible';
-    modal.style.opacity = '1';
+    const actions = modal.querySelector('.modal-actions');
+    if (actions) {
+        actions.innerHTML = isDeleteConfirmation
+            ? `<button type="button" class="btn-cancel" onclick="closeAlert()">BATAL</button><button type="button" class="btn-confirm btn-danger" onclick="konfirmasiBersihkanRiwayatProduk()">BERSIHKAN</button>`
+            : `<button type="button" class="btn-confirm" onclick="closeAlert()">OKE, SAYA MENGERTI</button>`;
+    }
+
+    modal.classList.add('is-open');
+    modal.style.setProperty('visibility', 'visible', 'important');
+    modal.style.setProperty('opacity', '1', 'important');
+    modal.style.setProperty('pointer-events', 'auto', 'important');
     const modalCard = modal.querySelector('.modal-card');
     if (modalCard) modalCard.style.transform = 'scale(1)';
 }
@@ -1324,8 +1355,9 @@ function showAlert(title, header, listItems) {
 function closeAlert() {
     const modal = document.getElementById('customModal');
     if (!modal) return;
-    modal.style.opacity = '0';
-    setTimeout(() => { modal.style.visibility = 'hidden'; }, 300);
+    modal.classList.remove('is-open');
+    modal.style.setProperty('opacity', '0', 'important');
+    modal.style.setProperty('pointer-events', 'none', 'important');
 }
 
 function toggleMetodePembayaranUI(metode) {
