@@ -974,6 +974,11 @@ async function bukaModalRiwayat() {
     // [STANDALONE] Kembalikan logika buka modal riwayat.
     const modal = document.getElementById('history-modal');
     if (!modal) return;
+
+    if (!modal.classList.contains('hidden')) {
+        tutupModalRiwayat();
+        return;
+    }
     const searchInput = document.getElementById('transfer-history-search-input');
     if (searchInput) searchInput.value = '';
 

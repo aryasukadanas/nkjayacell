@@ -293,7 +293,7 @@
 
     </main>
 
-    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/90 backdrop-blur-lg border-t border-gray-100 flex justify-around p-2 z-40 rounded-t-[1.8rem] shadow-[0_-8px_24px_rgba(0,0,0,0.04)]">
+    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/90 backdrop-blur-lg border-t border-gray-100 flex justify-around p-2 z-[60] rounded-t-[1.8rem] shadow-[0_-8px_24px_rgba(0,0,0,0.04)]">
         <a href="index.html" class="flex-1 flex flex-col items-center gap-1 text-gray-400 py-2">
             <i class="fas fa-store text-xl"></i>
             <span class="text-[8px] font-black uppercase">Produk</span>
@@ -312,7 +312,7 @@
 
     <!-- [NEW] Modal Riwayat Transaksi (Meniru index.html) -->
     <div id="history-modal" onclick="if (event.target === this) tutupModalRiwayat()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden opacity-0 transition-all duration-300 flex items-end justify-center">
-        <div class="bg-white w-full max-w-md rounded-t-[2.5rem] p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto transform translate-y-full transition-transform duration-300 no-scrollbar">
+        <div class="bg-white w-full max-w-md rounded-t-[2.5rem] p-6 pb-24 shadow-2xl space-y-4 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain scroll-pb-24 transform translate-y-full transition-transform duration-300 no-scrollbar">
             
             <div class="flex justify-between items-center pb-3 border-b border-gray-100">
                 <h3 class="font-black text-gray-900 text-base flex items-center gap-2"><i class="fas fa-history text-indigo-600"></i> Riwayat Transfer</h3>
@@ -326,15 +326,15 @@
                     <i class="fas fa-search absolute left-3 text-gray-400 text-xs"></i>
                     <input id="transfer-history-search-input" type="search" oninput="renderRiwayatUI()" placeholder="Cari ID transaksi dari Transfer..." class="w-full h-full pl-9 pr-3 bg-transparent text-xs font-bold text-gray-700 placeholder:text-gray-400 border-0 outline-none ring-0 focus:ring-0">
                 </div>
-                <div id="daftar-riwayat" class="space-y-2.5 max-h-[65vh] overflow-y-auto no-scrollbar pr-0.5"></div>
+                <div id="daftar-riwayat" class="space-y-2.5 pr-0.5"></div>
             </div>
 
         </div>
     </div>
 
     <!-- [NEW] Modal Struk Bukti Transfer -->
-    <div id="struk-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-300 flex items-center justify-center p-4">
-        <div class="bg-gray-100 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-3xl shadow-2xl transform scale-95 transition-transform duration-300">
+    <div id="struk-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] hidden opacity-0 transition-opacity duration-300 flex items-center justify-center p-4">
+        <div class="bg-gray-100 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain scroll-pb-24 rounded-3xl shadow-2xl transform scale-95 transition-transform duration-300 pb-20">
             <!-- Bagian konten struk yang akan di-screenshot -->
             <div id="struk-content" class="bg-white p-6 rounded-t-3xl">
                 <div class="text-center mb-4">

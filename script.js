@@ -960,6 +960,11 @@ function bukaModalRiwayatLangsung() {
 
     if (!modal) return;
 
+    if (!modal.classList.contains('hidden')) {
+        tutupModalKeranjang();
+        return;
+    }
+
     // Switch View Section
     if (checkoutSection) checkoutSection.classList.add('hidden');
     if (historySection) historySection.classList.remove('hidden');
