@@ -68,6 +68,7 @@ let listCacheRiwayat = [];
 let petaNamaPelangganPLN = {};
 let petaDayaPelangganPLN = {};
 let petaJumlahDayaPelangganPLN = {};
+let petaJumlahDayaPLNBerdasarkanNominal = {};
 let dataStrukAktif = null;
 let notifikasiPromoDikirim = new Set();
 
@@ -177,6 +178,19 @@ function ambilNilaiArsip(cols, aliases) {
     const index = aliases.map(alias => alias.toUpperCase().replace(/[^A-Z0-9]/g, ''))
         .map(alias => rawArsipHeaders.indexOf(alias)).find(index => index >= 0);
     return index === undefined ? '' : (cols[index] || '').trim();
+}
+
+function normalisasiNominalPLN(value) {
+    const digits = String(value || '').replace(/[^0-9]/g, '');
+    return digits ? String(Number(digits)) : '';
+}
+
+function ambilJumlahDayaPLN(idPln, nominal) {
+    const idBersih = String(idPln || '').replace(/\D/g, '');
+    const nominalBersih = normalisasiNominalPLN(nominal);
+    return petaJumlahDayaPLNBerdasarkanNominal[idBersih]?.[nominalBersih]
+        || petaJumlahDayaPelangganPLN[idBersih]
+        || '';
 }
 
   // ==========================================================
@@ -308,6 +322,9 @@ async function muatNamaPelangganPLN() {
         const namaIndex = findColumn(['NAMA', 'NAMA PELANGGAN', 'PELANGGAN']);
         const tarifIndex = findColumn(['TARIF/DAYA', 'TARIF DAYA', 'DAYA']);
         const jumlahDayaIndex = findColumn(['JUMLAH DAYA', 'JUMLAH DAYA TERBARU', 'DAYA TERISI']);
+        const nominalIndexes = headers
+            .map((header, index) => ({ index, nominal: normalisasiNominalPLN(header) }))
+            .filter(({ index, nominal }) => index > tarifIndex && nominal);
 
         rows.slice(headerIndex + 1).forEach(row => {
             const cols = pecahBarisCSV(row);
@@ -319,6 +336,13 @@ async function muatNamaPelangganPLN() {
             if (idPln && tarifDaya) petaDayaPelangganPLN[idPln] = tarifDaya;
             // Baris yang lebih bawah dianggap data terbaru; nilai kosong tidak menimpa nilai lama.
             if (idPln && jumlahDaya) petaJumlahDayaPelangganPLN[idPln] = jumlahDaya;
+            if (idPln) {
+                if (!petaJumlahDayaPLNBerdasarkanNominal[idPln]) petaJumlahDayaPLNBerdasarkanNominal[idPln] = {};
+                nominalIndexes.forEach(({ index, nominal }) => {
+                    const nilai = (cols[index] || '').trim();
+                    if (nilai) petaJumlahDayaPLNBerdasarkanNominal[idPln][nominal] = nilai;
+                });
+            }
         });
 
         tampilkanNamaPelangganPLN(document.getElementById('search-phone-input')?.value || '');
@@ -1620,7 +1644,7 @@ function simpanRiwayatProdukLokal(idTransaksi, waktu, noHp, produk, total, statu
         target: noHp,
         produk: keranjangBelanja.produk, // Gunakan nama produk bersih
         biaya: total,
-        jumlahDaya: petaJumlahDayaPelangganPLN[noHp.replace(/\D/g, '')] || '',
+        jumlahDaya: ambilJumlahDayaPLN(noHp, keranjangBelanja.produk) || '',
         status: status.toUpperCase().includes("LUNAS") ? "SUKSES" : "PROSES", // Tetap 'PROSES' jika bukan LUNAS
         produkLengkap: produkLengkap, // Simpan deskripsi lengkap ke dalam satu field
         keterangan: keranjangBelanja.keterangan || "",
@@ -1748,16 +1772,16 @@ function tampilkanStrukDariRiwayat(item) {
         || item.biaya;
     const produkToken = nominalPesanan ? `TOKEN PLN - ${formatHarga(nominalPesanan)}` : 'TOKEN PLN';
     const gabunganProduk = `${produk} ${ambilArsip(['PRODUK', 'NAMA PRODUK'])}`.toUpperCase();
+    const idPlnPesanan = kolomEdit.idPln || item.target || ambilArsip(['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR']);
     const token = {
         idTrx: kolomEdit.idTrx || item.id_transaksi || ambilArsip(['ID TRANSAKSI', 'ID TRX', 'ID']),
-        idPln: kolomEdit.idPln || item.target || ambilArsip(['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR']),
+        idPln: idPlnPesanan,
         produk: produkToken,
         nama: kolomEdit.nama || ambilArsip(['NAMA', 'NAMA PELANGGAN', 'PELANGGAN']) || petaNamaPelangganPLN[(item.target || '').replace(/\D/g, '')] || '-',
         tarifDaya: kolomEdit.tarifDaya || petaDayaPelangganPLN[(item.target || '').replace(/\D/g, '')] || '-',
         jumlahDaya: kolomEdit.jumlahDaya
-            || ambilArsipDenganId(['JUMLAH DAYA', 'DAYA TERISI', 'JUMLAH NOMINAL', 'NOMINAL'])
-            || petaJumlahDayaPelangganPLN[(item.target || '').replace(/\D/g, '')]
             || item.jumlahDaya
+            || ambilArsipDenganId(['JUMLAH DAYA', 'DAYA TERISI'])
             || '-',
         harga: kolomEdit.harga || ambilArsip(['HARGA', 'TOTAL TRANSFER', 'TOTAL BAYAR']) || item.biaya,
         serial: ambilSerialArsip() || '-'
