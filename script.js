@@ -1547,28 +1547,6 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
     // --- 1. SIMPAN KE RIWAYAT LOKAL (SAMA SEPERTI TRANSAKSI TRANSFER) ---
     simpanRiwayatProdukLokal(idTransaksi, waktuMks, noHp, fullProdukLabel, hargaFinal, statusLabel);
 
-    // [UPDATE] Gunakan metode FormData yang sama dengan transfer.js untuk pengiriman data yang lebih andal.
-    try {
-        // Kirim sebagai JSON, karena Apps Script untuk 'ARSIP' mengharapkan e.postData.contents
-        const response = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            // Hapus 'mode: no-cors' agar bisa membaca respons
-            headers: {
-              'Content-Type': 'text/plain;charset=utf-8', // Gunakan text/plain untuk menghindari preflight CORS
-            },
-            body: JSON.stringify(dataSimpan)
-        });
-
-        const textResponse = await response.text();
-        if (textResponse.trim().toLowerCase() === 'sukses') {
-            console.log(`✅ Data produk (ID: ${idTransaksi}) berhasil terekam di Google Sheets.`);
-        } else {
-            throw new Error(`Server merespons dengan pesan tak terduga: ${textResponse}`);
-        }
-    } catch (e) { 
-        console.error(`❌ Gagal mengirim data produk (ID: ${idTransaksi}) ke Google Sheets:`, e);
-    }
-
     const keteranganText = keranjangBelanja.keterangan ? `📝 Keterangan: ${keranjangBelanja.keterangan}\n` : "";
 
     const textWA = `⚡ *TRANSAKSI BARU - NK JAYA CELL* ⚡\n` +
@@ -1584,10 +1562,30 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
                    `--------------------------------------------\n` +
                    `Mohon segera diproses ya, Terima kasih! 🙏`;
 
+    // Buka WhatsApp sebelum await agar popup tetap dianggap berasal dari klik pengguna.
     window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(textWA)}`, '_blank');
 
-    // PERBAIKAN: Beri jeda agar pengguna melihat proses selesai sebelum modal ditutup.
-    setTimeout(() => {
+    // Kirim ke Google Sheets di latar belakang agar pengguna tidak menunggu respons server.
+    fetch(SCRIPT_URL, {
+            method: 'POST',
+            // Hapus 'mode: no-cors' agar bisa membaca respons
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8', // Gunakan text/plain untuk menghindari preflight CORS
+            },
+            body: JSON.stringify(dataSimpan),
+            keepalive: true
+        })
+        .then(response => response.text().then(textResponse => {
+            if (textResponse.trim().toLowerCase() === 'sukses') {
+                console.log(`✅ Data produk (ID: ${idTransaksi}) berhasil terekam di Google Sheets.`);
+            } else {
+                throw new Error(`Server merespons dengan pesan tak terduga: ${textResponse}`);
+            }
+        }))
+        .catch(e => console.error(`❌ Gagal mengirim data produk (ID: ${idTransaksi}) ke Google Sheets:`, e));
+
+    // Reset UI segera; penyimpanan lokal sudah dilakukan sebelum request dikirim.
+    {
         const inputPencarian = document.getElementById('search-phone-input');
         if(inputPencarian) inputPencarian.value = "";
         
@@ -1606,9 +1604,12 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
         
         keranjangBelanja = null;
         document.getElementById('cart-count').innerText = "0";
-        if(btn) btn.disabled = false; // Cukup aktifkan kembali, teks akan direset saat modal dibuka lagi.
+        if (btn) {
+            btn.innerHTML = txtAsli;
+            btn.disabled = false;
+        }
         tutupModalKeranjang();
-    }, 1500); // Jeda 1.5 detik
+    }
 }
 
 // FUNGSI SLIDER BANNER (KHUSUS UNTUK INDEX.HTML)

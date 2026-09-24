@@ -714,8 +714,10 @@ Halo Admin, saya ingin melakukan transfer dengan rincian berikut:
 
 _Mohon segera diproses ya, terima kasih!_ 🙏✨`;
     
-    // PROSES PENYIMPANAN DATA
-    await simpanKeSpreadsheet(idTransaksi, namaPemilik);
+    // Simpan ke Google Sheets di latar belakang agar WhatsApp terbuka tanpa menunggu server.
+    simpanKeSpreadsheet(idTransaksi, namaPemilik).catch(error => {
+        console.error("Gagal menyimpan transfer ke Google Sheets:", error);
+    });
     simpanKeRiwayat(idTransaksi, bank, norekDenganSpasi, namaPemilik, nominal, admin);
 
     const url = `https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(pesan)}`;
@@ -729,14 +731,12 @@ _Mohon segera diproses ya, terima kasih!_ 🙏✨`;
     if(namaPelangganEl) namaPelangganEl.innerText = "-";
     hitungTotal();
 
-    setTimeout(() => {
-        if (btnTransfer) {
-            btnTransfer.disabled = false;
-            btnTransfer.innerHTML = `<i class="fab fa-whatsapp text-lg"></i> KIRIM DATA TRANSFER KE ADMIN`; 
-            btnTransfer.style.opacity = "1";
-            btnTransfer.style.cursor = "pointer";
-        }
-    }, 2000);
+    if (btnTransfer) {
+        btnTransfer.disabled = false;
+        btnTransfer.innerHTML = `<i class="fab fa-whatsapp text-lg"></i> KIRIM DATA TRANSFER KE ADMIN`;
+        btnTransfer.style.opacity = "1";
+        btnTransfer.style.cursor = "pointer";
+    }
 }
 /**
  * [NEW] Menampilkan modal struk dengan data transaksi
