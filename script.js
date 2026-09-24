@@ -1901,13 +1901,13 @@ function tampilkanStruk(data) {
     // Menampilkan detail target (No HP/ID Game)
     const targetDetailEl = document.getElementById('struk-target-detail');
     targetDetailEl.innerHTML = `
-        <div class="flex justify-between">
+        <div class="struk-detail-row flex items-start">
             <span class="text-gray-500 font-medium">ID Transaksi:</span>
-            <span class="font-bold text-gray-800">${data.id || '-'}</span>
+            <span class="struk-detail-value font-bold text-gray-800">${data.id || '-'}</span>
         </div>
-        <div class="flex justify-between">
+        <div class="struk-detail-row flex items-start">
             <span class="text-gray-500 font-medium">ID/No. Target:</span>
-            <span class="font-bold text-gray-800">${data.target}</span>
+            <span class="struk-detail-value font-bold text-gray-800">${data.target}</span>
         </div>
     `;
 

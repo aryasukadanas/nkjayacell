@@ -243,3 +243,20 @@ nav.fixed {
     height: auto !important;
     box-sizing: border-box !important;
 }
+
+/* Rapatkan isi struk ke label tanpa mengubah jarak antarbarisnya. */
+.struk-detail-row,
+.struk-token-row {
+    justify-content: flex-start;
+    column-gap: 0.5rem;
+}
+
+.struk-detail-row > span:first-child,
+.struk-token-row > span:first-child {
+    flex: 0 0 auto;
+}
+
+.struk-detail-value,
+.struk-token-row > strong {
+    text-align: left;
+}
