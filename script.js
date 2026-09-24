@@ -1902,11 +1902,11 @@ function tampilkanStruk(data) {
     const targetDetailEl = document.getElementById('struk-target-detail');
     targetDetailEl.innerHTML = `
         <div class="struk-detail-row flex items-start">
-            <span class="text-gray-500 font-medium">ID Transaksi:</span>
+            <span class="struk-detail-label text-gray-500 font-medium">ID Transaksi:</span>
             <span class="struk-detail-value font-bold text-gray-800">${data.id || '-'}</span>
         </div>
         <div class="struk-detail-row flex items-start">
-            <span class="text-gray-500 font-medium">ID/No. Target:</span>
+            <span class="struk-detail-label text-gray-500 font-medium">ID/No. Target:</span>
             <span class="struk-detail-value font-bold text-gray-800">${data.target}</span>
         </div>
     `;
@@ -2009,7 +2009,7 @@ async function printStruk58mm() {
             const awalan = `${labelRapi}: `;
             const barisNilai = bungkusTeks(value, 32 - awalan.length);
             return [
-                awalan + barisNilai[0].padStart(32 - awalan.length, ' '),
+                awalan + barisNilai[0],
                 ...barisNilai.slice(1).map(baris => ' '.repeat(awalan.length) + baris)
             ];
         };

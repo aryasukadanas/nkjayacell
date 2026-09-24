@@ -256,7 +256,14 @@ nav.fixed {
     flex: 0 0 auto;
 }
 
+.struk-detail-label {
+    flex: 0 0 7rem !important;
+}
+
 .struk-detail-value,
 .struk-token-row > strong {
+    min-width: 0;
+    flex: 1;
     text-align: left;
+    overflow-wrap: anywhere;
 }
