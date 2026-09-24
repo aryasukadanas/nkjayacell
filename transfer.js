@@ -989,7 +989,7 @@ async function printStrukTransfer58mm() {
     ...barisThermalTransfer('ID Transaksi', data.id),
                 ...barisThermalTransfer('Tanggal', tanggalCetak),
                 ...barisThermalTransfer('Waktu', waktuCetak),
-    ...barisThermalTransfer('Status', 'SUKSES'),
+    ...barisThermalTransfer('Status', data.status),
     '--------------------------------',
     'DATA PENERIMA',
     ...barisThermalTransfer('Bank Tujuan', data.bank),
@@ -1037,8 +1037,10 @@ function pisahkanTanggalWaktuTransfer(value) {
 
 function dataStrukTransferAktif() {
     const teks = id => document.getElementById(id)?.innerText.trim() || '-';
+    const idTransaksi = teks('struk-id');
+    const statusSheet = ambilStatusTransferBerdasarkanId(idTransaksi);
     return {
-        id: teks('struk-id'),
+        id: idTransaksi,
         bank: teks('struk-bank-tujuan'),
         norek: teks('struk-no-rekening'),
         nama: teks('struk-nama-penerima'),
@@ -1046,8 +1048,25 @@ function dataStrukTransferAktif() {
         nominal: teks('struk-nominal'),
         admin: teks('struk-admin'),
         total: teks('struk-total'),
-        status: document.getElementById('struk-status-judul')?.innerText || 'DIPROSES'
+        status: statusSheet || normalisasiStatusTransfer(document.getElementById('struk-status-judul')?.innerText)
     };
+}
+
+function normalisasiStatusTransfer(value) {
+    const status = String(value || '').trim().toUpperCase();
+    if (status.includes('LUNAS') || status.includes('SUKSES')) return 'SUKSES';
+    if (status.includes('GAGAL') || status.includes('FAILED')) return 'GAGAL';
+    return 'PROSES';
+}
+
+function ambilStatusTransferBerdasarkanId(idTransaksi) {
+    const idNormal = normalisasiIdTransfer(idTransaksi);
+    if (!idNormal) return '';
+
+    const barisTransaksi = databaseArsip.find(cols =>
+        normalisasiIdTransfer(cols[0]) === idNormal
+    );
+    return barisTransaksi ? normalisasiStatusTransfer(barisTransaksi[9]) : '';
 }
 
 function formatRupiahTransfer(value) {
