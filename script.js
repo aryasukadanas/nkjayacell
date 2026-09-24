@@ -1024,16 +1024,40 @@ function bukaModalRiwayatLangsung() {
     filterRiwayatStatus('SEMUA');
 }
 
+function normalisasiIdTransaksi(value) {
+    return String(value ?? '')
+        .replace(/[\s'"`\uFEFF]/g, '')
+        .trim()
+        .toUpperCase();
+}
+
 function ambilArsipNominal(value) {
-    const nominal = Number(String(value || '').replace(/[^0-9-]/g, ''));
-    return Number.isFinite(nominal) ? nominal : 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? Math.round(value) : 0;
+
+    let teks = String(value ?? '').trim().replace(/[^0-9,.-]/g, '');
+    if (!teks) return 0;
+
+    const posisiTitik = teks.lastIndexOf('.');
+    const posisiKoma = teks.lastIndexOf(',');
+    if (posisiTitik >= 0 && posisiKoma >= 0) {
+        const pemisahDesimal = posisiTitik > posisiKoma ? '.' : ',';
+        teks = teks.replace(pemisahDesimal === '.' ? /,/g : /\./g, '').replace(pemisahDesimal, '.');
+    } else if (posisiTitik >= 0 || posisiKoma >= 0) {
+        const pemisah = posisiTitik >= 0 ? '.' : ',';
+        const bagianDesimal = teks.length - teks.lastIndexOf(pemisah) - 1;
+        teks = bagianDesimal > 0 && bagianDesimal <= 2
+            ? teks.replace(pemisah, '.')
+            : teks.replace(new RegExp(`\\${pemisah}`, 'g'), '');
+    }
+
+    const nominal = Number(teks);
+    return Number.isFinite(nominal) ? Math.round(nominal) : 0;
 }
 
 function filterRiwayatStatus(filterType = 'SEMUA') {
     const itemsContainer = document.getElementById('history-items-container');
     if (!itemsContainer) return;
-    const searchId = String(document.getElementById('history-search-input')?.value || '')
-        .replace(/[\s']/g, '').toUpperCase();
+    const searchId = normalisasiIdTransaksi(document.getElementById('history-search-input')?.value);
 
     // Atur Aktif Tombol Filter Tab UI
     const filterButtons = {
@@ -1058,7 +1082,7 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
         if (!row.trim()) return;
         const cols = pecahBarisCSV(row);
         
-        const idTransaksiSheet = ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']).replace(/'/g, '');
+        const idTransaksiSheet = normalisasiIdTransaksi(ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']));
         const noHpTargetSheet = ambilNilaiArsip(cols, ['NOMOR', 'NOMOR HP', 'ID PLN', 'IDPEL', 'TARGET']).replace(/'/g, '');
         const noHpTargetKey = noHpTargetSheet.replace(/\D/g, "");
         const statusTransaksiSheet = ambilNilaiArsip(cols, ['STATUS', 'STATUS TRANSAKSI']).replace(/'/g, '').toUpperCase();
@@ -1079,7 +1103,7 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
         let noHpKey = item.target ? item.target.trim() : "";
         let noHpDigitsKey = noHpKey.replace(/\D/g, "");
         // Jika ditemukan status terbaru di sheet ARSIP berdasarkan nomor HP, pakai status itu.
-        let statusFinal = statusTerupdateMap[item.id_transaksi]
+        let statusFinal = statusTerupdateMap[normalisasiIdTransaksi(item.id_transaksi)]
             || statusTerupdateMap[noHpKey]
             || statusTerupdateMap[noHpDigitsKey]
             || item.statusAwal
@@ -1106,11 +1130,10 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
     if (searchId) {
         const idArsip = new Set(rawArsipRows.map(row => {
             const cols = pecahBarisCSV(row);
-            return ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID'])
-                .replace(/[\s']/g, '').toUpperCase();
+            return normalisasiIdTransaksi(ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']));
         }).filter(Boolean));
         dataTerfilter = dataTerfilter.filter(item => {
-            const idRiwayat = String(item.id_transaksi || '').replace(/[\s']/g, '').toUpperCase();
+            const idRiwayat = normalisasiIdTransaksi(item.id_transaksi);
             return idRiwayat.includes(searchId) && (!idArsip.size || idArsip.has(idRiwayat));
         });
 
@@ -1119,15 +1142,18 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
             if (!row.trim()) return;
             const cols = pecahBarisCSV(row);
             const idTransaksi = ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']);
-            const idNormal = idTransaksi.replace(/[\s']/g, '').toUpperCase();
+            const idNormal = normalisasiIdTransaksi(idTransaksi);
             if (!idNormal.includes(searchId) || idLokal.has(idNormal)) return;
 
             const statusSheet = ambilNilaiArsip(cols, ['STATUS', 'STATUS TRANSAKSI']).toUpperCase();
-            const nominalSheet = ambilArsipNominal(ambilNilaiArsip(cols, ['HARGA', 'TOTAL BAYAR', 'TOTAL TRANSFER', 'NOMINAL']));
+            const nominalSheet = ambilArsipNominal(ambilNilaiArsip(cols, ['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI', 'NOMINAL']));
+            const targetSheet = ambilNilaiArsip(cols, ['NOMOR', 'NOMOR HP', 'ID PLN', 'IDPEL', 'TARGET']);
             dataTerfilter.push({
                 id_transaksi: idTransaksi,
                 tanggal: ambilNilaiArsip(cols, ['TANGGAL', 'WAKTU', 'DATE']),
-                target: ambilNilaiArsip(cols, ['NOMOR', 'NOMOR HP', 'ID PLN', 'IDPEL', 'TARGET']),
+                target: targetSheet,
+                jumlahDaya: ambilJumlahDayaPLN(targetSheet, nominalSheet)
+                    || ambilNilaiArsip(cols, ['JUMLAH DAYA', 'DAYA TERISI', 'DAYA']),
                 produk: ambilNilaiArsip(cols, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']) || 'Transaksi Arsip',
                 produkLengkap: ambilNilaiArsip(cols, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']) || 'Transaksi Arsip',
                 biaya: nominalSheet,
@@ -1781,9 +1807,9 @@ function tampilkanStrukDariRiwayat(item) {
         tarifDaya: kolomEdit.tarifDaya || petaDayaPelangganPLN[(item.target || '').replace(/\D/g, '')] || '-',
         jumlahDaya: kolomEdit.jumlahDaya
             || item.jumlahDaya
-            || ambilArsipDenganId(['JUMLAH DAYA', 'DAYA TERISI'])
+            || ambilArsipDenganId(['JUMLAH DAYA', 'DAYA TERISI', 'DAYA'])
             || '-',
-        harga: kolomEdit.harga || ambilArsip(['HARGA', 'TOTAL TRANSFER', 'TOTAL BAYAR']) || item.biaya,
+        harga: kolomEdit.harga || ambilArsip(['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']) || item.biaya,
         serial: ambilSerialArsip() || '-'
     };
     tampilkanStruk({
@@ -1927,10 +1953,7 @@ function bagikanStrukWA() {
 let printerBluetoothCharacteristic = null;
 
 async function printStruk58mm() {
-    if (!dataStrukAktif?.isToken) {
-        alert('Printer Bluetooth 58mm saat ini khusus untuk struk token listrik.');
-        return;
-    }
+    if (!dataStrukAktif) return;
     if (!navigator.bluetooth) {
         printStruk();
         return;
@@ -1981,17 +2004,23 @@ async function printStruk58mm() {
             return baris;
         };
         const field = (label, value) => {
-            const lebarLabel = 11;
+            const lebarLabel = 16;
             const labelRapi = String(label).padEnd(lebarLabel, ' ');
             const awalan = `${labelRapi}: `;
             const barisNilai = bungkusTeks(value, 32 - awalan.length);
-            return [awalan + barisNilai[0], ...barisNilai.slice(1).map(baris => ' '.repeat(awalan.length) + baris)];
+            return [
+                awalan + barisNilai[0].padStart(32 - awalan.length, ' '),
+                ...barisNilai.slice(1).map(baris => ' '.repeat(awalan.length) + baris)
+            ];
         };
         const statusCetak = dataStrukAktif.status || 'DIPROSES';
         const waktuCetak = document.getElementById('struk-waktu')?.innerText || '-';
-        const isi = [
-            `${esc}@`, `${esc}3\x06`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
-            'STRUK TOKEN LISTRIK', statusCetak, waktuCetak, `${esc}a\x00`, '--------------------------------',
+        const header = [
+            `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
+            dataStrukAktif.isToken ? 'STRUK TOKEN LISTRIK' : 'STRUK TRANSAKSI',
+            statusCetak, waktuCetak, `${esc}a\x00`, '--------------------------------'
+        ];
+        const isiToken = [
             ...field('ID TRX', nilai('token-id-trx')),
             ...field('ID PLN', nilai('token-id-pln')),
             ...field('PRODUK', nilai('token-produk')),
@@ -2002,7 +2031,18 @@ async function printStruk58mm() {
             '--------------------------------', `${esc}a\x01`, '***Token serial number***',
             `${gs}!\x11`, ...bungkusTeks(nilai('token-serial'), 16), `${gs}!\x00`,
             '--------------------------------', `${esc}a\x01`,
-            ...bungkusTeks('INPUT TOKEN SERIAL NUMBER PADA MCB PEMILIK METERAN', 32),
+            ...bungkusTeks('INPUT TOKEN SERIAL NUMBER PADA MCB PEMILIK METERAN', 32)
+        ];
+        const isiUmum = [
+            ...field('ID Transaksi', dataStrukAktif.id),
+            ...field('Produk', dataStrukAktif.produkLengkap),
+            ...field('ID/No. Target', dataStrukAktif.target),
+            '--------------------------------',
+            ...field('Total Bayar', formatHarga(dataStrukAktif.total))
+        ];
+        const isi = [
+            ...header,
+            ...(dataStrukAktif.isToken ? isiToken : isiUmum),
             `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '\n\n\n'
         ].join('\n');
         await kirimDataBluetooth(new TextEncoder().encode(isi));
@@ -2033,7 +2073,7 @@ function printStruk() {
         return;
     }
     jendelaPrint.document.write(`<!doctype html><html lang="id"><head><base href="${window.location.href}"><meta charset="utf-8"><title>Struk NK JAYA CELL</title><style>
-        *{box-sizing:border-box}body{margin:0;padding:16px;background:#fff;color:#111;font-family:Arial,sans-serif}#struk-content{width:100%;max-width:380px;margin:auto;padding:20px;background:#fff}img{max-width:64px;display:block;margin:0 auto 8px}button{display:none!important}.hidden{display:none!important}.text-center{text-align:center}.flex{display:flex}.justify-between{justify-content:space-between}.text-right{text-align:right}.break-all{word-break:break-all}.text-2xl{font-size:24px}.text-3xl{font-size:30px}.font-black,.font-bold{font-weight:700}.text-gray-500,.text-gray-400{color:#666}.border-t,.border-t-2{border-top:1px dashed #bbb;margin-top:12px;padding-top:12px}.border-t-2{border-top:2px solid #333}.space-y-2>*+*{margin-top:8px}.space-y-2\.5>*+*{margin-top:10px}@media print{body{padding:0}}
+        @page{size:58mm auto;margin:0}*{box-sizing:border-box}body{width:58mm;margin:0;padding:3mm;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:11px}#struk-content{width:100%;padding:0;background:#fff}img{max-width:64px;display:block;margin:0 auto 8px}button{display:none!important}.hidden{display:none!important}.text-center{text-align:center}.flex{display:flex}.justify-between{justify-content:space-between}.text-right{text-align:right}.break-all{word-break:break-all}.font-black,.font-bold{font-weight:700}.text-gray-500,.text-gray-400{color:#666}.text-gray-800,.text-gray-900{color:#111}.border-t,.border-t-2{border-top:1px dashed #888;margin-top:8px;padding-top:8px}.border-t-2{border-top:2px solid #333}.space-y-2>*+*{margin-top:5px}.space-y-2\.5>*+*{margin-top:6px}.space-y-3>*+*{margin-top:7px}.pt-1{padding-top:4px}.pt-3{padding-top:8px}.pb-4{padding-bottom:8px}.mt-1{margin-top:4px}.mt-2{margin-top:6px}.mb-4{margin-bottom:8px}.p-6,.p-4{padding:0}.text-xs{font-size:11px}.text-3xl{font-size:18px}.leading-relaxed{line-height:1.35}.tracking-tight,.tracking-widest{letter-spacing:normal}@media print{body{padding:3mm}}
     </style></head><body>${isiStruk.outerHTML}</body></html>`);
     jendelaPrint.document.close();
     jendelaPrint.focus();

@@ -41,6 +41,36 @@ function nilaiTransferSheet(cols, aliases, fallbackIndex = -1) {
     return String(cols[index === undefined ? fallbackIndex : index] || '').replace(/^"|"$/g, '').trim();
 }
 
+function normalisasiIdTransfer(value) {
+    return String(value ?? '')
+        .replace(/[\s'"`\uFEFF]/g, '')
+        .trim()
+        .toUpperCase();
+}
+
+function ambilNominalTransferArsip(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? Math.round(value) : 0;
+
+    let teks = String(value ?? '').trim().replace(/[^0-9,.-]/g, '');
+    if (!teks) return 0;
+
+    const posisiTitik = teks.lastIndexOf('.');
+    const posisiKoma = teks.lastIndexOf(',');
+    if (posisiTitik >= 0 && posisiKoma >= 0) {
+        const pemisahDesimal = posisiTitik > posisiKoma ? '.' : ',';
+        teks = teks.replace(pemisahDesimal === '.' ? /,/g : /\./g, '').replace(pemisahDesimal, '.');
+    } else if (posisiTitik >= 0 || posisiKoma >= 0) {
+        const pemisah = posisiTitik >= 0 ? '.' : ',';
+        const bagianDesimal = teks.length - teks.lastIndexOf(pemisah) - 1;
+        teks = bagianDesimal > 0 && bagianDesimal <= 2
+            ? teks.replace(pemisah, '.')
+            : teks.replace(new RegExp(`\\${pemisah}`, 'g'), '');
+    }
+
+    const nominal = Number(teks);
+    return Number.isFinite(nominal) ? Math.round(nominal) : 0;
+}
+
 /**
  * Mengambil data tarif admin dan data riwayat/pelanggan dari Google Sheets
  */
@@ -392,8 +422,7 @@ function renderRiwayatUI() {
     if (!containerDaftar) return;
 
     const riwayat = JSON.parse(localStorage.getItem('nk_transfer_history')) || [];
-    const searchId = String(document.getElementById('transfer-history-search-input')?.value || '')
-        .replace(/[\s'"]/g, '').toUpperCase();
+    const searchId = normalisasiIdTransfer(document.getElementById('transfer-history-search-input')?.value);
 
     if (riwayat.length === 0 && !searchId) {
         containerDaftar.innerHTML = `
@@ -409,7 +438,7 @@ function renderRiwayatUI() {
     const statusMap = {};
     databaseArsip.forEach(cols => {
         // Struktur sheet Transfer: ID di kolom A, rekening di kolom E, status di kolom J.
-        const idTransaksi = cols[0]?.trim();
+        const idTransaksi = normalisasiIdTransfer(cols[0]);
         const nomorTujuan = cols[4]?.replace(/\D/g, '');
         const status = cols[9]?.trim().toUpperCase();
         if (idTransaksi && status) {
@@ -422,29 +451,29 @@ function renderRiwayatUI() {
 
     const riwayatTerfilter = searchId
         ? riwayat.filter(item => {
-            const idRiwayat = String(item.id || '').replace(/[\s'"]/g, '').toUpperCase();
+            const idRiwayat = normalisasiIdTransfer(item.id);
             return idRiwayat.includes(searchId) && databaseArsip.some(cols =>
-                String(cols[0] || '').replace(/[\s'"]/g, '').toUpperCase().includes(searchId)
+                normalisasiIdTransfer(cols[0]).includes(searchId)
             );
         })
         : riwayat;
 
     if (searchId) {
-        const idLokal = new Set(riwayatTerfilter.map(item => String(item.id || '').replace(/[\s'\"]/g, '').toUpperCase()));
+        const idLokal = new Set(riwayatTerfilter.map(item => normalisasiIdTransfer(item.id)));
         databaseArsip.forEach(cols => {
             const idTransaksi = nilaiTransferSheet(cols, ['ID TRANSAKSI', 'ID TRX', 'ID'], 0);
-            const idNormal = idTransaksi.replace(/[\s'\"]/g, '').toUpperCase();
+            const idNormal = normalisasiIdTransfer(idTransaksi);
             if (!idNormal.includes(searchId) || idLokal.has(idNormal)) return;
-            const nominal = Number(nilaiTransferSheet(cols, ['NOMINAL', 'TOTAL BAYAR', 'TOTAL TRANSFER', 'HARGA'], 0).replace(/[^0-9-]/g, '')) || 0;
+            const nominal = ambilNominalTransferArsip(nilaiTransferSheet(cols, ['TRANSFER', 'NOMINAL', 'NOMINAL TRANSFER', 'TOTAL TRANSFER', 'HARGA'], 6));
             riwayatTerfilter.push({
                 id: idTransaksi,
                 nama: nilaiTransferSheet(cols, ['NAMA', 'NAMA PEMILIK', 'PELANGGAN'], 5) || '-',
-                bank: nilaiTransferSheet(cols, ['BANK', 'BANK TUJUAN'], 2) || '-',
+                bank: nilaiTransferSheet(cols, ['PRODUK/BANK', 'BANK', 'BANK TUJUAN'], 3) || '-',
                 norek: nilaiTransferSheet(cols, ['NO REKENING', 'NOMOR REKENING', 'REKENING'], 4) || '-',
                 tanggal: nilaiTransferSheet(cols, ['TANGGAL', 'WAKTU', 'DATE'], 1),
                 waktu: '',
                 nominal,
-                admin: Number(nilaiTransferSheet(cols, ['BIAYA ADMIN', 'ADMIN'], 0).replace(/[^0-9-]/g, '')) || 0
+                admin: ambilNominalTransferArsip(nilaiTransferSheet(cols, ['BIAYA', 'BIAYA ADMIN', 'ADMIN'], 7))
             });
         });
     }
@@ -461,7 +490,7 @@ function renderRiwayatUI() {
 
     const riwayatHTML = riwayatTerfilter.map(item => {
         const noRekRiwayat = item.norek.replace(/\D/g, ''); // [FIX] Hapus SEMUA karakter selain angka agar formatnya bersih dan konsisten.
-        let statusFinal = statusMap[item.id] || statusMap[noRekRiwayat] || "PROSES"; // Prioritaskan pencocokan via ID Transaksi
+        let statusFinal = statusMap[normalisasiIdTransfer(item.id)] || statusMap[noRekRiwayat] || "PROSES"; // Prioritaskan pencocokan via ID Transaksi
 
         // [FIX] Standarisasi label status
         if (statusFinal.includes("LUNAS") || statusFinal.includes("SUKSES")) statusFinal = "SUKSES";
@@ -1169,11 +1198,19 @@ async function bukaModalRiwayat() {
     const searchInput = document.getElementById('transfer-history-search-input');
     if (searchInput) searchInput.value = '';
 
+    const loadingEl = document.getElementById('daftar-riwayat');
+    if (loadingEl) loadingEl.innerHTML = `<div class="text-center py-10 text-gray-400 italic text-xs"><i class="fas fa-spinner animate-spin mr-2"></i> Memperbarui status...</div>`;
+
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            modal.classList.remove('opacity-0');
+            modal.querySelector(':scope > div').classList.remove('translate-y-full');
+        });
+    });
+
     // Selalu ambil data status terbaru dari spreadsheet setiap kali modal dibuka
     try {
-        const loadingEl = document.getElementById('daftar-riwayat');
-        if (loadingEl) loadingEl.innerHTML = `<div class="text-center py-10 text-gray-400 italic text-xs"><i class="fas fa-spinner animate-spin mr-2"></i> Memperbarui status...</div>`;
-
         // Gunakan sheet Transfer yang berisi status transaksi di kolom J.
         const resArsip = await fetch(SHEET_TRANSFER_URL);
         if (!resArsip.ok) throw new Error(`Sheet status tidak dapat diakses (${resArsip.status})`);
@@ -1189,12 +1226,6 @@ async function bukaModalRiwayat() {
     }
 
     renderRiwayatUI(); // Render ulang dengan data status yang sudah diperbarui
-
-    modal.classList.remove('hidden');
-    setTimeout(() => {
-        modal.classList.remove('opacity-0');
-        modal.querySelector('div').classList.remove('translate-y-full');
-    }, 10);
 }
 
 function tutupModalRiwayat() {
@@ -1202,7 +1233,7 @@ function tutupModalRiwayat() {
     const modal = document.getElementById('history-modal');
     if (!modal) return;
     modal.classList.add('opacity-0');
-    modal.querySelector('div').classList.add('translate-y-full');
+    modal.querySelector(':scope > div').classList.add('translate-y-full');
     setTimeout(() => modal.classList.add('hidden'), 300);
 }
 
