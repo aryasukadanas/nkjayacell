@@ -1999,10 +1999,10 @@ async function printStruk58mm() {
             ...field('TARIF/DAYA', nilai('token-tarif-daya')),
             ...field('JUMLAH DAYA', nilai('token-jumlah-daya')),
             ...field('HARGA', nilai('token-harga')),
-            '--------------------------------', `${esc}a\x01`, 'NOMOR TOKEN',
+            '--------------------------------', `${esc}a\x01`, '***Token serial number***',
             `${gs}!\x11`, ...bungkusTeks(nilai('token-serial'), 16), `${gs}!\x00`,
-            `${esc}a\x00`, '--------------------------------', ...field('TOTAL BAYAR', document.getElementById('struk-total')?.innerText || '-'),
-            `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '\n'
+            `${esc}a\x00`, '--------------------------------', ...field('SERIAL NUMBER MCB', nilai('token-serial')),
+            `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '\n\n\n'
         ].join('\n');
         await kirimDataBluetooth(new TextEncoder().encode(isi));
     } catch (error) {
