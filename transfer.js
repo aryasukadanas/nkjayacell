@@ -947,14 +947,14 @@ async function printStrukTransfer58mm() {
     'NK JAYA CELL',
     `${esc}E\x00`,
     'BUKTI TRANSFER BANK',
-    'Banjar Pasar , Desa Melaya , Jembrana, BALI',
+    'Banjar Pasar ,  Desa Melaya  ,  Jembrana, BALI',
     `${esc}a\x00`,
     '--------------------------------',
 
     ...barisThermalTransfer('ID Transaksi', data.id),
                 ...barisThermalTransfer('Tanggal', tanggalCetak),
                 ...barisThermalTransfer('Waktu', waktuCetak),
-
+ ...barisThermalTransfer('Status', Sukses),
     '--------------------------------',
     'DATA PENERIMA',
     ...barisThermalTransfer('Bank Tujuan', data.bank),
@@ -966,12 +966,9 @@ async function printStrukTransfer58mm() {
     ...barisThermalTransfer('Biaya Admin', formatRupiahTransfer(data.admin)),
     '--------------------------------',
     ...barisThermalTransfer('Total', formatRupiahTransfer(data.total)),
-    ...barisThermalTransfer('Status', data.status),
-    '',
+   
     `${esc}a\x01`,
-    '***',
-'Simpan resi ini sebagai bukti transaksi yang sah.',
-'***',
+'Simpan resi  ini  sebagai bukti transaksi yang sah.',
     `${esc}a\x00`,
     '',
     '\n'
