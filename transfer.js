@@ -1009,17 +1009,22 @@ async function kirimDataPrinterTransfer(data) {
 }
 
 function printStrukTransferBrowser(data) {
+    const isiStruk = document.getElementById('struk-content');
+    if (!isiStruk) return;
+    const salinanStruk = isiStruk.cloneNode(true);
+    salinanStruk.querySelectorAll('img').forEach(gambar => gambar.remove());
+    salinanStruk.querySelectorAll('[contenteditable="true"]').forEach(field => {
+        field.removeAttribute('contenteditable');
+        field.classList.remove('rounded', 'bg-amber-50', 'outline-none', 'px-1');
+    });
     const jendelaPrint = window.open('', '_blank', 'width=420,height=760');
     if (!jendelaPrint) {
         alert('Pop-up print diblokir browser. Izinkan pop-up lalu coba lagi.');
         return;
     }
-    const baris = [
-        ['ID TRX', data.id], ['STATUS', data.status], ['WAKTU', data.tanggal],
-        ['BANK', data.bank], ['NO REKENING', data.norek], ['NAMA', data.nama],
-        ['NOMINAL', data.nominal], ['BIAYA ADMIN', data.admin], ['TOTAL BAYAR', data.total]
-    ].map(([label, value]) => `<div class="row"><span>${label}</span><strong>${value}</strong></div>`).join('');
-    jendelaPrint.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Struk Transfer</title><style>@page{size:58mm auto;margin:0}*{box-sizing:border-box}body{width:58mm;margin:0;padding:4mm 3mm;font:11px Arial,sans-serif;color:#000}.head{text-align:center;font-weight:bold;font-size:14px;margin-bottom:8px}.line{border-top:1px dashed #000;margin:7px 0}.row{display:flex;justify-content:space-between;gap:6px;margin:5px 0}.row span{color:#333}.row strong{text-align:right;word-break:break-word}.total{font-size:15px;font-weight:bold}.thanks{text-align:center;margin-top:10px}@media print{button{display:none}}</style></head><body><div class="head">NK JAYA CELL<br>BUKTI TRANSFER BANK</div><div class="line"></div>${baris}<div class="line"></div><div class="thanks">Terima kasih</div></body></html>`);
+    jendelaPrint.document.write(`<!doctype html><html lang="id"><head><base href="${window.location.href}"><meta charset="utf-8"><title>Struk Transfer</title><style>
+        @page{size:58mm auto;margin:0}*{box-sizing:border-box}body{width:58mm;margin:0;padding:3mm;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:11px}#struk-content{width:100%;padding:0;background:#fff}button{display:none!important}.hidden{display:none!important}.text-center{text-align:center}.flex{display:flex}.justify-between{justify-content:space-between}.text-right{text-align:right}.font-black,.font-bold{font-weight:700}.text-gray-500,.text-gray-400{color:#666}.text-gray-800,.text-gray-900{color:#111}.border-t,.border-t-2{border-top:1px dashed #888;margin-top:8px;padding-top:8px}.border-t-2{border-top:2px solid #333}.space-y-2>*+*{margin-top:5px}.space-y-2\.5>*+*{margin-top:6px}.space-y-3>*+*{margin-top:7px}.pt-1{padding-top:4px}.pt-3{padding-top:8px}.pb-4{padding-bottom:8px}.mt-1{margin-top:4px}.mt-2{margin-top:6px}.mb-4{margin-bottom:8px}.p-6,.p-4{padding:0}.text-xs{font-size:11px}.text-3xl{font-size:18px}.leading-relaxed{line-height:1.35}.tracking-tight,.tracking-widest{letter-spacing:normal}@media print{body{padding:3mm}}
+    </style></head><body>${salinanStruk.outerHTML}</body></html>`);
     jendelaPrint.document.close();
     jendelaPrint.focus();
     setTimeout(() => { jendelaPrint.print(); jendelaPrint.close(); }, 300);
