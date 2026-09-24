@@ -1908,7 +1908,7 @@ async function printStruk58mm() {
         return;
     }
     if (!navigator.bluetooth) {
-        alert('Web Bluetooth tidak didukung. Gunakan Chrome di Android melalui HTTPS atau localhost.');
+        printStruk();
         return;
     }
 
@@ -1965,27 +1965,26 @@ async function printStruk58mm() {
         };
         const statusCetak = dataStrukAktif.status || 'DIPROSES';
         const waktuCetak = document.getElementById('struk-waktu')?.innerText || '-';
-        const jarakAntarBlok = '';
         const isi = [
             `${esc}@`, `${esc}3\x14`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
             'STRUK TOKEN LISTRIK', statusCetak, waktuCetak, `${esc}a\x00`, '--------------------------------',
-            ...field('ID TRX', nilai('token-id-trx')), jarakAntarBlok,
-            ...field('ID PLN', nilai('token-id-pln')), jarakAntarBlok,
-            ...field('PRODUK', nilai('token-produk')), jarakAntarBlok,
-            ...field('NAMA', nilai('token-nama')), jarakAntarBlok,
-            ...field('TARIF/DAYA', nilai('token-tarif-daya')), jarakAntarBlok,
-            ...field('JUMLAH DAYA', nilai('token-jumlah-daya')), jarakAntarBlok,
+            ...field('ID TRX', nilai('token-id-trx')),
+            ...field('ID PLN', nilai('token-id-pln')),
+            ...field('PRODUK', nilai('token-produk')),
+            ...field('NAMA', nilai('token-nama')),
+            ...field('TARIF/DAYA', nilai('token-tarif-daya')),
+            ...field('JUMLAH DAYA', nilai('token-jumlah-daya')),
             ...field('HARGA', nilai('token-harga')),
             '--------------------------------', `${esc}a\x01`, 'NOMOR TOKEN',
             `${gs}!\x11`, ...bungkusTeks(nilai('token-serial'), 16), `${gs}!\x00`,
             `${esc}a\x00`, '--------------------------------', ...field('TOTAL BAYAR', document.getElementById('struk-total')?.innerText || '-'),
-            '', `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '', '\n'
+            `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '\n'
         ].join('\n');
         await kirimDataBluetooth(new TextEncoder().encode(isi));
     } catch (error) {
         printerBluetoothCharacteristic = null;
         console.error('Gagal mencetak ke printer Bluetooth:', error);
-        alert(`Gagal mencetak Bluetooth: ${error.message}`);
+        printStruk();
     }
 }
 
