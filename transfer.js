@@ -943,13 +943,15 @@ async function printStrukTransfer58mm() {
                 `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
                 'BUKTI TRANSFER BANK', data.status, data.tanggal, `${esc}a\x00`,
                 '--------------------------------',
-                ...barisThermalTransfer('ID TRX', data.id), '',
-                ...barisThermalTransfer('BANK', data.bank), '',
-                ...barisThermalTransfer('NO REK', data.norek), '',
-                ...barisThermalTransfer('NAMA', data.nama),
+                'ID TRANSAKSI',
+                ...barisThermalTransfer('ID Transaksi', data.id), '',
+                'DATA PENERIMA',
+                ...barisThermalTransfer('Bank Tujuan', data.bank), '',
+                ...barisThermalTransfer('No. Rekening', data.norek), '',
+                ...barisThermalTransfer('Nama', data.nama),
                 '--------------------------------',
-                ...barisThermalTransfer('NOMINAL', formatRupiahTransfer(data.nominal)), '',
-                ...barisThermalTransfer('ADMIN', formatRupiahTransfer(data.admin)),
+                ...barisThermalTransfer('Nominal Transfer', formatRupiahTransfer(data.nominal)), '',
+                ...barisThermalTransfer('Biaya Admin', formatRupiahTransfer(data.admin)),
                 '--------------------------------', `${esc}E\x01`,
                 ...barisThermalTransfer('TOTAL', formatRupiahTransfer(data.total)), `${esc}E\x00`,
                 '', `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '', '\n'
@@ -986,12 +988,15 @@ function formatRupiahTransfer(value) {
 }
 
 function barisThermalTransfer(label, value) {
-    const prefix = `${label}: `;
+    const lebarBaris = 32;
+    const labelRapi = `${label}:`;
     const teks = String(value || '-');
     const hasil = [];
-    for (let posisi = 0; posisi < teks.length || !hasil.length; posisi += 32 - prefix.length) {
-        const bagian = teks.slice(posisi, posisi + 32 - (posisi ? 0 : prefix.length));
-        hasil.push((posisi ? ' '.repeat(prefix.length) : prefix) + (bagian || '-'));
+    const lebarNilai = lebarBaris - labelRapi.length - 1;
+    for (let posisi = 0; posisi < teks.length || !hasil.length; posisi += lebarNilai) {
+        const bagian = teks.slice(posisi, posisi + lebarNilai) || '-';
+        const awalan = posisi ? ' '.repeat(labelRapi.length + 1) : `${labelRapi} `;
+        hasil.push(posisi ? awalan + bagian : awalan + bagian.padStart(lebarNilai, ' '));
         if (!bagian) break;
     }
     return hasil;
