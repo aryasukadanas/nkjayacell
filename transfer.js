@@ -940,22 +940,41 @@ async function printStrukTransfer58mm() {
             if (!printerTransferCharacteristic) throw new Error('Characteristic printer tidak ditemukan.');
             const esc = '\x1B';
             const lines = [
-                `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
-                'BUKTI TRANSFER BANK', data.status, data.tanggal, `${esc}a\x00`,
-                '--------------------------------',
-                'ID TRANSAKSI',
-                ...barisThermalTransfer('ID Transaksi', data.id), '',
-                'DATA PENERIMA',
-                ...barisThermalTransfer('Bank Tujuan', data.bank), '',
-                ...barisThermalTransfer('No. Rekening', data.norek), '',
-                ...barisThermalTransfer('Nama', data.nama),
-                '--------------------------------',
-                ...barisThermalTransfer('Nominal Transfer', formatRupiahTransfer(data.nominal)), '',
-                ...barisThermalTransfer('Biaya Admin', formatRupiahTransfer(data.admin)),
-                '--------------------------------', `${esc}E\x01`,
-                ...barisThermalTransfer('TOTAL', formatRupiahTransfer(data.total)), `${esc}E\x00`,
-                '', `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '', '\n'
-            ].join('\n');
+    `${esc}@`,
+    `${esc}a\x01`,
+    `${esc}E\x01`,
+    'NK JAYA CELL',
+    `${esc}E\x00`,
+    'BUKTI TRANSFER BANK',
+    data.status,
+    `${esc}a\x00`,
+    '--------------------------------',
+
+    ...barisThermalTransfer('ID Transaksi', data.id),
+    ...barisThermalTransfer('Tanggal', data.tanggal),
+
+    '--------------------------------',
+    'DATA PENERIMA',
+    ...barisThermalTransfer('Bank Tujuan', data.bank),
+    ...barisThermalTransfer('No. Rekening', data.norek),
+    ...barisThermalTransfer('Nama', data.nama),
+
+    '--------------------------------',
+    ...barisThermalTransfer('Nominal Transfer', formatRupiahTransfer(data.nominal)),
+    ...barisThermalTransfer('Biaya Admin', formatRupiahTransfer(data.admin)),
+
+    '--------------------------------',
+    `${esc}E\x01`,
+    ...barisThermalTransfer('TOTAL', formatRupiahTransfer(data.total)),
+    `${esc}E\x00`,
+
+    '',
+    `${esc}a\x01`,
+    'Simpan resi ini sebagai bukti transaksi yang sah.',
+    `${esc}a\x00`,
+    '',
+    '\n'
+].join('\n');
             await kirimDataPrinterTransfer(new TextEncoder().encode(lines));
             return;
         } catch (error) {
