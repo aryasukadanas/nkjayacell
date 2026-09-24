@@ -731,7 +731,7 @@ function tampilkanStruk(data) {
     }
 
     // Isi data ke elemen struk
-    document.getElementById('struk-waktu').innerText = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
+    document.getElementById('struk-waktu').innerText = data.tanggal || new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
     const bankTujuan = data.bank || '-';
     const noRekening = data.norek || '-';
     const namaPenerima = data.nama || '-';
@@ -748,18 +748,24 @@ function tampilkanStruk(data) {
     document.getElementById('struk-id-container').innerHTML = `
         <div class="flex justify-between">
             <span class="text-gray-500 font-medium">ID Transaksi:</span>
-            <span class="font-bold text-gray-800">${data.id || '-'}</span>
+            <span id="struk-id" data-editable="true" class="font-bold text-gray-800">${data.id || '-'}</span>
         </div>
     `;
 
     // Siapkan tombol aksi
     const actionsContainer = document.getElementById('struk-actions');
     actionsContainer.innerHTML = `
+        <button onclick="aktifkanEditStrukTransfer('${data.id || ''}')" class="col-span-2 w-full py-2.5 bg-amber-100 text-amber-700 font-black text-xs rounded-xl active:scale-95 transition-all">
+            <i class="fas fa-pen mr-1"></i> Edit Isi Struk
+        </button>
         <button onclick="downloadStruk('${data.id}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
             <i class="fas fa-download"></i> Download
         </button>
         <button onclick="shareStruk('${data.id}')" class="w-full py-3 bg-green-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
             <i class="fab fa-whatsapp"></i> Bagikan
+        </button>
+        <button onclick="printStrukTransfer58mm()" class="col-span-2 w-full py-2.5 bg-slate-900 text-white font-black text-xs rounded-xl active:scale-95 transition-all">
+            <i class="fas fa-print mr-1"></i> Cetak Struk Thermal 58mm
         </button>
         <button onclick="tutupModalStruk()" class="col-span-2 w-full py-2 bg-transparent text-gray-500 font-bold text-xs rounded-xl active:scale-95 transition-all">
             Tutup
@@ -778,16 +784,53 @@ function tampilkanStruk(data) {
  */
 function tampilkanStrukDariRiwayat(item, status) {
     // [STANDALONE] Fungsi ini sekarang menjadi jembatan ke `tampilkanStruk` di file ini.
+    const edits = JSON.parse(localStorage.getItem('nk_transfer_receipt_edits') || '{}')[item.id] || {};
     tampilkanStruk({
-        id: item.id,
-        bank: item.bank,
-        norek: item.norek,
-        nama: item.nama,
-        nominal: item.nominal,
-        admin: item.admin,
-        total: item.nominal + item.admin,
+        id: edits.id || item.id,
+        bank: edits.bank || item.bank,
+        norek: edits.norek || item.norek,
+        nama: edits.nama || item.nama,
+        nominal: Number(edits.nominal ?? item.nominal) || 0,
+        admin: Number(edits.admin ?? item.admin) || 0,
+        total: Number(edits.total ?? (item.nominal + item.admin)) || 0,
+        tanggal: edits.tanggal || [item.tanggal, item.waktu].filter(Boolean).join(' - '),
         status: status // Kirim status ke fungsi utama
     });
+}
+
+function aktifkanEditStrukTransfer(id) {
+    const fields = Array.from(document.querySelectorAll('#struk-content [data-editable="true"], #struk-bank-tujuan, #struk-no-rekening, #struk-nama-penerima, #struk-waktu, #struk-nominal, #struk-admin, #struk-total'));
+    if (fields[0]?.isContentEditable) return;
+    fields.forEach(field => {
+        field.contentEditable = 'true';
+        field.classList.add('rounded', 'bg-amber-50', 'outline-none', 'px-1');
+    });
+    document.getElementById('struk-actions')?.insertAdjacentHTML('afterbegin', `
+        <button id="transfer-save-button" onclick="simpanEditStrukTransfer('${id}')" class="col-span-2 w-full py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl">
+            <i class="fas fa-save mr-1"></i> Simpan Perubahan
+        </button>
+    `);
+}
+
+function simpanEditStrukTransfer(id) {
+    const edits = JSON.parse(localStorage.getItem('nk_transfer_receipt_edits') || '{}');
+    edits[id] = {
+        id: document.getElementById('struk-id')?.innerText.trim() || id,
+        bank: document.getElementById('struk-bank-tujuan')?.innerText.trim() || '-',
+        norek: document.getElementById('struk-no-rekening')?.innerText.trim() || '-',
+        nama: document.getElementById('struk-nama-penerima')?.innerText.trim() || '-',
+        tanggal: document.getElementById('struk-waktu')?.innerText.trim() || '-',
+        nominal: document.getElementById('struk-nominal')?.innerText.replace(/[^0-9]/g, '') || '0',
+        admin: document.getElementById('struk-admin')?.innerText.replace(/[^0-9]/g, '') || '0',
+        total: document.getElementById('struk-total')?.innerText.replace(/[^0-9]/g, '') || '0'
+    };
+    localStorage.setItem('nk_transfer_receipt_edits', JSON.stringify(edits));
+    document.querySelectorAll('#struk-content [contenteditable="true"]').forEach(field => {
+        field.contentEditable = 'false';
+        field.classList.remove('rounded', 'bg-amber-50', 'outline-none', 'px-1');
+    });
+    document.getElementById('transfer-save-button')?.remove();
+    alert('Perubahan struk transfer tersimpan di perangkat ini.');
 }
 
 /**
@@ -864,6 +907,122 @@ async function shareStruk(ref) {
     } finally {
         strukElement.style.backgroundColor = originalBg;
     }
+}
+
+let printerTransferCharacteristic = null;
+
+async function printStrukTransfer58mm() {
+    const data = dataStrukTransferAktif();
+    if (!data) return;
+
+    if (navigator.bluetooth) {
+        try {
+            if (!printerTransferCharacteristic) {
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        '0000ffe0-0000-1000-8000-00805f9b34fb',
+                        '0000ff00-0000-1000-8000-00805f9b34fb',
+                        '000018f0-0000-1000-8000-00805f9b34fb'
+                    ]
+                });
+                const server = await device.gatt.connect();
+                for (const service of await server.getPrimaryServices()) {
+                    const characteristic = (await service.getCharacteristics()).find(item =>
+                        item.properties.write || item.properties.writeWithoutResponse
+                    );
+                    if (characteristic) {
+                        printerTransferCharacteristic = characteristic;
+                        break;
+                    }
+                }
+            }
+            if (!printerTransferCharacteristic) throw new Error('Characteristic printer tidak ditemukan.');
+            const esc = '\x1B';
+            const lines = [
+                `${esc}@`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
+                'BUKTI TRANSFER BANK', data.status, data.tanggal, `${esc}a\x00`,
+                '--------------------------------',
+                ...barisThermalTransfer('ID TRX', data.id), '',
+                ...barisThermalTransfer('BANK', data.bank), '',
+                ...barisThermalTransfer('NO REK', data.norek), '',
+                ...barisThermalTransfer('NAMA', data.nama),
+                '--------------------------------',
+                ...barisThermalTransfer('NOMINAL', formatRupiahTransfer(data.nominal)), '',
+                ...barisThermalTransfer('ADMIN', formatRupiahTransfer(data.admin)),
+                '--------------------------------', `${esc}E\x01`,
+                ...barisThermalTransfer('TOTAL', formatRupiahTransfer(data.total)), `${esc}E\x00`,
+                '', `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '', '\n'
+            ].join('\n');
+            await kirimDataPrinterTransfer(new TextEncoder().encode(lines));
+            return;
+        } catch (error) {
+            printerTransferCharacteristic = null;
+            console.warn('Bluetooth printer tidak digunakan:', error.message);
+        }
+    }
+
+    printStrukTransferBrowser(data);
+}
+
+function dataStrukTransferAktif() {
+    const teks = id => document.getElementById(id)?.innerText.trim() || '-';
+    return {
+        id: teks('struk-id'),
+        bank: teks('struk-bank-tujuan'),
+        norek: teks('struk-no-rekening'),
+        nama: teks('struk-nama-penerima'),
+        tanggal: teks('struk-waktu'),
+        nominal: teks('struk-nominal'),
+        admin: teks('struk-admin'),
+        total: teks('struk-total'),
+        status: document.getElementById('struk-status-judul')?.innerText || 'DIPROSES'
+    };
+}
+
+function formatRupiahTransfer(value) {
+    const angka = Number(String(value || '').replace(/[^0-9]/g, '')) || 0;
+    return 'Rp ' + angka.toLocaleString('id-ID');
+}
+
+function barisThermalTransfer(label, value) {
+    const prefix = `${label}: `;
+    const teks = String(value || '-');
+    const hasil = [];
+    for (let posisi = 0; posisi < teks.length || !hasil.length; posisi += 32 - prefix.length) {
+        const bagian = teks.slice(posisi, posisi + 32 - (posisi ? 0 : prefix.length));
+        hasil.push((posisi ? ' '.repeat(prefix.length) : prefix) + (bagian || '-'));
+        if (!bagian) break;
+    }
+    return hasil;
+}
+
+async function kirimDataPrinterTransfer(data) {
+    for (let posisi = 0; posisi < data.length; posisi += 180) {
+        const potongan = data.slice(posisi, posisi + 180);
+        if (printerTransferCharacteristic.properties.writeWithoutResponse) {
+            await printerTransferCharacteristic.writeValueWithoutResponse(potongan);
+        } else {
+            await printerTransferCharacteristic.writeValue(potongan);
+        }
+    }
+}
+
+function printStrukTransferBrowser(data) {
+    const jendelaPrint = window.open('', '_blank', 'width=420,height=760');
+    if (!jendelaPrint) {
+        alert('Pop-up print diblokir browser. Izinkan pop-up lalu coba lagi.');
+        return;
+    }
+    const baris = [
+        ['ID TRX', data.id], ['STATUS', data.status], ['WAKTU', data.tanggal],
+        ['BANK', data.bank], ['NO REKENING', data.norek], ['NAMA', data.nama],
+        ['NOMINAL', data.nominal], ['BIAYA ADMIN', data.admin], ['TOTAL BAYAR', data.total]
+    ].map(([label, value]) => `<div class="row"><span>${label}</span><strong>${value}</strong></div>`).join('');
+    jendelaPrint.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Struk Transfer</title><style>@page{size:58mm auto;margin:0}*{box-sizing:border-box}body{width:58mm;margin:0;padding:4mm 3mm;font:11px Arial,sans-serif;color:#000}.head{text-align:center;font-weight:bold;font-size:14px;margin-bottom:8px}.line{border-top:1px dashed #000;margin:7px 0}.row{display:flex;justify-content:space-between;gap:6px;margin:5px 0}.row span{color:#333}.row strong{text-align:right;word-break:break-word}.total{font-size:15px;font-weight:bold}.thanks{text-align:center;margin-top:10px}@media print{button{display:none}}</style></head><body><div class="head">NK JAYA CELL<br>BUKTI TRANSFER BANK</div><div class="line"></div>${baris}<div class="line"></div><div class="thanks">Terima kasih</div></body></html>`);
+    jendelaPrint.document.close();
+    jendelaPrint.focus();
+    setTimeout(() => { jendelaPrint.print(); jendelaPrint.close(); }, 300);
 }
 
 /**
