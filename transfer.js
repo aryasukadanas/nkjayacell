@@ -954,7 +954,7 @@ async function printStrukTransfer58mm() {
     ...barisThermalTransfer('ID Transaksi', data.id),
                 ...barisThermalTransfer('Tanggal', tanggalCetak),
                 ...barisThermalTransfer('Waktu', waktuCetak),
- ...barisThermalTransfer('Status', Sukses),
+    ...barisThermalTransfer('Status', 'SUKSES'),
     '--------------------------------',
     'DATA PENERIMA',
     ...barisThermalTransfer('Bank Tujuan', data.bank),
