@@ -939,6 +939,7 @@ async function printStrukTransfer58mm() {
             }
             if (!printerTransferCharacteristic) throw new Error('Characteristic printer tidak ditemukan.');
             const esc = '\x1B';
+            const [tanggalCetak = '-', waktuCetak = '-'] = String(data.tanggal || '-').split(/\s+-\s+/, 2);
             const lines = [
     `${esc}@`,
     `${esc}a\x01`,
@@ -951,7 +952,8 @@ async function printStrukTransfer58mm() {
     '--------------------------------',
 
     ...barisThermalTransfer('ID Transaksi', data.id),
-    ...barisThermalTransfer('Tanggal', data.tanggal),
+                ...barisThermalTransfer('Tanggal', tanggalCetak),
+                ...barisThermalTransfer('Waktu', waktuCetak),
 
     '--------------------------------',
     'DATA PENERIMA',
@@ -1008,13 +1010,14 @@ function formatRupiahTransfer(value) {
 
 function barisThermalTransfer(label, value) {
     const lebarBaris = 32;
-    const labelRapi = `${label}:`;
+    const lebarLabel = 16;
+    const labelRapi = String(label).padEnd(lebarLabel, ' ');
     const teks = String(value || '-');
     const hasil = [];
-    const lebarNilai = lebarBaris - labelRapi.length - 1;
+    const lebarNilai = lebarBaris - lebarLabel - 2;
     for (let posisi = 0; posisi < teks.length || !hasil.length; posisi += lebarNilai) {
         const bagian = teks.slice(posisi, posisi + lebarNilai) || '-';
-        const awalan = posisi ? ' '.repeat(labelRapi.length + 1) : `${labelRapi} `;
+        const awalan = posisi ? ' '.repeat(lebarLabel + 2) : `${labelRapi}: `;
         hasil.push(posisi ? awalan + bagian : awalan + bagian.padStart(lebarNilai, ' '));
         if (!bagian) break;
     }
