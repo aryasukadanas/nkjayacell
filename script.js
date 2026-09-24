@@ -2001,7 +2001,8 @@ async function printStruk58mm() {
             ...field('HARGA', nilai('token-harga')),
             '--------------------------------', `${esc}a\x01`, '***Token serial number***',
             `${gs}!\x11`, ...bungkusTeks(nilai('token-serial'), 16), `${gs}!\x00`,
-            `${esc}a\x00`, '--------------------------------', ...field('SERIAL NUMBER MCB', nilai('token-serial')),
+            `${esc}a\x00`, '--------------------------------',
+            ...bungkusTeks('INPUT TOKEN SERIAL NUMBER PADA MCB PEMILIK METERAN', 32),
             `${esc}a\x01`, 'Terima kasih', `${esc}a\x00`, '\n\n\n'
         ].join('\n');
         await kirimDataBluetooth(new TextEncoder().encode(isi));
