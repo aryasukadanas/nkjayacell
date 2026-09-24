@@ -759,8 +759,12 @@ function tampilkanStruk(data) {
         judulEl.className = 'font-black text-amber-600 text-lg';
     }
 
-    // Isi data ke elemen struk
-    document.getElementById('struk-waktu').innerText = data.tanggal || new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' });
+    // Tampilkan tanggal dan waktu sebagai dua baris terpisah di semua mode cetak.
+    const waktuStruk = document.getElementById('struk-waktu');
+    const bagianWaktu = pisahkanTanggalWaktuTransfer(data.tanggal || new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }));
+    if (waktuStruk) {
+        waktuStruk.innerHTML = `${bagianWaktu.tanggal}<br>${bagianWaktu.waktu}`;
+    }
     const bankTujuan = data.bank || '-';
     const noRekening = data.norek || '-';
     const namaPenerima = data.nama || '-';
@@ -968,7 +972,9 @@ async function printStrukTransfer58mm() {
             }
             if (!printerTransferCharacteristic) throw new Error('Characteristic printer tidak ditemukan.');
             const esc = '\x1B';
-            const [tanggalCetak = '-', waktuCetak = '-'] = String(data.tanggal || '-').split(/\s+-\s+/, 2);
+            const bagianWaktu = pisahkanTanggalWaktuTransfer(data.tanggal);
+            const tanggalCetak = bagianWaktu.tanggal;
+            const waktuCetak = bagianWaktu.waktu;
             const lines = [
     `${esc}@`,
     `${esc}a\x01`,
@@ -1011,6 +1017,22 @@ async function printStrukTransfer58mm() {
     }
 
     printStrukTransferBrowser(data);
+}
+
+function pisahkanTanggalWaktuTransfer(value) {
+    const teksTanggal = String(value || '-').replace(/\s*\n\s*/g, ' ').trim();
+    const waktuMatch = teksTanggal.match(/\b\d{1,2}[.:]\d{2}(?::\d{2})?\s*(?:WIB|WITA|WIT)?\b/i);
+    if (!waktuMatch) {
+        return {
+            tanggal: teksTanggal.split(/\s+-\s+|,\s*/, 1)[0].trim() || '-',
+            waktu: '-'
+        };
+    }
+
+    return {
+        tanggal: teksTanggal.slice(0, waktuMatch.index).replace(/[,-]\s*$/, '').trim() || '-',
+        waktu: waktuMatch[0].replace(/\./g, ':')
+    };
 }
 
 function dataStrukTransferAktif() {
