@@ -1990,7 +1990,7 @@ async function printStruk58mm() {
         const statusCetak = dataStrukAktif.status || 'DIPROSES';
         const waktuCetak = document.getElementById('struk-waktu')?.innerText || '-';
         const isi = [
-            `${esc}@`, `${esc}3\x14`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
+            `${esc}@`, `${esc}3\x0A`, `${esc}a\x01`, `${esc}E\x01`, 'NK JAYA CELL', `${esc}E\x00`,
             'STRUK TOKEN LISTRIK', statusCetak, waktuCetak, `${esc}a\x00`, '--------------------------------',
             ...field('ID TRX', nilai('token-id-trx')),
             ...field('ID PLN', nilai('token-id-pln')),
