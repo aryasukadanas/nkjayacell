@@ -2088,13 +2088,9 @@ function aktifkanEditStrukToken(id) {
     fields.forEach(field => {
         field.contentEditable = 'true';
         field.classList.toggle('rounded', !sedangEdit);
-        field.classList.toggle('bg-white/10', !sedangEdit); // Ganti bg-amber-50 menjadi bg-white/10
+        field.classList.toggle('bg-amber-50', !sedangEdit);
         field.classList.toggle('outline-none', !sedangEdit);
     });
-    const actions = document.getElementById('struk-actions');
-    actions.insertAdjacentHTML('afterbegin', `<button id="token-save-button" onclick="simpanEditStrukToken('${id}')" class="col-span-2 w-full py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl"><i class="fas fa-save mr-1"></i> Simpan Perubahan</button>`);
-}
-
     const actions = document.getElementById('struk-actions');
     actions.insertAdjacentHTML('afterbegin', `<button id="token-save-button" onclick="simpanEditStrukToken('${id}')" class="col-span-2 w-full py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl"><i class="fas fa-save mr-1"></i> Simpan Perubahan</button>`);
 }
@@ -2111,13 +2107,8 @@ function simpanEditStrukToken(id) {
     localStorage.setItem('nk_token_receipt_edits', JSON.stringify(edits));
     document.querySelectorAll('#struk-token [data-editable="true"]').forEach(field => {
         field.contentEditable = 'false';
-        field.classList.remove('rounded', 'bg-white/10', 'outline-none'); // Hapus bg-white/10 saat disimpan
+        field.classList.remove('rounded', 'bg-amber-50', 'outline-none');
     });
-    document.getElementById('token-save-button')?.remove();
-    showAlert('STRUK TERSIMPAN', 'Perubahan struk token disimpan di perangkat ini.', ['Data arsip asli tetap tidak berubah.']);
-}
-
-
     document.getElementById('token-save-button')?.remove();
     showAlert('STRUK TERSIMPAN', 'Perubahan struk token disimpan di perangkat ini.', ['Data arsip asli tetap tidak berubah.']);
 }
