@@ -2088,7 +2088,8 @@ function aktifkanEditStrukToken(id) {
     fields.forEach(field => {
         field.contentEditable = 'true';
         field.classList.toggle('rounded', !sedangEdit);
-        field.classList.toggle('bg-amber-50', !sedangEdit);
+        field.classList.toggle('bg-slate-800', !sedangEdit); // <--- Ubah di sini
+        field.classList.toggle('text-white', !sedangEdit);   // <--- Tambahkan ini agar teks jelas terlihat
         field.classList.toggle('outline-none', !sedangEdit);
     });
     const actions = document.getElementById('struk-actions');
@@ -2107,7 +2108,7 @@ function simpanEditStrukToken(id) {
     localStorage.setItem('nk_token_receipt_edits', JSON.stringify(edits));
     document.querySelectorAll('#struk-token [data-editable="true"]').forEach(field => {
         field.contentEditable = 'false';
-        field.classList.remove('rounded', 'bg-amber-50', 'outline-none');
+        field.classList.remove('rounded','bg-slate-800','text-white','outline-none');
     });
     document.getElementById('token-save-button')?.remove();
     showAlert('STRUK TERSIMPAN', 'Perubahan struk token disimpan di perangkat ini.', ['Data arsip asli tetap tidak berubah.']);
