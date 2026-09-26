@@ -2106,10 +2106,12 @@ function simpanEditStrukToken(id) {
     const edits = JSON.parse(localStorage.getItem('nk_token_receipt_edits') || '{}');
     edits[id] = edit;
     localStorage.setItem('nk_token_receipt_edits', JSON.stringify(edits));
-    document.querySelectorAll('#struk-token [data-editable="true"]').forEach(field => {
-        field.contentEditable = 'false';
-        field.classList.remove('rounded', 'bg-amber-50', 'outline-none');
-    });
+    // Pada fungsi simpanEditStrukToken(id):
+document.querySelectorAll('#struk-token [data-editable="true"]').forEach(field => {
+    field.contentEditable = 'false';
+    field.classList.remove('rounded', 'bg-slate-800', 'text-white', 'outline-none');
+});
+
     document.getElementById('token-save-button')?.remove();
     showAlert('STRUK TERSIMPAN', 'Perubahan struk token disimpan di perangkat ini.', ['Data arsip asli tetap tidak berubah.']);
 }
