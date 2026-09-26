@@ -2086,11 +2086,12 @@ function aktifkanEditStrukToken(id) {
     const sedangEdit = fields[0]?.isContentEditable;
     if (sedangEdit) return;
     fields.forEach(field => {
-        field.contentEditable = 'true';
-        field.classList.toggle('rounded', !sedangEdit);
-        field.classList.toggle('bg-amber-50', !sedangEdit);
-        field.classList.toggle('outline-none', !sedangEdit);
-    });
+    field.contentEditable = 'true';
+    field.classList.toggle('rounded', !sedangEdit);
+    field.classList.toggle('bg-slate-800', !sedangEdit); // Ubah ke bg-slate-800
+    field.classList.toggle('text-white', !sedangEdit);    // Tambahkan agar teks tetap terang
+    field.classList.toggle('outline-none', !sedangEdit);
+});
     const actions = document.getElementById('struk-actions');
     actions.insertAdjacentHTML('afterbegin', `<button id="token-save-button" onclick="simpanEditStrukToken('${id}')" class="col-span-2 w-full py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl"><i class="fas fa-save mr-1"></i> Simpan Perubahan</button>`);
 }
