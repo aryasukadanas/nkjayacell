@@ -2088,7 +2088,7 @@ function aktifkanEditStrukToken(id) {
     fields.forEach(field => {
     field.contentEditable = 'true';
     field.classList.toggle('rounded', !sedangEdit);
-    field.classList.toggle('bg-slate-800', !sedangEdit); // Ubah ke bg-slate-800
+    field.classList.toggle('bg-white/10', !sedangEdit); // Ubah ke bg-slate-800
     field.classList.toggle('text-white', !sedangEdit);    // Tambahkan agar teks tetap terang
     field.classList.toggle('outline-none', !sedangEdit);
 });
@@ -2109,7 +2109,7 @@ function simpanEditStrukToken(id) {
     // Pada fungsi simpanEditStrukToken(id):
 document.querySelectorAll('#struk-token [data-editable="true"]').forEach(field => {
     field.contentEditable = 'false';
-    field.classList.remove('rounded', 'bg-slate-800', 'text-white', 'outline-none');
+    field.classList.remove('rounded', 'bg-white/10', 'text-white', 'outline-none');
 });
 
     document.getElementById('token-save-button')?.remove();
