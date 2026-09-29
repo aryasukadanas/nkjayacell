@@ -62,6 +62,12 @@
                     <article class="metric-card"><div class="metric-label"><span>Transaksi</span><i class="fas fa-receipt"></i></div><strong id="metric-count">0</strong><small>Dalam periode terpilih</small></article>
                     <article class="metric-card"><div class="metric-label"><span>Total dibayar</span><i class="fas fa-wallet"></i></div><strong id="metric-volume">Rp 0</strong><small>Nilai transaksi dalam periode</small></article>
                 </div>
+                <div class="status-breakdown-heading"><h3>Rincian berdasarkan status</h3><span>Dalam periode terpilih</span></div>
+                <div class="status-breakdown-grid">
+                    <article class="status-report-card success-report"><div class="status-report-heading"><h4>SUKSES</h4><span id="report-success-count">0 transaksi</span></div><div class="status-report-value"><span>Keuntungan</span><strong id="report-success-profit">Rp 0</strong></div><div class="status-report-value"><span>Jumlah bayar</span><strong id="report-success-volume">Rp 0</strong></div></article>
+                    <article class="status-report-card process-report"><div class="status-report-heading"><h4>PROSES</h4><span id="report-process-count">0 transaksi</span></div><div class="status-report-value"><span>Keuntungan</span><strong id="report-process-profit">Rp 0</strong></div><div class="status-report-value"><span>Jumlah bayar</span><strong id="report-process-volume">Rp 0</strong></div></article>
+                    <article class="status-report-card failed-report"><div class="status-report-heading"><h4>GAGAL</h4><span id="report-failed-count">0 transaksi</span></div><div class="status-report-value"><span>Keuntungan</span><strong id="report-failed-profit">Rp 0</strong></div><div class="status-report-value"><span>Jumlah bayar</span><strong id="report-failed-volume">Rp 0</strong></div></article>
+                </div>
             </section>
 
             <section class="transactions-section" aria-labelledby="transactions-title">
@@ -69,7 +75,6 @@
                 <div class="filter-panel">
                     <label class="search-field"><i class="fas fa-hashtag"></i><input id="filter-id" type="search" placeholder="Cari ID TRX"></label>
                     <label class="search-field"><i class="fas fa-phone"></i><input id="filter-contact" type="search" placeholder="Nomor HP / rekening"></label>
-                    <label class="filter-date">Tanggal <input id="filter-date" type="date"></label>
                     <label class="filter-date">Dari <input id="filter-from" type="date"></label>
                     <label class="filter-date">Sampai <input id="filter-to" type="date"></label>
                     <label class="source-filter">Sumber<select id="filter-source"><option value="all">Semua data</option><option value="ARSIP">ARSIP</option><option value="TRANSFER">Transfer</option></select></label>
@@ -96,6 +101,15 @@
             <div class="profit-preview"><span>Keuntungan otomatis</span><strong id="edit-profit-preview">Rp 0</strong><small>Rumus: total transaksi - modal</small></div>
             <div id="edit-fields" class="edit-fields"></div>
             <div class="dialog-actions"><button id="cancel-edit" class="button button-outline" type="button">Batal</button><button class="button button-dark" type="submit"><i class="fas fa-check"></i> Simpan lokal</button></div>
+        </form>
+    </dialog>
+
+    <dialog id="token-edit-dialog" class="edit-dialog">
+        <form id="token-edit-form">
+            <header class="dialog-heading"><div><p class="eyebrow">EDIT STRUK TOKEN</p><h2>Data token listrik</h2></div><button id="close-token-edit" class="icon-button" type="button" aria-label="Tutup"><i class="fas fa-xmark"></i></button></header>
+            <p class="dialog-note">Perubahan disimpan lokal dengan format yang sama seperti halaman index. Data Arsip tidak berubah.</p>
+            <div id="token-edit-fields" class="edit-fields"></div>
+            <div class="dialog-actions"><button id="cancel-token-edit" class="button button-outline" type="button">Batal</button><button class="button button-dark" type="submit"><i class="fas fa-check"></i> Simpan struk</button></div>
         </form>
     </dialog>
 

@@ -79,6 +79,20 @@ h1, h2, p { margin-top: 0; }
 .metric-label i { color: var(--green); }
 .metric-card strong { display: block; overflow: hidden; font-family: var(--mono); font-size: clamp(18px, 2vw, 25px); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .metric-card small { display: block; margin-top: 8px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.status-breakdown-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 0 10px; }
+.status-breakdown-heading h3 { margin: 0; font-size: 12px; }
+.status-breakdown-heading span { color: var(--muted); font-size: 10px; }
+.status-breakdown-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.status-report-card { min-width: 0; padding: 13px 14px; border: 1px solid var(--line); border-radius: 8px; background: #fbfcfa; }
+.success-report { border-top: 3px solid #18845f; }
+.process-report { border-top: 3px solid #c58620; }
+.failed-report { border-top: 3px solid #c04e3b; }
+.status-report-heading, .status-report-value { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.status-report-heading { margin-bottom: 12px; }
+.status-report-heading h4 { margin: 0; font-family: var(--mono); font-size: 10px; font-weight: 500; }
+.status-report-heading span, .status-report-value span { color: var(--muted); font-size: 10px; }
+.status-report-value + .status-report-value { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e9ede9; }
+.status-report-value strong { overflow: hidden; font-family: var(--mono); font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 
 .transactions-section { margin-top: 20px; }
 .transaction-heading { margin-bottom: 16px; }
@@ -164,6 +178,7 @@ tbody tr:hover { background: #fbfcfb; }
     .date-pair label { flex: 1; min-width: 120px; }
     .date-pair input { width: 100%; }
     .metrics-grid { grid-template-columns: 1fr; }
+    .status-breakdown-grid { grid-template-columns: 1fr; }
     .metric-card { padding: 14px; }
     .metric-label { margin-bottom: 8px; }
     .metric-card strong { font-size: 21px; }

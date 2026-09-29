@@ -1,5 +1,6 @@
 const ADMIN_STORAGE_KEY = 'nkjc_admin_local_edits_v1';
 const ADMIN_PASSKEY_KEY = 'nkjc_admin_passkey_v1';
+const TOKEN_EDIT_STORAGE_KEY = 'nk_token_receipt_edits';
 const statusNormalize = value => String(value || '').trim().toUpperCase();
 const normalizeHeader = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
@@ -17,13 +18,18 @@ const elements = {
     reportRangeLabel: document.getElementById('report-range-label'),
     dialog: document.getElementById('edit-dialog'),
     editForm: document.getElementById('edit-form'),
-    editFields: document.getElementById('edit-fields')
+    editFields: document.getElementById('edit-fields'),
+    tokenEditDialog: document.getElementById('token-edit-dialog'),
+    tokenEditForm: document.getElementById('token-edit-form'),
+    tokenEditFields: document.getElementById('token-edit-fields')
 };
 
 let transactions = [];
 let activeEdit = null;
+let activeTokenEdit = null;
 let reportRange = { from: startOfDay(new Date()), to: endOfDay(new Date()) };
 let bluetoothPrinter = null;
+let plnCustomerLookup = { byId: {} };
 
 function parseCsv(text) {
     const rows = [];
@@ -117,6 +123,78 @@ function makeTransaction(source, index, fields, originalId) {
     return record;
 }
 
+async function fetchPlnCustomerLookup() {
+    const response = await fetch(SHEET_NAMA_PLN_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Data PLN: HTTP ${response.status}`);
+    const rows = parseCsv(await response.text());
+    const headerIndex = rows.findIndex(row => {
+        const headers = row.map(normalizeHeader);
+        return headers.includes('IDPLN') && headers.includes('NAMA');
+    });
+    if (headerIndex < 0) throw new Error('Header data pelanggan PLN tidak ditemukan.');
+    const headers = rows[headerIndex].map(normalizeHeader);
+    const findColumn = aliases => aliases.map(normalizeHeader).map(alias => headers.indexOf(alias)).find(index => index >= 0);
+    const idIndex = findColumn(['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR']);
+    const nameIndex = findColumn(['NAMA', 'NAMA PELANGGAN', 'PELANGGAN']);
+    const tariffIndex = findColumn(['TARIF/DAYA', 'TARIF DAYA', 'DAYA']);
+    const powerIndex = findColumn(['JUMLAH DAYA', 'JUMLAH DAYA TERBARU', 'DAYA TERISI']);
+    const nominalIndexes = headers.map((header, index) => ({ index, nominal: header.replace(/[^0-9]/g, '') }))
+        .filter(item => tariffIndex !== undefined && item.index > tariffIndex && item.nominal);
+    const lookup = { byId: {} };
+    rows.slice(headerIndex + 1).forEach(row => {
+        const id = String(row[idIndex] || '').replace(/\D/g, '');
+        if (!id) return;
+        const customer = lookup.byId[id] || { nominalPower: {} };
+        if (nameIndex !== undefined && row[nameIndex] && !customer.name) customer.name = row[nameIndex];
+        if (tariffIndex !== undefined && row[tariffIndex]) customer.tariff = row[tariffIndex];
+        if (powerIndex !== undefined && row[powerIndex]) customer.power = row[powerIndex];
+        nominalIndexes.forEach(({ index, nominal }) => {
+            if (row[index]) customer.nominalPower[nominal] = row[index];
+        });
+        lookup.byId[id] = customer;
+    });
+    return lookup;
+}
+
+function findRelatedArchive(record, archives) {
+    const id = normalizeHeader(record.id);
+    const byId = id && archives.find(item => normalizeHeader(item.id) === id);
+    if (byId) return byId;
+    const target = String(record.contact || '').replace(/\D/g, '');
+    return target && archives.find(item => String(item.contact || '').replace(/\D/g, '') === target) || record;
+}
+
+function readTokenReceiptEdits() {
+    try { return JSON.parse(localStorage.getItem(TOKEN_EDIT_STORAGE_KEY) || '{}'); }
+    catch { return {}; }
+}
+
+function buildTokenReceiptData(record, archives) {
+    const linked = findRelatedArchive(record, archives);
+    const aliases = names => getField(linked, names);
+    const target = String(record.contact || '').replace(/\D/g, '');
+    const customer = plnCustomerLookup.byId[target] || {};
+    const edits = readTokenReceiptEdits()[record.id] || {};
+    const orderNominal = aliases(['NOMINAL TOKEN', 'JUMLAH NOMINAL', 'NOMINAL'])
+        || String(record.product || '').match(/(?:RP\.?\s*)?([\d.]+)/i)?.[1]
+        || String(record.amount || '');
+    const nominalKey = String(orderNominal).replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+    const linkedPower = getField(linked, ['JUMLAH DAYA', 'DAYA TERISI', 'DAYA']);
+    const tariff = customer.tariff || aliases(['TARIF/DAYA', 'TARIF DAYA']) || '-';
+    const token = {
+        idTrx: edits.idTrx || record.id || '-',
+        idPln: edits.idPln || record.contact || aliases(['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR']) || '-',
+        produk: edits.produk || (orderNominal ? `TOKEN PLN - ${formatMoney(parseAmount(orderNominal))}` : 'TOKEN PLN'),
+        nama: edits.nama || aliases(['NAMA', 'NAMA PELANGGAN', 'PELANGGAN']) || customer.name || '-',
+        tarifDaya: edits.tarifDaya || tariff,
+        jumlahDaya: edits.jumlahDaya || customer.nominalPower?.[nominalKey] || linkedPower || customer.power || '-',
+        harga: edits.harga || aliases(['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']) || String(record.amount || '-'),
+        serial: edits.serial || aliases(['SERIAL NUMBER', 'NOMOR TOKEN', 'ANGKA TOKEN', 'TOKEN', 'SN']) || '-'
+    };
+    const productText = `${record.product} ${aliases(['PRODUK', 'NAMA PRODUK', 'KETERANGAN'])}`.toUpperCase();
+    return { token, isToken: productText.includes('TOKEN') || productText.includes('PLN') };
+}
+
 function calculateFinancials(record) {
     const transferAmount = parseAmount(getField(record, ['TRANSFER', 'NOMINAL', 'NOMINAL TRANSFER', 'TOTAL TRANSFER']));
     const transferFee = parseAmount(getField(record, ['BIAYA', 'BIAYA ADMIN', 'ADMIN']));
@@ -199,11 +277,22 @@ async function loadTransactions() {
     state.classList.remove('is-error');
     state.textContent = 'Menghubungkan ke Google Sheets...';
     try {
-        const [arsip, transfer] = await Promise.all([
+        const [arsip, transfer, plnLookup] = await Promise.all([
             fetchSheet(SHEET_ARSIP_URL, 'ARSIP'),
-            fetchSheet(SHEET_TRANSFER_URL, 'TRANSFER')
+            fetchSheet(SHEET_TRANSFER_URL, 'TRANSFER'),
+            fetchPlnCustomerLookup().catch(error => {
+                console.warn('Data nama/daya PLN tidak dapat dimuat:', error);
+                return { byId: {} };
+            })
         ]);
-        transactions = [...arsip, ...transfer].sort((first, second) => (second.date?.getTime() || 0) - (first.date?.getTime() || 0));
+        plnCustomerLookup = plnLookup;
+        transactions = [...arsip, ...transfer];
+        transactions.filter(record => record.source === 'ARSIP').forEach(record => {
+            const receipt = buildTokenReceiptData(record, arsip);
+            record.isToken = receipt.isToken;
+            record.tokenReceipt = receipt.token;
+        });
+        transactions.sort((first, second) => (second.date?.getTime() || 0) - (first.date?.getTime() || 0));
         document.getElementById('last-sync').textContent = `Diperbarui ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} · ${transactions.length} baris dimuat`;
         state.hidden = true;
         renderAll();
@@ -223,7 +312,6 @@ function getFilteredTransactions() {
     const idSearch = document.getElementById('filter-id').value.trim().toLowerCase();
     const contactSearch = document.getElementById('filter-contact').value.replace(/\s/g, '').toLowerCase();
     const source = document.getElementById('filter-source').value;
-    const exact = document.getElementById('filter-date').value;
     const fromValue = document.getElementById('filter-from').value;
     const toValue = document.getElementById('filter-to').value;
     const from = fromValue ? startOfDay(new Date(`${fromValue}T00:00:00`)) : null;
@@ -232,7 +320,6 @@ function getFilteredTransactions() {
         if (source !== 'all' && record.source !== source) return false;
         if (idSearch && !String(record.id).toLowerCase().includes(idSearch)) return false;
         if (contactSearch && !String(record.contact).replace(/\s/g, '').toLowerCase().includes(contactSearch)) return false;
-        if (exact && (!record.date || localDateKey(record.date) !== exact)) return false;
         if (from && (!record.date || record.date < from)) return false;
         if (to && (!record.date || record.date > to)) return false;
         return true;
@@ -266,10 +353,8 @@ function createFilteredCsv(records = getFilteredTransactions()) {
 }
 
 function getExportPeriodLabel() {
-    const exact = document.getElementById('filter-date').value;
     const from = document.getElementById('filter-from').value;
     const to = document.getElementById('filter-to').value;
-    if (exact) return exact;
     if (from && to) return `${from}_sampai_${to}`;
     if (from) return `mulai_${from}`;
     if (to) return `sampai_${to}`;
@@ -315,7 +400,7 @@ function renderRows() {
             <td class="mono">${escapeHtml(formatMoney(record.amount))}</td>
             <td class="mono">${escapeHtml(formatMoney(record.profit))}</td>
             <td><span class="status-badge ${statusClass(record.status)}">${escapeHtml(record.status || 'PROSES')}</span></td>
-            <td><div class="row-actions"><button class="icon-button" type="button" data-action="edit" data-key="${escapeHtml(record.key)}" title="Edit lokal" aria-label="Edit lokal"><i class="fas fa-pen"></i></button><button class="icon-button print-button" type="button" data-action="print" data-key="${escapeHtml(record.key)}" title="Cetak struk 58 mm" aria-label="Cetak struk"><i class="fas fa-print"></i></button></div></td>
+            <td><div class="row-actions">${record.isToken ? `<button class="icon-button" type="button" data-action="edit-token" data-key="${escapeHtml(record.key)}" title="Edit struk token" aria-label="Edit struk token"><i class="fas fa-bolt"></i></button>` : `<button class="icon-button" type="button" data-action="edit" data-key="${escapeHtml(record.key)}" title="Edit lokal" aria-label="Edit lokal"><i class="fas fa-pen"></i></button>`}<button class="icon-button print-button" type="button" data-action="print" data-key="${escapeHtml(record.key)}" title="Cetak struk 58 mm" aria-label="Cetak struk"><i class="fas fa-print"></i></button></div></td>
         </tr>`;
     }).join('');
     elements.emptyState.hidden = filtered.length > 0;
@@ -325,9 +410,26 @@ function renderReport() {
     const reportRows = transactions.filter(record => isBetween(record.date, reportRange.from, reportRange.to));
     const profit = reportRows.reduce((sum, record) => sum + record.profit, 0);
     const volume = reportRows.reduce((sum, record) => sum + record.amount, 0);
+    const statusTotals = {
+        success: { count: 0, profit: 0, volume: 0 },
+        process: { count: 0, profit: 0, volume: 0 },
+        failed: { count: 0, profit: 0, volume: 0 }
+    };
+    reportRows.forEach(record => {
+        const className = statusClass(record.status);
+        const key = className === 'success' ? 'success' : className === 'failed' ? 'failed' : 'process';
+        statusTotals[key].count += 1;
+        statusTotals[key].profit += record.profit;
+        statusTotals[key].volume += record.amount;
+    });
     document.getElementById('metric-profit').textContent = formatMoney(profit);
     document.getElementById('metric-count').textContent = reportRows.length.toLocaleString('id-ID');
     document.getElementById('metric-volume').textContent = formatMoney(volume);
+    Object.entries(statusTotals).forEach(([key, totals]) => {
+        document.getElementById(`report-${key}-count`).textContent = `${totals.count.toLocaleString('id-ID')} transaksi`;
+        document.getElementById(`report-${key}-profit`).textContent = formatMoney(totals.profit);
+        document.getElementById(`report-${key}-volume`).textContent = formatMoney(totals.volume);
+    });
     const options = { day: '2-digit', month: 'short', year: 'numeric' };
     elements.reportRangeLabel.textContent = `${reportRange.from.toLocaleDateString('id-ID', options)} – ${reportRange.to.toLocaleDateString('id-ID', options)}`;
 }
@@ -466,6 +568,58 @@ function clearLocalEdits() {
     loadTransactions();
 }
 
+function openTokenReceiptEdit(record) {
+    activeTokenEdit = record;
+    const token = record.tokenReceipt || buildTokenReceiptData(record, transactions.filter(item => item.source === 'ARSIP')).token;
+    const labels = {
+        idTrx: 'ID Transaksi',
+        idPln: 'ID PLN',
+        produk: 'Produk',
+        nama: 'Nama',
+        tarifDaya: 'Tarif / Daya',
+        jumlahDaya: 'Jumlah Daya',
+        harga: 'Harga',
+        serial: 'Serial Number'
+    };
+    elements.tokenEditFields.replaceChildren();
+    Object.entries(labels).forEach(([key, labelText]) => {
+        const label = document.createElement('label');
+        label.className = 'edit-field';
+        const caption = document.createElement('span');
+        caption.textContent = labelText;
+        const input = document.createElement('input');
+        input.type = key === 'harga' ? 'number' : 'text';
+        input.name = key;
+        input.value = key === 'harga' ? String(parseAmount(token[key])) : String(token[key] || '');
+        input.autocomplete = 'off';
+        if (key === 'harga') {
+            input.step = '1';
+            input.inputMode = 'numeric';
+        }
+        label.append(caption, input);
+        elements.tokenEditFields.append(label);
+    });
+    elements.tokenEditDialog.showModal();
+}
+
+function saveTokenReceiptEdit(event) {
+    event.preventDefault();
+    if (!activeTokenEdit) return;
+    const edits = readTokenReceiptEdits();
+    const edit = {};
+    elements.tokenEditForm.querySelectorAll('[name]').forEach(input => { edit[input.name] = input.value; });
+    edits[activeTokenEdit.id] = edit;
+    try {
+        localStorage.setItem(TOKEN_EDIT_STORAGE_KEY, JSON.stringify(edits));
+        activeTokenEdit.tokenReceipt = buildTokenReceiptData(activeTokenEdit, transactions.filter(item => item.source === 'ARSIP')).token;
+        elements.tokenEditDialog.close();
+        activeTokenEdit = null;
+        renderAll();
+    } catch (error) {
+        window.alert(`Edit struk token tidak dapat disimpan: ${error.message}`);
+    }
+}
+
 function receiptLayout(record) {
     const rows = [];
     const add = (text, align = 'left', emphasis = 'normal') => rows.push({ text: String(text ?? ''), align, emphasis });
@@ -531,22 +685,23 @@ function receiptLayout(record) {
         add('');
         add('Simpan resi ini sebagai bukti transaksi yang sah.', 'center');
     } else {
-        const isToken = /TOKEN|PLN/i.test(`${record.product} ${getField(record, ['KATEGORI'])}`);
+        const token = record.tokenReceipt || {};
+        const isToken = record.isToken || /TOKEN|PLN/i.test(`${record.product} ${getField(record, ['KATEGORI'])}`);
         storeHeader(isToken ? 'STRUK TOKEN LISTRIK' : 'STRUK TRANSAKSI');
         add(statusNormalize(record.status) || 'DIPROSES');
         add(formatDate(record.date || record.dateText));
         separator();
         if (isToken) {
-            field('ID TRX', record.id);
-            field('ID PLN', getField(record, ['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR', 'TARGET']) || record.contact);
-            field('PRODUK', record.product);
-            field('NAMA', getField(record, ['NAMA PELANGGAN', 'NAMA', 'PELANGGAN']));
-            field('TARIF/DAYA', getField(record, ['TARIF/DAYA', 'TARIF DAYA', 'JUMLAH DAYA', 'DAYA']));
-            field('JUMLAH DAYA', getField(record, ['JUMLAH DAYA', 'DAYA TERISI', 'DAYA']));
-            field('HARGA', formatMoney(record.amount));
+            field('ID TRX', token.idTrx || record.id);
+            field('ID PLN', token.idPln || record.contact);
+            field('PRODUK', token.produk || record.product);
+            field('NAMA', token.nama);
+            field('TARIF/DAYA', token.tarifDaya);
+            field('JUMLAH DAYA', token.jumlahDaya);
+            field('HARGA', formatMoney(parseAmount(token.harga || record.amount)));
             separator();
             add('***Token serial number***', 'center', 'bold');
-            add(getField(record, ['SERIAL NUMBER', 'NOMOR TOKEN', 'ANGKA TOKEN', 'TOKEN', 'SN']), 'center', 'large');
+            add(token.serial || '-', 'center', 'large');
             separator();
             add('INPUT TOKEN SERIAL NUMBER PADA MCB PEMILIK METERAN', 'center');
         } else {
@@ -801,11 +956,11 @@ function bindEvents() {
     document.getElementById('refresh-button').addEventListener('click', loadTransactions);
     document.getElementById('clear-edits-button').addEventListener('click', clearLocalEdits);
     document.getElementById('reset-filters').addEventListener('click', () => {
-        ['filter-id', 'filter-contact', 'filter-date', 'filter-from', 'filter-to'].forEach(id => { document.getElementById(id).value = ''; });
+        ['filter-id', 'filter-contact', 'filter-from', 'filter-to'].forEach(id => { document.getElementById(id).value = ''; });
         document.getElementById('filter-source').value = 'all';
         renderRows();
     });
-    ['filter-id', 'filter-contact', 'filter-date', 'filter-from', 'filter-to', 'filter-source'].forEach(id => {
+    ['filter-id', 'filter-contact', 'filter-from', 'filter-to', 'filter-source'].forEach(id => {
         document.getElementById(id).addEventListener('input', renderRows);
         document.getElementById(id).addEventListener('change', renderRows);
     });
@@ -822,14 +977,20 @@ function bindEvents() {
         }
         const record = transactions.find(item => item.key === button.dataset.key);
         if (!record) return;
+        if (button.dataset.action === 'edit-token') openTokenReceiptEdit(record);
         if (button.dataset.action === 'edit') openEdit(record);
         if (button.dataset.action === 'print') printRecord(record);
     });
     elements.editForm.addEventListener('submit', saveLocalEdit);
+    elements.tokenEditForm.addEventListener('submit', saveTokenReceiptEdit);
     elements.editFields.addEventListener('input', updateEditCalculations);
     document.getElementById('close-edit').addEventListener('click', () => elements.dialog.close());
     document.getElementById('cancel-edit').addEventListener('click', () => elements.dialog.close());
+    document.getElementById('close-token-edit').addEventListener('click', () => elements.tokenEditDialog.close());
+    document.getElementById('cancel-token-edit').addEventListener('click', () => elements.tokenEditDialog.close());
     elements.dialog.addEventListener('click', event => { if (event.target === elements.dialog) elements.dialog.close(); });
+    elements.tokenEditDialog.addEventListener('click', event => { if (event.target === elements.tokenEditDialog) elements.tokenEditDialog.close(); });
+    elements.tokenEditDialog.addEventListener('close', () => { activeTokenEdit = null; });
 }
 
 bindEvents();
