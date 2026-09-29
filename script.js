@@ -1680,6 +1680,18 @@ function simpanRiwayatProdukLokal(idTransaksi, waktu, noHp, produk, total, statu
 
     riwayat.unshift(transaksiBaru); // Masukkan ke urutan paling atas
     localStorage.setItem('nk_produk_history', JSON.stringify(riwayat));
+
+    const isRiwayatGame = window.location.pathname.includes('gameml.html');
+    listCacheRiwayat = isRiwayatGame
+        ? riwayat.filter(item => Boolean(
+            item.gameName
+            || String(item.produkLengkap || '').toUpperCase().includes('TOPUP')
+            || String(item.kategori || '').toUpperCase().includes('TOPUP')
+        ))
+        : riwayat;
+    if (!document.getElementById('history-view-section')?.classList.contains('hidden')) {
+        filterRiwayatStatus('SEMUA');
+    }
 }
 
 async function downloadQrCodeGambar() {
@@ -1775,6 +1787,14 @@ function konfirmasiSudahBayarQris() {
     }
     
     kirimTransaksiKeSheetDanWA(noHp, "Lunas (Scan QRIS Dinamis)");
+    showAlert(
+        'KONFIRMASI QRIS BERHASIL',
+        'PEMBAYARAN SUDAH TERCATAT',
+        [
+            'Status transaksi Anda sudah disimpan sebagai SUKSES.',
+            'Nota transaksi telah dikirim ke WhatsApp admin untuk diproses.'
+        ]
+    );
 }
 
 /**
@@ -1811,7 +1831,7 @@ function tampilkanStrukDariRiwayat(item) {
             || ambilArsipDenganId(['JUMLAH DAYA', 'DAYA TERISI', 'DAYA'])
             || '-',
         harga: kolomEdit.harga || ambilArsip(['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']) || item.biaya,
-        serial: ambilSerialArsip() || '-'
+        serial: kolomEdit.serial || ambilSerialArsip() || '-'
     };
     tampilkanStruk({
         id: item.id_transaksi,
