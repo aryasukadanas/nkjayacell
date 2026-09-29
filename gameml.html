@@ -76,7 +76,16 @@
         body[data-theme="dark"] .qris-guide p,
         body[data-theme="dark"] .qris-guide li,
         body[data-theme="dark"] .qris-guide ol {
-            color: #e2e8f0 !important;
+            color: #f1f5f9 !important;
+        }
+        body[data-theme="dark"] #qris-guide-toggle,
+        body[data-theme="dark"] #qris-guide {
+            background-color: #172554 !important;
+            border-color: #3b82f6 !important;
+            color: #dbeafe !important;
+        }
+        body[data-theme="dark"] #qris-guide p {
+            color: #bfdbfe !important;
         }
         body[data-theme="dark"] .text-blue-600,
         body[data-theme="dark"] .text-blue-500 {
@@ -399,7 +408,7 @@
     </div>
 
     <div id="qris-modal" class="hidden fixed inset-0 bg-black/50 z-50 transition-opacity duration-300 flex items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4">
-        <div class="bg-white rounded-2xl p-4 max-w-sm w-full text-center shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain relative">
+        <div class="bg-white rounded-2xl p-4 pb-16 max-w-sm w-full text-center shadow-xl max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain relative scroll-pb-16">
             <button onclick="tutupModalQris()" class="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl leading-none" aria-label="Tutup QRIS">
                 <i class="fas fa-times"></i>
             </button>
@@ -417,7 +426,12 @@
                 <span id="qris-countdown" class="text-sm font-black text-amber-700">05:00</span>
             </div>
 
-            <div class="qris-guide mb-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-left">
+            <button type="button" id="qris-guide-toggle" onclick="toggleQrisGuide()" aria-expanded="false" class="w-full mb-2 flex items-center justify-between rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-left text-[9px] font-black uppercase tracking-wider text-indigo-700">
+                <span><i class="fas fa-circle-info mr-1"></i> Cara Pembayaran QRIS</span>
+                <i id="qris-guide-toggle-icon" class="fas fa-chevron-down"></i>
+            </button>
+
+            <div id="qris-guide" class="qris-guide mb-3 hidden rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-left">
                 <p class="text-[9px] font-black uppercase tracking-[0.18em] text-indigo-700 mb-1.5">Cara Pembayaran QRIS</p>
                 <ol class="text-[9px] text-gray-700 space-y-1 list-decimal pl-4">
                     <li>Buka aplikasi e-wallet atau mobile banking Anda.</li>
@@ -428,7 +442,7 @@
                 </ol>
             </div>
             
-            <button onclick="konfirmasiSudahBayarQris()" class="w-full py-2.5 bg-emerald-600 text-white font-black text-[10px] rounded-xl shadow-md active:scale-95 transition-all">Saya Sudah Bayar</button>
+            <button onclick="konfirmasiSudahBayarQris()" class="sticky bottom-0 w-full py-3 mt-2 bg-emerald-600 text-white font-black text-[10px] rounded-xl shadow-md active:scale-95 transition-all">Saya Sudah Bayar</button>
         </div>
     </div>
 

@@ -1775,6 +1775,20 @@ function tutupModalQris() {
     if (countdownEl) countdownEl.textContent = '05:00';
 }
 
+function toggleQrisGuide() {
+    const guide = document.getElementById('qris-guide');
+    const toggle = document.getElementById('qris-guide-toggle');
+    const icon = document.getElementById('qris-guide-toggle-icon');
+    if (!guide || !toggle) return;
+
+    const isOpening = guide.classList.toggle('hidden');
+    toggle.setAttribute('aria-expanded', String(!isOpening));
+    if (icon) {
+        icon.classList.toggle('fa-chevron-down', isOpening);
+        icon.classList.toggle('fa-chevron-up', !isOpening);
+    }
+}
+
 function konfirmasiSudahBayarQris() {
     // Perbaikan: Ambil nomor target dari input yang benar.
     // Input ini sudah diisi otomatis baik dari halaman game maupun index.
