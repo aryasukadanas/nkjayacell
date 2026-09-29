@@ -326,56 +326,112 @@ function getFilteredTransactions() {
     });
 }
 
-function csvCell(value) {
-    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-    let text = String(value ?? '');
-    if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`;
-    return `"${text.replace(/"/g, '""')}"`;
+function getReportTransactions() {
+    return transactions.filter(record => isBetween(record.date, reportRange.from, reportRange.to));
 }
 
-function createFilteredCsv(records = getFilteredTransactions()) {
+function getReportStatusTotals(records) {
+    const totals = {
+        success: { label: 'SUKSES', count: 0, profit: 0, amount: 0 },
+        process: { label: 'PROSES', count: 0, profit: 0, amount: 0 },
+        failed: { label: 'GAGAL', count: 0, profit: 0, amount: 0 }
+    };
+    records.forEach(record => {
+        const className = statusClass(record.status);
+        const key = className === 'success' ? 'success' : className === 'failed' ? 'failed' : 'process';
+        totals[key].count += 1;
+        totals[key].profit += record.profit;
+        totals[key].amount += record.amount;
+    });
+    return Object.values(totals);
+}
+
+function safeExcelValue(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const text = String(value ?? '');
+    return /^[=+@\-\t\r]/.test(text) ? `'${text}` : text;
+}
+
+function buildTransactionExportRows(records) {
     const fieldMap = new Map();
     records.forEach(record => record.fields.forEach(field => {
         if (!fieldMap.has(field.key)) fieldMap.set(field.key, field.label);
     }));
     const fields = [...fieldMap.entries()];
-    const headers = ['Sumber', ...fields.map(([, label]) => label), 'Total Browser', 'Keuntungan Browser'];
-    const lines = [headers.map(csvCell).join(';')];
+    const headers = [
+        'Tanggal Browser', 'ID TRX', 'Sumber', 'Status Browser', 'Nomor / Rekening',
+        'Produk / Bank', 'Nama', 'Jumlah Bayar Browser', 'Keuntungan Browser', 'Modal Browser',
+        ...fields.map(([, label]) => label),
+        'ID PLN Struk', 'Produk Token Struk', 'Nama PLN Struk', 'Tarif / Daya Struk',
+        'Jumlah Daya Struk', 'Harga Struk', 'Serial Token Struk'
+    ];
+    const rows = [headers];
     records.forEach(record => {
-        const recordFields = new Map(record.fields.map(field => [field.key, field.value]));
-        const values = [record.source, ...fields.map(([key]) => {
-            if (normalizeHeader(key) === 'JUMLAH') return record.amount;
-            return recordFields.get(key) ?? '';
-        }), record.amount, record.profit];
-        lines.push(values.map(csvCell).join(';'));
+        const values = new Map(record.fields.map(field => [field.key, field.value]));
+        const token = record.tokenReceipt || {};
+        const row = [
+            formatDate(record.date || record.dateText), record.id, record.source, record.status,
+            record.contact, record.product, record.customer, record.amount, record.profit,
+            getField(record, MODAL_ALIASES),
+            ...fields.map(([key]) => normalizeHeader(key) === 'JUMLAH' ? record.amount : (values.get(key) ?? '')),
+            token.idPln || '', token.produk || '', token.nama || '', token.tarifDaya || '',
+            token.jumlahDaya || '', token.harga || '', token.serial || ''
+        ];
+        rows.push(row.map(safeExcelValue));
     });
-    return `\uFEFFsep=;\r\n${lines.join('\r\n')}`;
+    return rows;
 }
 
-function getExportPeriodLabel() {
-    const from = document.getElementById('filter-from').value;
-    const to = document.getElementById('filter-to').value;
-    if (from && to) return `${from}_sampai_${to}`;
-    if (from) return `mulai_${from}`;
-    if (to) return `sampai_${to}`;
-    return 'semua_periode';
+function createWorksheet(workbook, name, rows, filterTable = false) {
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    const columnCount = Math.max(1, ...rows.map(row => row.length));
+    sheet['!cols'] = Array.from({ length: columnCount }, (_, index) => ({ wch: index === 0 ? 26 : index < 8 ? 20 : 18 }));
+    if (filterTable && rows.length > 1) {
+        sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: columnCount - 1 } }) };
+    }
+    workbook.Sheets[name] = sheet;
+    workbook.SheetNames.push(name);
 }
 
-function exportFilteredTransactions() {
-    const filtered = getFilteredTransactions();
-    if (!filtered.length) {
-        window.alert('Tidak ada transaksi untuk diunduh sesuai filter aktif.');
+function getReportFilename() {
+    const from = localDateKey(reportRange.from);
+    const to = localDateKey(reportRange.to);
+    return `laporan_transaksi_${from}_sampai_${to}.xlsx`;
+}
+
+function exportExcelWorkbook() {
+    if (!window.XLSX) {
+        window.alert('Pustaka Excel belum termuat. Periksa koneksi internet lalu muat ulang halaman.');
         return;
     }
-    const blob = new Blob([createFilteredCsv(filtered)], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `transaksi_${getExportPeriodLabel()}.csv`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const periodRecords = getReportTransactions();
+    const filteredRecords = getFilteredTransactions();
+    if (!periodRecords.length && !filteredRecords.length) {
+        window.alert('Tidak ada transaksi untuk diunduh pada periode atau filter terpilih.');
+        return;
+    }
+    const statusTotals = getReportStatusTotals(periodRecords);
+    const totalProfit = periodRecords.reduce((sum, record) => sum + record.profit, 0);
+    const totalAmount = periodRecords.reduce((sum, record) => sum + record.amount, 0);
+    const workbook = XLSX.utils.book_new();
+    createWorksheet(workbook, 'Laporan', [
+        ['LAPORAN TRANSAKSI & KEUNTUNGAN'],
+        ['Periode mulai', localDateKey(reportRange.from)],
+        ['Periode sampai', localDateKey(reportRange.to)],
+        ['Data sumber', 'Data yang dimuat di browser, termasuk edit lokal'],
+        ['Jumlah transaksi', periodRecords.length],
+        ['Total keuntungan', totalProfit],
+        ['Total jumlah bayar', totalAmount],
+        ['Jumlah hasil filter tabel', filteredRecords.length],
+        ['Waktu ekspor', new Date().toLocaleString('id-ID')]
+    ]);
+    createWorksheet(workbook, 'Per Status', [
+        ['Status', 'Jumlah transaksi', 'Keuntungan', 'Jumlah bayar'],
+        ...statusTotals.map(item => [item.label, item.count, item.profit, item.amount])
+    ], true);
+    createWorksheet(workbook, 'Data Periode', buildTransactionExportRows(periodRecords), true);
+    createWorksheet(workbook, 'Hasil Filter', buildTransactionExportRows(filteredRecords), true);
+    XLSX.writeFile(workbook, getReportFilename(), { compression: true });
 }
 
 function statusClass(status) {
@@ -966,7 +1022,7 @@ function bindEvents() {
     });
     document.querySelectorAll('.period-button').forEach(button => button.addEventListener('click', () => selectPeriod(button.dataset.period)));
     document.getElementById('apply-report-range').addEventListener('click', applyCustomReportRange);
-    document.getElementById('export-button').addEventListener('click', exportFilteredTransactions);
+    document.getElementById('export-button').addEventListener('click', exportExcelWorkbook);
     elements.rows.addEventListener('click', event => {
         const button = event.target.closest('button[data-action]');
         if (!button) return;

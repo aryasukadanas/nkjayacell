@@ -71,7 +71,7 @@
             </section>
 
             <section class="transactions-section" aria-labelledby="transactions-title">
-                <div class="section-heading transaction-heading"><div><p class="eyebrow">ARSIP & TRANSFER</p><h2 id="transactions-title">Data transaksi</h2></div><div class="transaction-heading-actions"><span id="result-count" class="count-label">0 transaksi</span><button id="export-button" class="button button-dark export-button" type="button" title="Unduh data sesuai filter aktif"><i class="fas fa-file-arrow-down"></i> Unduh CSV Excel</button></div></div>
+                <div class="section-heading transaction-heading"><div><p class="eyebrow">ARSIP & TRANSFER</p><h2 id="transactions-title">Data transaksi</h2></div><div class="transaction-heading-actions"><span id="result-count" class="count-label">0 transaksi</span><button id="export-button" class="button button-dark export-button" type="button" title="Unduh laporan dan data transaksi sebagai workbook Excel"><i class="fas fa-file-excel"></i> Unduh Excel</button></div></div>
                 <div class="filter-panel">
                     <label class="search-field"><i class="fas fa-hashtag"></i><input id="filter-id" type="search" placeholder="Cari ID TRX"></label>
                     <label class="search-field"><i class="fas fa-phone"></i><input id="filter-contact" type="search" placeholder="Nomor HP / rekening"></label>
@@ -113,6 +113,7 @@
         </form>
     </dialog>
 
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="config.js"></script>
     <script src="admin.js"></script>
 </body>
