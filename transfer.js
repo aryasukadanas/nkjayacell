@@ -788,9 +788,6 @@ function tampilkanStruk(data) {
     // Siapkan tombol aksi
     const actionsContainer = document.getElementById('struk-actions');
     actionsContainer.innerHTML = `
-        <button onclick="aktifkanEditStrukTransfer('${data.id || ''}')" class="col-span-2 w-full py-2.5 bg-amber-100 text-amber-700 font-black text-xs rounded-xl active:scale-95 transition-all">
-            <i class="fas fa-pen mr-1"></i> Edit Isi Struk
-        </button>
         <button onclick="downloadStruk('${data.id}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
             <i class="fas fa-download"></i> Download
         </button>
@@ -829,41 +826,6 @@ function tampilkanStrukDariRiwayat(item, status) {
         tanggal: edits.tanggal || [item.tanggal, item.waktu].filter(Boolean).join(' - '),
         status: status // Kirim status ke fungsi utama
     });
-}
-
-function aktifkanEditStrukTransfer(id) {
-    const fields = Array.from(document.querySelectorAll('#struk-content [data-editable="true"], #struk-bank-tujuan, #struk-no-rekening, #struk-nama-penerima, #struk-waktu, #struk-nominal, #struk-admin, #struk-total'));
-    if (fields[0]?.isContentEditable) return;
-    fields.forEach(field => {
-        field.contentEditable = 'true';
-        field.classList.add('rounded', 'bg-amber-50', 'outline-none', 'px-1');
-    });
-    document.getElementById('struk-actions')?.insertAdjacentHTML('afterbegin', `
-        <button id="transfer-save-button" onclick="simpanEditStrukTransfer('${id}')" class="col-span-2 w-full py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl">
-            <i class="fas fa-save mr-1"></i> Simpan Perubahan
-        </button>
-    `);
-}
-
-function simpanEditStrukTransfer(id) {
-    const edits = JSON.parse(localStorage.getItem('nk_transfer_receipt_edits') || '{}');
-    edits[id] = {
-        id: document.getElementById('struk-id')?.innerText.trim() || id,
-        bank: document.getElementById('struk-bank-tujuan')?.innerText.trim() || '-',
-        norek: document.getElementById('struk-no-rekening')?.innerText.trim() || '-',
-        nama: document.getElementById('struk-nama-penerima')?.innerText.trim() || '-',
-        tanggal: document.getElementById('struk-waktu')?.innerText.trim() || '-',
-        nominal: document.getElementById('struk-nominal')?.innerText.replace(/[^0-9]/g, '') || '0',
-        admin: document.getElementById('struk-admin')?.innerText.replace(/[^0-9]/g, '') || '0',
-        total: document.getElementById('struk-total')?.innerText.replace(/[^0-9]/g, '') || '0'
-    };
-    localStorage.setItem('nk_transfer_receipt_edits', JSON.stringify(edits));
-    document.querySelectorAll('#struk-content [contenteditable="true"]').forEach(field => {
-        field.contentEditable = 'false';
-        field.classList.remove('rounded', 'bg-amber-50', 'outline-none', 'px-1');
-    });
-    document.getElementById('transfer-save-button')?.remove();
-    alert('Perubahan struk transfer tersimpan di perangkat ini.');
 }
 
 /**

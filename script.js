@@ -1951,7 +1951,6 @@ function tampilkanStruk(data) {
 
     const actionsContainer = document.getElementById('struk-actions');
     actionsContainer.innerHTML = `
-        ${data.isToken ? `<button onclick="aktifkanEditStrukToken('${data.id}')" class="col-span-2 w-full py-2.5 bg-amber-100 text-amber-700 font-black text-xs rounded-xl active:scale-95 transition-all"><i class="fas fa-pen mr-1"></i> Edit Struk Token</button>` : ''}
         <button onclick="downloadStruk('${data.id}')" class="w-full py-3 bg-gray-200 text-gray-800 font-bold text-xs rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2">
             <i class="fas fa-download"></i> Download
         </button>
@@ -2113,38 +2112,6 @@ function printStruk() {
     jendelaPrint.document.close();
     jendelaPrint.focus();
     setTimeout(() => { jendelaPrint.print(); jendelaPrint.close(); }, 300);
-}
-
-function aktifkanEditStrukToken(id) {
-    const fields = Array.from(document.querySelectorAll('#struk-token [data-editable="true"]'));
-    const sedangEdit = fields[0]?.isContentEditable;
-    if (sedangEdit) return;
-    fields.forEach(field => {
-        field.contentEditable = 'true';
-        field.classList.toggle('rounded', !sedangEdit);
-        field.classList.toggle('bg-slate-800/20', !sedangEdit); // <--- Ubah di sini
-        field.classList.toggle('outline-none', !sedangEdit);
-    });
-    const actions = document.getElementById('struk-actions');
-    actions.insertAdjacentHTML('afterbegin', `<button id="token-save-button" onclick="simpanEditStrukToken('${id}')" class="col-span-2 w-full py-2.5 bg-emerald-600 text-white font-black text-xs rounded-xl"><i class="fas fa-save mr-1"></i> Simpan Perubahan</button>`);
-}
-
-function simpanEditStrukToken(id) {
-    const edit = {};
-    const fieldMap = {
-        'token-id-trx': 'idTrx', 'token-id-pln': 'idPln', 'token-produk': 'produk', 'token-nama': 'nama',
-        'token-tarif-daya': 'tarifDaya', 'token-jumlah-daya': 'jumlahDaya', 'token-harga': 'harga', 'token-serial': 'serial'
-    };
-    Object.entries(fieldMap).forEach(([elementId, key]) => { edit[key] = document.getElementById(elementId)?.innerText.trim() || ''; });
-    const edits = JSON.parse(localStorage.getItem('nk_token_receipt_edits') || '{}');
-    edits[id] = edit;
-    localStorage.setItem('nk_token_receipt_edits', JSON.stringify(edits));
-    document.querySelectorAll('#struk-token [data-editable="true"]').forEach(field => {
-        field.contentEditable = 'false';
-        field.classList.remove('rounded','bg-slate-800/20','bg-slate-800','text-white','outline-none');
-    });
-    document.getElementById('token-save-button')?.remove();
-    showAlert('STRUK TERSIMPAN', 'Perubahan struk token disimpan di perangkat ini.', ['Data arsip asli tetap tidak berubah.']);
 }
 
 function tutupModalStruk() {

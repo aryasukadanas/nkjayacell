@@ -529,7 +529,13 @@ function applyCustomReportRange() {
 function openEdit(record) {
     activeEdit = record;
     elements.editFields.replaceChildren();
-    record.fields.forEach(field => {
+    const fields = record.fields.filter(field => {
+        const fieldName = normalizeHeader(field.label);
+        const isTokenField = ['TOKEN', 'SN', 'SERIALNUMBER', 'ANGKATOKEN', 'NOMORTOKEN'].includes(fieldName);
+        const isPowerField = ['JUMLAH DAYA', 'JUMLAH DAYA TERBARU', 'DAYA TERISI', 'DAYA'].some(name => normalizeHeader(name) === fieldName);
+        return record.isToken || (!isTokenField && !isPowerField);
+    });
+    fields.forEach(field => {
         const label = document.createElement('label');
         label.className = 'edit-field';
         const caption = document.createElement('span');
@@ -600,7 +606,7 @@ function saveLocalEdit(event) {
     event.preventDefault();
     if (!activeEdit) return;
     const overrides = readOverrides();
-    const edited = {};
+    const edited = Object.fromEntries(activeEdit.fields.map(field => [field.key, field.value]));
     elements.editForm.querySelectorAll('[name]').forEach(input => { edited[input.name] = input.value; });
     const unchanged = activeEdit.fields.every(field => edited[field.key] === field.value);
     if (unchanged) delete overrides[activeEdit.key];
