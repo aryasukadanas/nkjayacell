@@ -82,6 +82,8 @@ h1, h2, p { margin-top: 0; }
 
 .transactions-section { margin-top: 20px; }
 .transaction-heading { margin-bottom: 16px; }
+.transaction-heading-actions { display: flex; align-items: center; gap: 12px; }
+.export-button { min-height: 36px; white-space: nowrap; }
 .filter-panel { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(190px, 1.4fr) repeat(3, minmax(125px, .8fr)) minmax(125px, .75fr) auto; align-items: end; gap: 9px; padding: 13px; border: 1px solid #e7ebe7; border-radius: 8px; background: #f8faf8; }
 .search-field { display: flex; align-items: center; gap: 8px; padding: 0 10px; color: #849087; }
 .search-field input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 11px; }
@@ -128,10 +130,14 @@ tbody tr:hover { background: #fbfcfb; }
 .dialog-heading h2 { margin: 0; font-size: 19px; }
 .dialog-heading .eyebrow { margin-bottom: 4px; }
 .dialog-note { margin: 16px 0; padding: 10px 12px; border-left: 3px solid var(--orange); background: #fff6f0; color: #785543; font-size: 11px; line-height: 1.5; }
+.profit-preview { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 3px 12px; margin-bottom: 14px; padding: 12px; border: 1px solid #c2e4d1; border-radius: 8px; background: #f0faf4; }
+.profit-preview span { color: #426554; font-size: 11px; font-weight: 600; }
+.profit-preview strong { color: var(--green); font-family: var(--mono); font-size: 17px; font-weight: 500; }
+.profit-preview small { grid-column: 1 / -1; color: var(--muted); font-size: 10px; }
 .edit-fields { display: grid; max-height: 55dvh; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; overflow: auto; padding: 2px; }
 .edit-field { display: grid; min-width: 0; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 600; }
-.edit-field input { width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); font-size: 12px; }
-.edit-field input:focus { border-color: var(--green); outline: 2px solid #087f5b20; }
+.edit-field input, .edit-field select { width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); font-size: 12px; }
+.edit-field input:focus, .edit-field select:focus { border-color: var(--green); outline: 2px solid #087f5b20; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
 @keyframes rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -149,6 +155,8 @@ tbody tr:hover { background: #fbfcfb; }
     .report-section, .transactions-section { padding: 15px; }
     .section-heading { align-items: flex-start; }
     .section-heading h2 { font-size: 16px; }
+    .transaction-heading-actions { align-items: flex-end; flex-direction: column-reverse; gap: 7px; }
+    .export-button { min-height: 34px; padding: 0 9px; font-size: 10px; }
     .report-toolbar { align-items: flex-start; }
     .segmented { width: 100%; }
     .period-button { flex: 1; padding: 0 5px; font-size: 10px; }

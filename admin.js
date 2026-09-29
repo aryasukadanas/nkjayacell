@@ -80,6 +80,9 @@ function applyOverrides(fields, override) {
         : field);
 }
 
+const MODAL_ALIASES = ['MODAL', 'HARGA MODAL', 'MODAL PRODUK', 'HARGA POKOK', 'HPP'];
+const NUMERIC_FIELD_NAMES = ['TRANSFER', 'NOMINAL', 'NOMINAL TRANSFER', 'BIAYA', 'BIAYA ADMIN', 'ADMIN', 'JUMLAH', 'TOTAL', 'TOTAL TRANSFER', 'TOTAL BAYAR', 'HARGA', 'HARGA ASLI', ...MODAL_ALIASES];
+
 function getField(record, aliases) {
     for (const alias of aliases) {
         const name = normalizeHeader(alias);
@@ -92,7 +95,10 @@ function getField(record, aliases) {
 function makeTransaction(source, index, fields, originalId) {
     const stableId = normalizeHeader(originalId) || `ROW${index}`;
     const key = `${source}:${stableId}`;
-    const editedFields = applyOverrides(fields, readOverrides()[key]);
+    const overrides = readOverrides()[key];
+    const hasModal = fields.some(field => MODAL_ALIASES.includes(normalizeHeader(field.label)));
+    const fieldsWithModal = hasModal ? fields : [...fields, { label: 'Modal', key: 'MODAL', value: '' }];
+    const editedFields = applyOverrides(fieldsWithModal, overrides);
     const record = { source, key, fields: editedFields };
     record.id = getField(record, ['ID TRANSAKSI', 'ID TRX', 'ID']);
     record.dateText = getField(record, ['TANGGAL', 'WAKTU', 'DATE']);
@@ -102,16 +108,26 @@ function makeTransaction(source, index, fields, originalId) {
         record.contact = getField(record, ['NOMOR', 'NOMOR HP', 'TARGET', 'ID PLN', 'IDPEL']);
         record.product = getField(record, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']);
         record.customer = '';
-        record.amount = parseAmount(getField(record, ['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']));
-        record.profit = parseAmount(getField(record, ['TOTAL TRANSFER'])) - parseAmount(getField(record, ['HARGA ASLI']));
     } else {
         record.contact = getField(record, ['NOMOR REKENING', 'NO REKENING', 'REKENING']);
         record.product = getField(record, ['PRODUK/BANK', 'BANK', 'BANK TUJUAN', 'KATEGORI']);
         record.customer = getField(record, ['NAMA', 'NAMA PEMILIK', 'PELANGGAN']);
-        record.amount = parseAmount(getField(record, ['JUMLAH'])) || parseAmount(getField(record, ['TRANSFER', 'NOMINAL', 'NOMINAL TRANSFER'])) + parseAmount(getField(record, ['BIAYA', 'BIAYA ADMIN', 'ADMIN']));
-        record.profit = parseAmount(getField(record, ['BIAYA', 'BIAYA ADMIN', 'ADMIN']));
     }
+    Object.assign(record, calculateFinancials(record));
     return record;
+}
+
+function calculateFinancials(record) {
+    const transferAmount = parseAmount(getField(record, ['TRANSFER', 'NOMINAL', 'NOMINAL TRANSFER', 'TOTAL TRANSFER']));
+    const transferFee = parseAmount(getField(record, ['BIAYA', 'BIAYA ADMIN', 'ADMIN']));
+    const total = record.source === 'TRANSFER'
+        ? parseAmount(getField(record, ['JUMLAH'])) || transferAmount + transferFee
+        : parseAmount(getField(record, ['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']));
+    const modalText = getField(record, MODAL_ALIASES).trim();
+    const fallbackProfit = record.source === 'TRANSFER'
+        ? transferFee
+        : parseAmount(getField(record, ['TOTAL TRANSFER'])) - parseAmount(getField(record, ['HARGA ASLI']));
+    return { amount: total, profit: modalText ? total - parseAmount(modalText) : fallbackProfit };
 }
 
 function parseAmount(value) {
@@ -223,6 +239,60 @@ function getFilteredTransactions() {
     });
 }
 
+function csvCell(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+    let text = String(value ?? '');
+    if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+}
+
+function createFilteredCsv(records = getFilteredTransactions()) {
+    const fieldMap = new Map();
+    records.forEach(record => record.fields.forEach(field => {
+        if (!fieldMap.has(field.key)) fieldMap.set(field.key, field.label);
+    }));
+    const fields = [...fieldMap.entries()];
+    const headers = ['Sumber', ...fields.map(([, label]) => label), 'Total Browser', 'Keuntungan Browser'];
+    const lines = [headers.map(csvCell).join(';')];
+    records.forEach(record => {
+        const recordFields = new Map(record.fields.map(field => [field.key, field.value]));
+        const values = [record.source, ...fields.map(([key]) => {
+            if (normalizeHeader(key) === 'JUMLAH') return record.amount;
+            return recordFields.get(key) ?? '';
+        }), record.amount, record.profit];
+        lines.push(values.map(csvCell).join(';'));
+    });
+    return `\uFEFFsep=;\r\n${lines.join('\r\n')}`;
+}
+
+function getExportPeriodLabel() {
+    const exact = document.getElementById('filter-date').value;
+    const from = document.getElementById('filter-from').value;
+    const to = document.getElementById('filter-to').value;
+    if (exact) return exact;
+    if (from && to) return `${from}_sampai_${to}`;
+    if (from) return `mulai_${from}`;
+    if (to) return `sampai_${to}`;
+    return 'semua_periode';
+}
+
+function exportFilteredTransactions() {
+    const filtered = getFilteredTransactions();
+    if (!filtered.length) {
+        window.alert('Tidak ada transaksi untuk diunduh sesuai filter aktif.');
+        return;
+    }
+    const blob = new Blob([createFilteredCsv(filtered)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `transaksi_${getExportPeriodLabel()}.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function statusClass(status) {
     const normalized = statusNormalize(status);
     if (normalized.includes('SUKSES') || normalized.includes('LUNAS') || normalized.includes('BERHASIL')) return 'success';
@@ -306,15 +376,66 @@ function openEdit(record) {
         label.className = 'edit-field';
         const caption = document.createElement('span');
         caption.textContent = field.label;
-        const input = document.createElement('input');
-        input.type = 'text';
+        const normalizedName = normalizeHeader(field.label);
+        const isStatus = ['STATUS', 'STATUSTRANSAKSI'].includes(normalizedName);
+        const isNumeric = NUMERIC_FIELD_NAMES.some(name => normalizeHeader(name) === normalizedName);
+        const input = document.createElement(isStatus ? 'select' : 'input');
+        if (isStatus) {
+            const currentStatus = normalizeTransferStatus(field.value);
+            ['SUKSES', 'PROSES', 'GAGAL'].forEach(status => {
+                const option = document.createElement('option');
+                option.value = status === currentStatus ? field.value : status;
+                option.textContent = status;
+                input.append(option);
+            });
+            input.value = field.value;
+        } else {
+            input.type = isNumeric ? 'number' : 'text';
+            if (isNumeric) {
+                input.step = '1';
+                input.inputMode = 'numeric';
+                input.value = field.value ? String(parseAmount(field.value)) : '';
+            } else {
+                input.value = field.value;
+            }
+        }
         input.name = field.key;
-        input.value = field.value;
         input.autocomplete = 'off';
         label.append(caption, input);
         elements.editFields.append(label);
     });
+    updateEditProfitPreview();
     elements.dialog.showModal();
+}
+
+function updateEditProfitPreview() {
+    if (!activeEdit) return;
+    const fields = activeEdit.fields.map(field => {
+        const input = elements.editForm.elements.namedItem(field.key);
+        return input ? { ...field, value: input.value } : field;
+    });
+    const profit = calculateFinancials({ ...activeEdit, fields }).profit;
+    document.getElementById('edit-profit-preview').textContent = formatMoney(profit);
+}
+
+function updateEditCalculations(event) {
+    if (!activeEdit) return;
+    if (activeEdit.source === 'TRANSFER') {
+        const changedField = activeEdit.fields.find(field => field.key === event.target.name);
+        const changedName = normalizeHeader(changedField?.label);
+        if (['TRANSFER', 'NOMINAL', 'NOMINALTRANSFER', 'BIAYA', 'BIAYAADMIN', 'ADMIN'].includes(changedName)) {
+            const amountField = activeEdit.fields.find(field => ['TRANSFER', 'NOMINAL', 'NOMINALTRANSFER'].includes(normalizeHeader(field.label)));
+            const feeField = activeEdit.fields.find(field => ['BIAYA', 'BIAYAADMIN', 'ADMIN'].includes(normalizeHeader(field.label)));
+            const totalField = activeEdit.fields.find(field => normalizeHeader(field.label) === 'JUMLAH');
+            const amountInput = amountField && elements.editForm.elements.namedItem(amountField.key);
+            const feeInput = feeField && elements.editForm.elements.namedItem(feeField.key);
+            const totalInput = totalField && elements.editForm.elements.namedItem(totalField.key);
+            if (amountInput && feeInput && totalInput) {
+                totalInput.value = String(parseAmount(amountInput.value) + parseAmount(feeInput.value));
+            }
+        }
+    }
+    updateEditProfitPreview();
 }
 
 function saveLocalEdit(event) {
@@ -322,7 +443,7 @@ function saveLocalEdit(event) {
     if (!activeEdit) return;
     const overrides = readOverrides();
     const edited = {};
-    elements.editForm.querySelectorAll('input[name]').forEach(input => { edited[input.name] = input.value; });
+    elements.editForm.querySelectorAll('[name]').forEach(input => { edited[input.name] = input.value; });
     const unchanged = activeEdit.fields.every(field => edited[field.key] === field.value);
     if (unchanged) delete overrides[activeEdit.key];
     else overrides[activeEdit.key] = edited;
@@ -690,6 +811,7 @@ function bindEvents() {
     });
     document.querySelectorAll('.period-button').forEach(button => button.addEventListener('click', () => selectPeriod(button.dataset.period)));
     document.getElementById('apply-report-range').addEventListener('click', applyCustomReportRange);
+    document.getElementById('export-button').addEventListener('click', exportFilteredTransactions);
     elements.rows.addEventListener('click', event => {
         const button = event.target.closest('button[data-action]');
         if (!button) return;
@@ -704,6 +826,7 @@ function bindEvents() {
         if (button.dataset.action === 'print') printRecord(record);
     });
     elements.editForm.addEventListener('submit', saveLocalEdit);
+    elements.editFields.addEventListener('input', updateEditCalculations);
     document.getElementById('close-edit').addEventListener('click', () => elements.dialog.close());
     document.getElementById('cancel-edit').addEventListener('click', () => elements.dialog.close());
     elements.dialog.addEventListener('click', event => { if (event.target === elements.dialog) elements.dialog.close(); });
