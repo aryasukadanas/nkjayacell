@@ -102,6 +102,9 @@ tbody tr:hover { background: #fbfcfb; }
 .mono { font-family: var(--mono); font-size: 10px; }
 .cell-title { max-width: 230px; overflow: hidden; font-weight: 600; text-overflow: ellipsis; }
 .cell-subtitle { max-width: 210px; overflow: hidden; margin-top: 3px; color: var(--muted); text-overflow: ellipsis; }
+.copy-cell { display: flex; align-items: center; gap: 6px; }
+.copy-button { width: 26px; height: 26px; flex: 0 0 26px; color: #68736e; font-size: 10px; }
+.copy-button:hover { color: var(--green); }
 .status-badge, .source-badge, .local-badge { display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 5px; font-family: var(--mono); font-size: 9px; }
 .source-badge { background: #edf0ed; color: #4e5b53; }
 .source-badge.transfer { background: #e8effa; color: #345a91; }

@@ -238,10 +238,10 @@ function renderRows() {
         const detail = record.customer ? `${record.product || '-'} · ${record.customer}` : (record.product || '-');
         return `<tr>
             <td>${escapeHtml(formatDate(record.date || record.dateText))}</td>
-            <td class="mono">${escapeHtml(record.id || '-')}</td>
+            <td><div class="copy-cell"><span class="mono">${escapeHtml(record.id || '-')}</span><button class="icon-button copy-button" type="button" data-action="copy" data-copy="${escapeHtml(record.id || '')}" title="Salin ID TRX" aria-label="Salin ID TRX"><i class="far fa-copy"></i></button></div></td>
             <td><span class="source-badge ${record.source === 'TRANSFER' ? 'transfer' : ''}">${record.source}</span>${edited ? '<span class="local-badge">LOKAL</span>' : ''}</td>
             <td><div class="cell-title" title="${escapeHtml(detail)}">${escapeHtml(detail)}</div></td>
-            <td class="mono">${escapeHtml(record.contact || '-')}</td>
+            <td><div class="copy-cell"><span class="mono">${escapeHtml(record.contact || '-')}</span><button class="icon-button copy-button" type="button" data-action="copy" data-copy="${escapeHtml(record.contact || '')}" title="Salin nomor" aria-label="Salin nomor"><i class="far fa-copy"></i></button></div></td>
             <td class="mono">${escapeHtml(formatMoney(record.amount))}</td>
             <td class="mono">${escapeHtml(formatMoney(record.profit))}</td>
             <td><span class="status-badge ${statusClass(record.status)}">${escapeHtml(record.status || 'PROSES')}</span></td>
@@ -345,61 +345,121 @@ function clearLocalEdits() {
     loadTransactions();
 }
 
-function receiptText(record) {
-    const rows = [
-        'NK JAYA CELL',
-        record.source === 'TRANSFER' ? 'STRUK BUKTI TRANSFER' : 'STRUK TRANSAKSI',
-        statusNormalize(record.status) || 'DIPROSES',
-        formatDate(record.date || record.dateText),
-        '--------------------------------'
-    ];
-    const field = (label, value) => {
-        const prefix = `${label}: `;
+function receiptLayout(record) {
+    const rows = [];
+    const add = (text, align = 'left', emphasis = 'normal') => rows.push({ text: String(text ?? ''), align, emphasis });
+    const separator = () => add('--------------------------------');
+    const wrapText = (text, width) => {
+        const words = String(text || '-').split(/\s+/);
         const lines = [];
-        let line = prefix;
-        String(value || '-').split(/\s+/).forEach(word => {
-            if (line.length > prefix.length && `${line} ${word}`.length > 32) {
+        let line = '';
+        words.forEach(word => {
+            while (word.length > width) {
+                if (line) lines.push(line);
+                lines.push(word.slice(0, width));
+                word = word.slice(width);
+                line = '';
+            }
+            if (line && `${line} ${word}`.length > width) {
                 lines.push(line);
-                line = `${' '.repeat(prefix.length)}${word}`;
+                line = word;
             } else {
-                line += `${line.endsWith(' ') ? '' : ' '}${word}`;
+                line = `${line}${line ? ' ' : ''}${word}`;
             }
         });
-        lines.push(line);
+        if (line || !lines.length) lines.push(line || '-');
         return lines;
     };
-    rows.push(...field('ID TRX', record.id));
+    const field = (label, value) => {
+        const prefix = `${String(label).padEnd(16, ' ')}: `;
+        const values = wrapText(value, 32 - prefix.length);
+        add(prefix + values[0]);
+        values.slice(1).forEach(valueLine => add(`${' '.repeat(prefix.length)}${valueLine}`));
+    };
+    const storeHeader = title => {
+        add('NK JAYA CELL', 'center', 'bold');
+        add(title, 'center');
+    };
+
     if (record.source === 'TRANSFER') {
-        rows.push(
-            ...field('Bank Tujuan', record.product),
-            ...field('No. Rekening', record.contact),
-            ...field('Nama Penerima', record.customer),
-            '--------------------------------',
-            ...field('Nominal Transfer', formatMoney(parseAmount(getField(record, ['TRANSFER', 'NOMINAL', 'NOMINAL TRANSFER'])))),
-            ...field('Biaya Admin', formatMoney(parseAmount(getField(record, ['BIAYA', 'BIAYA ADMIN', 'ADMIN'])))),
-            '--------------------------------',
-            ...field('TOTAL BAYAR', formatMoney(record.amount))
-        );
+        const transactionDate = record.date || parseSheetDate(record.dateText);
+        const dateText = transactionDate
+            ? transactionDate.toLocaleDateString('id-ID')
+            : String(record.dateText || '-').split(/[ ,]+\d{1,2}[.:]\d{2}/)[0];
+        const timeText = transactionDate
+            ? transactionDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+            : '-';
+        storeHeader('BUKTI TRANSFER BANK');
+        add('Banjar Pasar, Desa Melaya, Jembrana, BALI', 'center');
+        add('');
+        separator();
+        field('ID Transaksi', record.id);
+        field('Tanggal', dateText);
+        field('Waktu', timeText);
+        field('Status', normalizeTransferStatus(record.status));
+        separator();
+        add('DATA PENERIMA');
+        field('Bank Tujuan', record.product);
+        field('No. Rekening', record.contact);
+        field('Nama', record.customer);
+        separator();
+        field('Nominal Transfer', formatMoney(parseAmount(getField(record, ['TRANSFER', 'NOMINAL', 'NOMINAL TRANSFER']))));
+        field('Biaya Admin', formatMoney(parseAmount(getField(record, ['BIAYA', 'BIAYA ADMIN', 'ADMIN']))));
+        separator();
+        field('Total', formatMoney(record.amount));
+        add('');
+        add('Simpan resi ini sebagai bukti transaksi yang sah.', 'center');
     } else {
         const isToken = /TOKEN|PLN/i.test(`${record.product} ${getField(record, ['KATEGORI'])}`);
-        rows.push(...field('Produk', record.product));
-        rows.push(...field(isToken ? 'ID PLN' : 'ID/No. Target', getField(record, ['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR', 'TARGET']) || record.contact));
-        const customerName = getField(record, ['NAMA PELANGGAN', 'NAMA', 'PELANGGAN']);
-        if (customerName) rows.push(...field('Nama', customerName));
+        storeHeader(isToken ? 'STRUK TOKEN LISTRIK' : 'STRUK TRANSAKSI');
+        add(statusNormalize(record.status) || 'DIPROSES');
+        add(formatDate(record.date || record.dateText));
+        separator();
         if (isToken) {
-            const power = getField(record, ['TARIF/DAYA', 'TARIF DAYA', 'JUMLAH DAYA', 'DAYA']);
-            const serial = getField(record, ['SERIAL NUMBER', 'NOMOR TOKEN', 'ANGKA TOKEN', 'TOKEN', 'SN']);
-            if (power) rows.push(...field('Tarif/Daya', power));
-            if (serial) rows.push(...field('Serial Token', serial));
+            field('ID TRX', record.id);
+            field('ID PLN', getField(record, ['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR', 'TARGET']) || record.contact);
+            field('PRODUK', record.product);
+            field('NAMA', getField(record, ['NAMA PELANGGAN', 'NAMA', 'PELANGGAN']));
+            field('TARIF/DAYA', getField(record, ['TARIF/DAYA', 'TARIF DAYA', 'JUMLAH DAYA', 'DAYA']));
+            field('JUMLAH DAYA', getField(record, ['JUMLAH DAYA', 'DAYA TERISI', 'DAYA']));
+            field('HARGA', formatMoney(record.amount));
+            separator();
+            add('***Token serial number***', 'center', 'bold');
+            add(getField(record, ['SERIAL NUMBER', 'NOMOR TOKEN', 'ANGKA TOKEN', 'TOKEN', 'SN']), 'center', 'large');
+            separator();
+            add('INPUT TOKEN SERIAL NUMBER PADA MCB PEMILIK METERAN', 'center');
+        } else {
+            field('ID Transaksi', record.id);
+            field('Produk', record.product);
+            field('ID/No. Target', getField(record, ['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR', 'TARGET']) || record.contact);
+            separator();
+            field('Total Bayar', formatMoney(record.amount));
         }
-        rows.push('--------------------------------', ...field('TOTAL BAYAR', formatMoney(record.amount)));
+        add('');
+        add('Terima kasih', 'center');
     }
-    rows.push('--------------------------------', 'Terima kasih');
-    return rows.join('\n');
+    return rows;
+}
+
+function normalizeTransferStatus(value) {
+    const status = statusNormalize(value);
+    if (status.includes('LUNAS') || status.includes('SUKSES')) return 'SUKSES';
+    if (status.includes('GAGAL') || status.includes('FAILED')) return 'GAGAL';
+    return 'PROSES';
+}
+
+function renderReceiptHtml(rows) {
+    const content = rows.map(row => {
+        const classes = [row.align, row.emphasis].filter(Boolean).join(' ');
+        return `<div class="${classes}">${escapeHtml(row.text) || '&nbsp;'}</div>`;
+    }).join('');
+    return `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Struk NK JAYA CELL</title><style>
+        @page{size:58mm auto;margin:0}*{box-sizing:border-box}body{width:58mm;margin:0;padding:3mm;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:9px;line-height:1.35}.receipt{width:100%}.receipt div{min-height:12px;overflow-wrap:anywhere;white-space:pre-wrap}.receipt .center{text-align:center}.receipt .bold{font-weight:700}.receipt .large{font-size:14px;font-weight:700;line-height:1.5}.receipt .blank{height:5px;min-height:5px} 
+    </style></head><body><main class="receipt">${content}</main><script>window.onload=()=>{window.focus();window.print();window.close()}<\/script></body></html>`;
 }
 
 async function printRecord(record) {
-    const text = receiptText(record);
+    const rows = receiptLayout(record);
     if ('bluetooth' in navigator) {
         try {
             if (!bluetoothPrinter) {
@@ -415,9 +475,15 @@ async function printRecord(record) {
                 }
             }
             if (!bluetoothPrinter) throw new Error('Printer tidak menyediakan kanal tulis.');
-            const receiptLines = text.split('\n');
-            const escpos = `\x1B@\x1Ba\x01\x1BE\x01${receiptLines[0]}\x1BE\x00\n${receiptLines.slice(1).join('\n')}\n\n\n`;
-            const bytes = new TextEncoder().encode(escpos);
+            const esc = '\x1B';
+            const gs = '\x1D';
+            const escpos = rows.map(row => {
+                const alignment = row.align === 'center' ? `${esc}a\x01` : `${esc}a\x00`;
+                const emphasis = row.emphasis === 'bold' || row.emphasis === 'large' ? `${esc}E\x01` : `${esc}E\x00`;
+                const size = row.emphasis === 'large' ? `${gs}!\x11` : `${gs}!\x00`;
+                return `${alignment}${emphasis}${size}${row.text}`;
+            }).join('\n') + `\n\n\n`;
+            const bytes = new TextEncoder().encode(`${esc}@${escpos}`);
             for (let offset = 0; offset < bytes.length; offset += 180) {
                 const chunk = bytes.slice(offset, offset + 180);
                 if (bluetoothPrinter.properties.writeWithoutResponse) await bluetoothPrinter.writeValueWithoutResponse(chunk);
@@ -434,9 +500,40 @@ async function printRecord(record) {
         window.alert('Pop-up cetak diblokir. Izinkan pop-up, lalu coba lagi.');
         return;
     }
-    const safeText = escapeHtml(text);
-    printWindow.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Struk NK JAYA CELL</title><style>@page{size:58mm auto;margin:0}*{box-sizing:border-box}body{width:58mm;margin:0;padding:3mm;color:#111;background:#fff;font:11px/1.45 Arial,sans-serif}pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}pre:first-line{font-weight:bold;text-align:center}</style></head><body><pre>${safeText}</pre><script>window.onload=()=>{window.focus();window.print();window.close()}<\/script></body></html>`);
+    printWindow.document.write(renderReceiptHtml(rows));
     printWindow.document.close();
+}
+
+async function copyTableValue(button) {
+    const value = button.dataset.copy || '';
+    if (!value) return;
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(value);
+        } else {
+            const input = document.createElement('textarea');
+            input.value = value;
+            input.style.position = 'fixed';
+            input.style.opacity = '0';
+            document.body.append(input);
+            input.select();
+            const copied = document.execCommand('copy');
+            input.remove();
+            if (!copied) throw new Error('Clipboard tidak tersedia.');
+        }
+        const icon = button.querySelector('i');
+        icon.className = 'fas fa-check';
+        button.title = 'Tersalin';
+        button.setAttribute('aria-label', 'Tersalin');
+        window.setTimeout(() => {
+            icon.className = 'far fa-copy';
+            button.title = button.dataset.copyLabel;
+            button.setAttribute('aria-label', button.dataset.copyLabel);
+        }, 1200);
+    } catch (error) {
+        console.error('Gagal menyalin nilai transaksi:', error);
+        window.alert('Tidak dapat menyalin. Periksa izin clipboard browser.');
+    }
 }
 
 function toBase64Url(bytes) {
@@ -596,6 +693,11 @@ function bindEvents() {
     elements.rows.addEventListener('click', event => {
         const button = event.target.closest('button[data-action]');
         if (!button) return;
+        if (button.dataset.action === 'copy') {
+            button.dataset.copyLabel = button.getAttribute('aria-label');
+            copyTableValue(button);
+            return;
+        }
         const record = transactions.find(item => item.key === button.dataset.key);
         if (!record) return;
         if (button.dataset.action === 'edit') openEdit(record);
