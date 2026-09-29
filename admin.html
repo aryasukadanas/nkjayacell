@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f4f5f2">
+    <title>Admin Transaksi | NK JAYA CELL</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+    <section id="auth-gate" class="auth-screen">
+        <div class="auth-brand"><span class="brand-mark"><i class="fas fa-bolt"></i></span><span>NK JAYA CELL <small>OPERATIONS</small></span></div>
+        <main class="auth-panel">
+            <div class="auth-icon"><i class="fas fa-fingerprint"></i></div>
+            <p class="eyebrow">ADMINISTRATOR</p>
+            <h1 id="auth-title">Buka panel transaksi</h1>
+            <p id="auth-description" class="auth-copy">Gunakan biometrik atau passkey yang terdaftar pada perangkat ini.</p>
+            <button id="auth-button" class="button button-dark button-wide" type="button">
+                <i class="fas fa-fingerprint"></i><span id="auth-button-label">Masuk dengan biometrik</span>
+            </button>
+            <p id="auth-message" class="auth-message" role="status" aria-live="polite"></p>
+            <p class="auth-note"><i class="fas fa-lock"></i> Daftarkan passkey pertama hanya pada perangkat admin. Memerlukan HTTPS/localhost dan dukungan passkey.</p>
+        </main>
+        <a class="back-link" href="index.html"><i class="fas fa-arrow-left"></i> Kembali ke aplikasi</a>
+    </section>
+
+    <div id="admin-app" class="app-shell" hidden>
+        <header class="topbar">
+            <a class="app-brand" href="index.html"><span class="brand-mark"><i class="fas fa-bolt"></i></span><span>NK JAYA CELL <small>ADMIN</small></span></a>
+            <div class="topbar-actions">
+                <span class="live-label"><i class="fas fa-circle"></i> DATA SHEET</span>
+                <button id="refresh-button" class="icon-button" type="button" title="Muat ulang data" aria-label="Muat ulang data"><i class="fas fa-rotate"></i></button>
+                <button id="lock-button" class="icon-button" type="button" title="Kunci panel" aria-label="Kunci panel"><i class="fas fa-lock"></i></button>
+            </div>
+        </header>
+
+        <main class="dashboard">
+            <section class="page-heading">
+                <div><p class="eyebrow">PENGELOLAAN TRANSAKSI</p><h1>Ringkasan operasional</h1><p id="last-sync" class="muted">Memuat transaksi...</p></div>
+                <button id="clear-edits-button" class="button button-outline" type="button"><i class="fas fa-rotate-left"></i> Hapus edit lokal</button>
+            </section>
+
+            <section class="report-section" aria-labelledby="report-title">
+                <div class="section-heading"><div><p class="eyebrow">PERFORMA</p><h2 id="report-title">Laporan keuntungan</h2></div><span id="report-range-label" class="range-label"></span></div>
+                <div class="report-toolbar">
+                    <div class="segmented" role="group" aria-label="Periode laporan">
+                        <button type="button" data-period="today" class="period-button is-active">Hari ini</button>
+                        <button type="button" data-period="yesterday" class="period-button">Kemarin</button>
+                        <button type="button" data-period="week" class="period-button">7 hari</button>
+                        <button type="button" data-period="month" class="period-button">Bulan ini</button>
+                        <button type="button" data-period="custom" class="period-button">Rentang</button>
+                    </div>
+                    <div id="report-custom-range" class="date-pair" hidden>
+                        <label>Dari <input id="report-from" type="date"></label>
+                        <label>Sampai <input id="report-to" type="date"></label>
+                        <button id="apply-report-range" class="button button-small button-dark" type="button">Terapkan</button>
+                    </div>
+                </div>
+                <div class="metrics-grid">
+                    <article class="metric-card metric-profit"><div class="metric-label"><span>Keuntungan</span><i class="fas fa-arrow-trend-up"></i></div><strong id="metric-profit">Rp 0</strong><small>Arsip: total transfer - harga asli; Transfer: biaya</small></article>
+                    <article class="metric-card"><div class="metric-label"><span>Transaksi</span><i class="fas fa-receipt"></i></div><strong id="metric-count">0</strong><small>Dalam periode terpilih</small></article>
+                    <article class="metric-card"><div class="metric-label"><span>Total dibayar</span><i class="fas fa-wallet"></i></div><strong id="metric-volume">Rp 0</strong><small>Nilai transaksi dalam periode</small></article>
+                </div>
+            </section>
+
+            <section class="transactions-section" aria-labelledby="transactions-title">
+                <div class="section-heading transaction-heading"><div><p class="eyebrow">ARSIP & TRANSFER</p><h2 id="transactions-title">Data transaksi</h2></div><span id="result-count" class="count-label">0 transaksi</span></div>
+                <div class="filter-panel">
+                    <label class="search-field"><i class="fas fa-hashtag"></i><input id="filter-id" type="search" placeholder="Cari ID TRX"></label>
+                    <label class="search-field"><i class="fas fa-phone"></i><input id="filter-contact" type="search" placeholder="Nomor HP / rekening"></label>
+                    <label class="filter-date">Tanggal <input id="filter-date" type="date"></label>
+                    <label class="filter-date">Dari <input id="filter-from" type="date"></label>
+                    <label class="filter-date">Sampai <input id="filter-to" type="date"></label>
+                    <label class="source-filter">Sumber<select id="filter-source"><option value="all">Semua data</option><option value="ARSIP">ARSIP</option><option value="TRANSFER">Transfer</option></select></label>
+                    <button id="reset-filters" class="button button-outline filter-reset" type="button"><i class="fas fa-filter-circle-xmark"></i> Reset</button>
+                </div>
+                <p id="local-edit-notice" class="local-notice"><i class="fas fa-hard-drive"></i> Perubahan disimpan di perangkat ini saja, tidak mengubah Google Sheet.</p>
+                <div id="data-state" class="data-state" role="status">Menghubungkan ke Google Sheets...</div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Tanggal</th><th>ID TRX</th><th>Sumber</th><th>Produk / penerima</th><th>Nomor / rekening</th><th>Total</th><th>Untung</th><th>Status</th><th>Aksi</th></tr></thead>
+                        <tbody id="transaction-rows"></tbody>
+                    </table>
+                </div>
+                <div id="empty-state" class="empty-state" hidden><i class="fas fa-magnifying-glass"></i><strong>Transaksi tidak ditemukan</strong><span>Ubah kata pencarian atau rentang tanggal.</span></div>
+            </section>
+            <footer class="page-footer">NK JAYA CELL <span>Data transaksi dibaca dari Google Sheets</span></footer>
+        </main>
+    </div>
+
+    <dialog id="edit-dialog" class="edit-dialog">
+        <form id="edit-form">
+            <header class="dialog-heading"><div><p class="eyebrow">EDIT LOKAL</p><h2>Ubah data transaksi</h2></div><button id="close-edit" class="icon-button" type="button" aria-label="Tutup"><i class="fas fa-xmark"></i></button></header>
+            <p class="dialog-note">Data asli di sheet tidak berubah. Edit ini hanya terlihat pada perangkat/browser ini.</p>
+            <div id="edit-fields" class="edit-fields"></div>
+            <div class="dialog-actions"><button id="cancel-edit" class="button button-outline" type="button">Batal</button><button class="button button-dark" type="submit"><i class="fas fa-check"></i> Simpan lokal</button></div>
+        </form>
+    </dialog>
+
+    <script src="config.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
