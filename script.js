@@ -1051,6 +1051,42 @@ function bukaModalKeranjang(nomorTargetOtomatis = "") {
 /**
  * 6. MENAMPILKAN TRANSAKSI DARI LOCALSTORAGE (INSTANT & AKURAT)
  */
+function tampilkanStatusRiwayatMemuat() {
+    const container = document.getElementById('history-items-container');
+    if (container) {
+        container.innerHTML = `
+            <div class="text-center py-10 text-gray-400 italic text-xs">
+                <i class="fas fa-spinner animate-spin mr-2"></i> Memperbarui status transaksi...
+            </div>
+        `;
+    }
+}
+
+async function refreshStatusRiwayat() {
+    const historySection = document.getElementById('history-view-section');
+    try {
+        const statusDiperbarui = await muatStatusArsipTerbaru();
+        if (statusDiperbarui && !historySection?.classList.contains('hidden')) {
+            filterRiwayatStatus(filterRiwayatAktif);
+        }
+    } catch (error) {
+        console.warn("Gagal memperbarui status riwayat:", error);
+        if (!historySection?.classList.contains('hidden')) {
+            const container = document.getElementById('history-items-container');
+            if (container) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-rose-500 text-xs">
+                        <p class="font-bold">Status terbaru gagal dimuat.</p>
+                        <button onclick="refreshStatusRiwayat()" class="mt-3 px-4 py-2 rounded-xl bg-rose-50 font-bold hover:bg-rose-100">
+                            <i class="fas fa-redo-alt mr-1"></i> Coba lagi
+                        </button>
+                    </div>
+                `;
+            }
+        }
+    }
+}
+
 function bukaModalRiwayatLangsung() {
     const modal = document.getElementById('cart-modal');
     const titleModal = document.getElementById('modal-title-dynamic');
@@ -1059,13 +1095,7 @@ function bukaModalRiwayatLangsung() {
 
     if (!modal) return;
 
-    const refreshStatus = muatStatusArsipTerbaru()
-        .then(statusDiperbarui => {
-            if (statusDiperbarui && !historySection?.classList.contains('hidden')) {
-                filterRiwayatStatus(filterRiwayatAktif);
-            }
-        })
-        .catch(error => console.warn("Gagal memperbarui status riwayat:", error));
+    const refreshStatus = refreshStatusRiwayat();
 
     if (!modal.classList.contains('hidden')) {
         tutupModalKeranjang();
@@ -1097,8 +1127,8 @@ function bukaModalRiwayatLangsung() {
         ? semuaRiwayat.filter(isRiwayatGame)
         : semuaRiwayat;
 
-    // Jalankan render list dengan filter default 'SEMUA'
-    filterRiwayatStatus('SEMUA');
+    filterRiwayatAktif = 'SEMUA';
+    tampilkanStatusRiwayatMemuat();
     return refreshStatus;
 }
 
