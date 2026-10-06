@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kuotakilat-v2';
+const CACHE_NAME = 'kuotakilat-v3';
 const assets = [
   './',
   './index.html',
@@ -25,6 +25,7 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).hostname === 'docs.google.com') return;
 
   e.respondWith(
     fetch(e.request).then(response => {

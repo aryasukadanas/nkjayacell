@@ -48,22 +48,23 @@ document.addEventListener('DOMContentLoaded', async () => {
  */
 async function muatDataDariSpreadsheet() {
     const selectEl = document.getElementById('pilih-game');
-    const cacheProduk = localStorage.getItem('nk_cache_produk_csv');
+    const cacheDaftarProduk = localStorage.getItem('nk_cache_produk_csv');
+    if (cacheDaftarProduk) {
+        localStorage.setItem('nk_cache_produk_csv', buatCacheDaftarProduk(cacheDaftarProduk));
+    }
 
     try {
-        const response = await fetch(SHEET_PRODUK_URL + '&_v=' + Date.now());
+        const urlProduk = new URL(SHEET_PRODUK_URL);
+        urlProduk.searchParams.set('_', String(Date.now()));
+        const response = await fetch(urlProduk.toString(), { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const text = await response.text();
-        localStorage.setItem('nk_cache_produk_csv', text);
         isiDatabaseGameDariCSV(text);
+        localStorage.setItem('nk_cache_produk_csv', buatCacheDaftarProduk(text));
         isiPilihanGame(selectEl);
     } catch (error) {
         console.error("Gagal sinkronisasi data game:", error);
-        if (cacheProduk) {
-            console.warn("Memuat data game dari cache lokal.");
-            isiDatabaseGameDariCSV(cacheProduk);
-            isiPilihanGame(selectEl);
-        } else if (selectEl) {
+        if (selectEl) {
             selectEl.innerHTML = '<option value="">-- Data game tidak tersedia --</option>';
         }
     }

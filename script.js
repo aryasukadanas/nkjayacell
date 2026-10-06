@@ -54,6 +54,11 @@ function buatTeksQrisDinamis(nominal) {
 let rawDatabaseRows = [];
 let rawArsipRows = [];
 let rawArsipHeaders = [];
+let petaStatusArsipRiwayat = new Map();
+let idArsipRiwayat = new Set();
+let dataArsipRiwayat = [];
+let statusArsipRequestId = 0;
+let filterRiwayatAktif = 'SEMUA';
 let masterPulsaGroup = {};
 let masterKuotaGroup = {};
 let masterTokenGroup = {}; 
@@ -168,10 +173,68 @@ function pecahBarisCSV(row) {
     return row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(value => value.trim().replace(/^"|"$/g, ''));
 }
 
+function buatCacheDaftarProduk(teksCSV) {
+    return teksCSV.split(/\r?\n/).map((row, index) => {
+        if (index === 0 || !row.trim()) return row;
+        const kolom = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        [2, 3, 4].forEach(indexHarga => {
+            if (indexHarga < kolom.length) kolom[indexHarga] = '';
+        });
+        return kolom.join(',');
+    }).join('\n');
+}
+
 function muatStrukturArsip(teksCSV) {
     const rows = teksCSV.split(/\r?\n/);
     rawArsipHeaders = rows[0] ? pecahBarisCSV(rows[0]).map(value => value.toUpperCase().replace(/[^A-Z0-9]/g, '')) : [];
     rawArsipRows = rows.slice(1);
+    petaStatusArsipRiwayat = new Map();
+    idArsipRiwayat = new Set();
+    dataArsipRiwayat = [];
+
+    rawArsipRows.forEach(row => {
+        if (!row.trim()) return;
+        const cols = pecahBarisCSV(row);
+        const idTransaksi = ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']);
+        const idNormal = normalisasiIdTransaksi(idTransaksi);
+        const target = ambilNilaiArsip(cols, ['NOMOR', 'NOMOR HP', 'ID PLN', 'IDPEL', 'TARGET']);
+        const status = ambilNilaiArsip(cols, ['STATUS', 'STATUS TRANSAKSI']).replace(/'/g, '').toUpperCase();
+        const nominal = ambilArsipNominal(ambilNilaiArsip(cols, ['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI', 'NOMINAL']));
+        const produk = ambilNilaiArsip(cols, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']) || 'Transaksi Arsip';
+
+        if (idNormal) idArsipRiwayat.add(idNormal);
+        if (status) {
+            if (target) petaStatusArsipRiwayat.set(target.replace(/'/g, ''), status);
+            const targetDigits = target.replace(/\D/g, '');
+            if (targetDigits) petaStatusArsipRiwayat.set(targetDigits, status);
+            if (idNormal) petaStatusArsipRiwayat.set(idNormal, status);
+        }
+
+        dataArsipRiwayat.push({
+            idTransaksi,
+            idNormal,
+            tanggal: ambilNilaiArsip(cols, ['TANGGAL', 'WAKTU', 'DATE']),
+            target,
+            jumlahDaya: ambilNilaiArsip(cols, ['JUMLAH DAYA', 'DAYA TERISI', 'DAYA']),
+            produk,
+            nominal,
+            status
+        });
+    });
+}
+
+async function muatStatusArsipTerbaru() {
+    const requestId = ++statusArsipRequestId;
+    const url = new URL(SHEET_ARSIP_URL);
+    url.searchParams.set('_', String(Date.now()));
+    const response = await fetch(url.toString(), { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Sheet status tidak dapat diakses (${response.status})`);
+
+    const teksArsip = await response.text();
+    if (requestId !== statusArsipRequestId) return false;
+
+    muatStrukturArsip(teksArsip);
+    return true;
 }
 
 function ambilNilaiArsip(cols, aliases) {
@@ -398,52 +461,38 @@ async function bukaDaftarKontakHP() {
  */
 async function muatDataDanPisahKategori() {
     console.log("Memulai penataan pangkalan data...");
-
-    // 1. AMBIL DARI MEMORI INTERNAL HP TERLEBIH DAHULU (INSTAN < 1 DETIK)
-    const cacheLokalProduk = localStorage.getItem('nk_cache_produk_csv');
-    const cacheLokalArsip = localStorage.getItem('nk_cache_arsip_csv'); // Ambil cache arsip jika ada
-    
-    if (cacheLokalProduk) {
-        console.log("Memuat daftar harga dari cache lokal HP...");
-        uraiDanProsesTeksCSV(cacheLokalProduk);
-        gantiTabUtama("KUOTA");
+    const cacheDaftarProduk = localStorage.getItem('nk_cache_produk_csv');
+    if (cacheDaftarProduk) {
+        localStorage.setItem('nk_cache_produk_csv', buatCacheDaftarProduk(cacheDaftarProduk));
     }
+    localStorage.removeItem('nk_cache_arsip_csv');
 
-    if (cacheLokalArsip) {
-        muatStrukturArsip(cacheLokalArsip);
-    }
-
-    // 2. TETAP SINKRONISASI DATA TERBARU DARI GOOGLE SHEET DI LATAR BELAKANG
     try {
-       // Ambil data dari kedua sheet secara paralel (bersamaan)
-        const [resProduk, resArsip] = await Promise.all([
-            // [UPDATE] Tambahkan cache buster untuk memastikan data produk selalu terbaru.
-                fetch(SHEET_PRODUK_URL),
-            fetch(SHEET_ARSIP_URL)
+        const urlProduk = new URL(SHEET_PRODUK_URL);
+        urlProduk.searchParams.set('_', String(Date.now()));
+        const [resProduk, statusArsipTerbaru] = await Promise.all([
+            fetch(urlProduk.toString(), { cache: 'no-store' }),
+            muatStatusArsipTerbaru().catch(error => {
+                console.warn("Gagal memperbarui status transaksi:", error);
+                return false;
+            })
         ]);
 
-        if (!resProduk.ok || !resArsip.ok) throw new Error("Gagal mengambil respon dari Google");
+        if (!resProduk.ok) throw new Error("Gagal mengambil daftar produk dari Google");
         
         const textDataTerbaru = await resProduk.text();
-        const textArsipTerbaru = await resArsip.text();
 
-    // Update data produk jika ada perubahan harga
-        if (textDataTerbaru !== cacheLokalProduk) {
-            localStorage.setItem('nk_cache_produk_csv', textDataTerbaru);
-            uraiDanProsesTeksCSV(textDataTerbaru);
-            gantiTabUtama(tabUtamaAktif); 
-        }
+        uraiDanProsesTeksCSV(textDataTerbaru);
+        localStorage.setItem('nk_cache_produk_csv', buatCacheDaftarProduk(textDataTerbaru));
+        gantiTabUtama(tabUtamaAktif);
 
-        // Update data arsip status transaksi harian
-        localStorage.setItem('nk_cache_arsip_csv', textArsipTerbaru);
-        muatStrukturArsip(textArsipTerbaru);
-        if (!document.getElementById('history-view-section')?.classList.contains('hidden')) {
-            filterRiwayatStatus('SEMUA');
+        if (statusArsipTerbaru && !document.getElementById('history-view-section')?.classList.contains('hidden')) {
+            filterRiwayatStatus(filterRiwayatAktif);
         }
         console.log("Daftar harga & status arsip berhasil diperbarui dari Google Sheets!");
 
     } catch (error) {
-        console.warn("Koneksi lambat/offline. Menggunakan pangkalan data internal HP:", error);
+        console.warn("Gagal memperbarui daftar produk dari Google:", error);
     }
 }
 /**
@@ -1014,14 +1063,15 @@ function bukaModalRiwayatLangsung() {
         ? semuaRiwayat.filter(isRiwayatGame)
         : semuaRiwayat;
 
-    // KODE TAMBAHAN: Pastikan database dari lokal/Google Sheet dipetakan ulang sebelum merender status
-    const cacheLokalProduk = localStorage.getItem('nk_cache_produk_csv');
-    if (cacheLokalProduk && rawDatabaseRows.length === 0) {
-        uraiDanProsesTeksCSV(cacheLokalProduk);
-    }
-
     // Jalankan render list dengan filter default 'SEMUA'
     filterRiwayatStatus('SEMUA');
+    muatStatusArsipTerbaru()
+        .then(statusDiperbarui => {
+            if (statusDiperbarui && !historySection?.classList.contains('hidden')) {
+                filterRiwayatStatus(filterRiwayatAktif);
+            }
+        })
+        .catch(error => console.warn("Gagal memperbarui status riwayat:", error));
 }
 
 function normalisasiIdTransaksi(value) {
@@ -1054,9 +1104,19 @@ function ambilArsipNominal(value) {
     return Number.isFinite(nominal) ? Math.round(nominal) : 0;
 }
 
+function normalisasiStatusRiwayat(value) {
+    const status = String(value || '').trim().toUpperCase();
+    if (status.includes('REFUND') || status.includes('PENGEMBALIAN')) return 'REFUND';
+    if (status.includes('LUNAS') || status.includes('SUCCESS') || status.includes('SUKSES')) return 'SUKSES';
+    if (status.includes('FAILED') || status.includes('GAGAL')) return 'GAGAL';
+    if (status.includes('PENDING') || status.includes('PROSES') || status.includes('DIPROSES')) return 'PROSES';
+    return status || 'PROSES';
+}
+
 function filterRiwayatStatus(filterType = 'SEMUA') {
     const itemsContainer = document.getElementById('history-items-container');
     if (!itemsContainer) return;
+    filterRiwayatAktif = filterType;
     const searchId = normalisasiIdTransaksi(document.getElementById('history-search-input')?.value);
 
     // Atur Aktif Tombol Filter Tab UI
@@ -1075,46 +1135,20 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
         }
     });
 
-    // Buat peta (map) status terupdate berdasarkan "Nomor/ID Target" dari sheet ARSIP
-    let statusTerupdateMap = {};
-    
-    rawArsipRows.forEach(row => {
-        if (!row.trim()) return;
-        const cols = pecahBarisCSV(row);
-        
-        const idTransaksiSheet = normalisasiIdTransaksi(ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']));
-        const noHpTargetSheet = ambilNilaiArsip(cols, ['NOMOR', 'NOMOR HP', 'ID PLN', 'IDPEL', 'TARGET']).replace(/'/g, '');
-        const noHpTargetKey = noHpTargetSheet.replace(/\D/g, "");
-        const statusTransaksiSheet = ambilNilaiArsip(cols, ['STATUS', 'STATUS TRANSAKSI']).replace(/'/g, '').toUpperCase();
-
-        if (noHpTargetSheet && statusTransaksiSheet) {
-            statusTerupdateMap[noHpTargetSheet] = statusTransaksiSheet;
-        }
-        if (noHpTargetKey && statusTransaksiSheet) {
-            statusTerupdateMap[noHpTargetKey] = statusTransaksiSheet;
-        }
-        if (idTransaksiSheet && statusTransaksiSheet) {
-            statusTerupdateMap[idTransaksiSheet] = statusTransaksiSheet;
-        }
-    });
-
     // Proses data riwayat dan perbarui statusnya berdasarkan pencocokan nomor HP target
     let riwayatDiproses = listCacheRiwayat.map(item => {
         let noHpKey = item.target ? item.target.trim() : "";
         let noHpDigitsKey = noHpKey.replace(/\D/g, "");
         // Jika ditemukan status terbaru di sheet ARSIP berdasarkan nomor HP, pakai status itu.
-        let statusFinal = statusTerupdateMap[normalisasiIdTransaksi(item.id_transaksi)]
-            || statusTerupdateMap[noHpKey]
-            || statusTerupdateMap[noHpDigitsKey]
+        let statusFinal = petaStatusArsipRiwayat.get(normalisasiIdTransaksi(item.id_transaksi))
+            || petaStatusArsipRiwayat.get(noHpKey)
+            || petaStatusArsipRiwayat.get(noHpDigitsKey)
             || item.statusAwal
             || item.status
             || "PROSES";
         
         // Standarisasi kata status dari Google Sheet ke sistem UI aplikasi Anda
-        statusFinal = String(statusFinal).trim().toUpperCase();
-        if (statusFinal.includes("LUNAS") || statusFinal.includes("SUCCESS") || statusFinal.includes("SUKSES")) statusFinal = "SUKSES";
-        if (statusFinal.includes("PENDING") || statusFinal.includes("PROSES") || statusFinal.includes("DIPROSES")) statusFinal = "PROSES";
-        if (statusFinal.includes("FAILED") || statusFinal.includes("GAGAL")) statusFinal = "GAGAL";
+        statusFinal = normalisasiStatusRiwayat(statusFinal);
 
         return {
             ...item,
@@ -1128,36 +1162,26 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
         dataTerfilter = riwayatDiproses.filter(item => item.status === filterType);
     }
     if (searchId) {
-        const idArsip = new Set(rawArsipRows.map(row => {
-            const cols = pecahBarisCSV(row);
-            return normalisasiIdTransaksi(ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']));
-        }).filter(Boolean));
         dataTerfilter = dataTerfilter.filter(item => {
             const idRiwayat = normalisasiIdTransaksi(item.id_transaksi);
-            return idRiwayat.includes(searchId) && (!idArsip.size || idArsip.has(idRiwayat));
+            return idRiwayat.includes(searchId) && (!idArsipRiwayat.size || idArsipRiwayat.has(idRiwayat));
         });
 
         const idLokal = new Set(dataTerfilter.map(item => String(item.id_transaksi || '').replace(/[\s']/g, '').toUpperCase()));
-        rawArsipRows.forEach(row => {
-            if (!row.trim()) return;
-            const cols = pecahBarisCSV(row);
-            const idTransaksi = ambilNilaiArsip(cols, ['ID TRANSAKSI', 'ID TRX', 'ID']);
-            const idNormal = normalisasiIdTransaksi(idTransaksi);
+        dataArsipRiwayat.forEach(item => {
+            const { idTransaksi, idNormal } = item;
             if (!idNormal.includes(searchId) || idLokal.has(idNormal)) return;
 
-            const statusSheet = ambilNilaiArsip(cols, ['STATUS', 'STATUS TRANSAKSI']).toUpperCase();
-            const nominalSheet = ambilArsipNominal(ambilNilaiArsip(cols, ['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI', 'NOMINAL']));
-            const targetSheet = ambilNilaiArsip(cols, ['NOMOR', 'NOMOR HP', 'ID PLN', 'IDPEL', 'TARGET']);
+            const { status, nominal, target, tanggal, jumlahDaya, produk } = item;
             dataTerfilter.push({
                 id_transaksi: idTransaksi,
-                tanggal: ambilNilaiArsip(cols, ['TANGGAL', 'WAKTU', 'DATE']),
-                target: targetSheet,
-                jumlahDaya: ambilJumlahDayaPLN(targetSheet, nominalSheet)
-                    || ambilNilaiArsip(cols, ['JUMLAH DAYA', 'DAYA TERISI', 'DAYA']),
-                produk: ambilNilaiArsip(cols, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']) || 'Transaksi Arsip',
-                produkLengkap: ambilNilaiArsip(cols, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']) || 'Transaksi Arsip',
-                biaya: nominalSheet,
-                status: statusSheet.includes('LUNAS') || statusSheet.includes('SUKSES') ? 'SUKSES' : statusSheet.includes('GAGAL') ? 'GAGAL' : 'PROSES'
+                tanggal,
+                target,
+                jumlahDaya: ambilJumlahDayaPLN(target, nominal) || jumlahDaya,
+                produk,
+                produkLengkap: produk,
+                biaya: nominal,
+                status: normalisasiStatusRiwayat(status)
             });
         });
     }
@@ -1186,6 +1210,9 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
         } else if (item.status === "GAGAL") {
             badgeStyle = "bg-rose-50 text-rose-700 border border-rose-100";
             iconStyle = "fa-times-circle text-rose-500";
+        } else if (item.status === "REFUND") {
+            badgeStyle = "bg-violet-50 text-violet-700 border border-violet-100";
+            iconStyle = "fa-undo-alt text-violet-500";
         } else {
             badgeStyle = "bg-amber-50 text-amber-700 border border-amber-100 animate-pulse";
             iconStyle = "fa-spinner animate-spin text-amber-500";
