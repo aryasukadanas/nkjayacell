@@ -159,7 +159,9 @@ function kirimNotifikasiPromoAktifJikaPerlu(items = []) {
     if (!Array.isArray(items) || items.length === 0) return;
 
     items.forEach(item => {
-        if (item && item.priceFlash > 0) {
+        const waktuAkhirFlash = item?.endTimer ? parseWaktuAkhirFlashSale(item.endTimer) : null;
+        const flashSaleAktif = item && item.priceFlash > 0 && waktuAkhirFlash && waktuAkhirFlash > new Date();
+        if (flashSaleAktif) {
             const diskon = Math.round(((item.priceNormal - item.priceFlash) / item.priceNormal) * 100);
             kirimPromoNotification(item.nama, 'FLASH SALE', diskon, item.priceFlash, operatorAktif || 'PROMO');
         } else if (item && item.pricePromo > 0) {
@@ -171,6 +173,37 @@ function kirimNotifikasiPromoAktifJikaPerlu(items = []) {
 
 function pecahBarisCSV(row) {
     return row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(value => value.trim().replace(/^"|"$/g, ''));
+}
+
+function parseWaktuAkhirFlashSale(value) {
+    const teks = String(value ?? '').trim().replace(/\b(WITA|WIB|WIT)\b/gi, '').trim();
+    if (!teks) return null;
+
+    const cocok = teks.match(/^(\d{1,4})[/. -](\d{1,2})[/. -](\d{1,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i);
+    if (cocok) {
+        const tahunDiDepan = cocok[1].length === 4;
+        const tahun = Number(tahunDiDepan ? cocok[1] : cocok[3]);
+        const bulan = Number(tahunDiDepan ? cocok[2] : cocok[2]);
+        const hari = Number(tahunDiDepan ? cocok[3] : cocok[1]);
+        let jam = Number(cocok[4] || 23);
+        const menit = Number(cocok[5] || (cocok[4] ? 0 : 59));
+        const detik = Number(cocok[6] || (cocok[4] ? 0 : 59));
+        const ampm = (cocok[7] || '').toUpperCase();
+
+        if (ampm) {
+            if (jam < 1 || jam > 12) return null;
+            jam = (jam % 12) + (ampm === 'PM' ? 12 : 0);
+        }
+
+        const tanggal = new Date(tahun, bulan - 1, hari, jam, menit, detik);
+        if (tanggal.getFullYear() !== tahun || tanggal.getMonth() !== bulan - 1
+            || tanggal.getDate() !== hari || tanggal.getHours() !== jam
+            || tanggal.getMinutes() !== menit || tanggal.getSeconds() !== detik) return null;
+        return tanggal;
+    }
+
+    const timestamp = Date.parse(teks);
+    return Number.isNaN(timestamp) ? null : new Date(timestamp);
 }
 
 function buatCacheDaftarProduk(teksCSV) {
@@ -745,14 +778,17 @@ function renderCardsProduk() {
     if (badgeCount) badgeCount.innerText = `${items.length} Item`;
 
     let adaFlashSale = false;
-    let targetTimeFlashGlobal = "";
+    let targetTimeFlashGlobal = null;
+    const sekarang = new Date();
 
     items.forEach(item => {
         const fileIcon = iconMap[operatorAktif] || "PULSA.png";
+        const targetAkhirFlash = item.endTimer ? parseWaktuAkhirFlashSale(item.endTimer) : null;
+        const flashSaleAktif = item.priceFlash > 0 && targetAkhirFlash && targetAkhirFlash > sekarang;
 
-        if (item.priceFlash > 0) {
+        if (flashSaleAktif) {
             adaFlashSale = true;
-            if (item.endTimer) targetTimeFlashGlobal = item.endTimer;
+            if (!targetTimeFlashGlobal || targetAkhirFlash < targetTimeFlashGlobal) targetTimeFlashGlobal = targetAkhirFlash;
             const diskon = Math.round(((item.priceNormal - item.priceFlash) / item.priceNormal) * 100);
             kirimPromoNotification(item.nama, 'FLASH SALE', diskon, item.priceFlash, operatorAktif);
 
@@ -803,6 +839,8 @@ function renderCardsProduk() {
             jalankanTimerMundurDinamis(targetTimeFlashGlobal);
         } else {
             sectionFlash.classList.add('hidden');
+            if (intervalMainTimer) clearInterval(intervalMainTimer);
+            intervalMainTimer = null;
         }
     }
 
@@ -812,32 +850,9 @@ function renderCardsProduk() {
 }
 
 function jalankanTimerMundurDinamis(targetString) {
-    let targetDate = null;
-    
-    if (targetString && targetString.trim() !== "") {
-        try {
-            // SISTEM PENGAMAN: Bersihkan teks jika admin salah input di spreadsheet
-            let formatBersih = targetString
-                .replace(/WITA|WIB|WIT|jam/gi, '') // Hapus tulisan WITA/WIB/Jam
-                .replace(/\./g, ':')               // Ubah paksa titik (.) menjadi titik dua (:)
-                .trim();
-                
-            targetDate = new Date(formatBersih);
-            
-            // Jika hasilnya tetap rusak (NaN), gunakan pengaman waktu default (Jam 12 malam ini)
-            if (isNaN(targetDate.getTime())) {
-                throw new Error("Format tanggal spreadsheet tidak valid.");
-            }
-        } catch (e) {
-            console.warn("Koreksi otomatis aktif: ", e.message);
-            const skrg = new Date();
-            targetDate = new Date(skrg.getFullYear(), skrg.getMonth(), skrg.getDate(), 23, 59, 59);
-        }
-    } else {
-        // Jika kolom waktu di spreadsheet dikosongkan, otomatis hitung mundur ke jam 12 malam hari ini
-        const skrg = new Date();
-        targetDate = new Date(skrg.getFullYear(), skrg.getMonth(), skrg.getDate(), 23, 59, 59);
-    }
+    if (intervalMainTimer) clearInterval(intervalMainTimer);
+    const targetDate = targetString instanceof Date ? targetString : parseWaktuAkhirFlashSale(targetString);
+    if (!targetDate) return;
 
     // Interval pemicu perubahan teks angka di halaman index.html
     intervalMainTimer = setInterval(() => {
@@ -845,28 +860,29 @@ function jalankanTimerMundurDinamis(targetString) {
         const selisih = targetDate - kini;
 
         if (selisih <= 0) {
-    document.getElementById('timer-hour').innerText = "00";
-    document.getElementById('timer-min').innerText = "00";
-    document.getElementById('timer-sec').innerText = "00";
-    clearInterval(intervalMainTimer);
-    
-    // TAMBAHAN KEAMANAN: Otomatis sembunyikan area Flash Sale di Web NK JAYA CELL
-    const sectionFlash = document.getElementById('main-flash-section');
-    if (sectionFlash) {
-        sectionFlash.classList.add('hidden'); // Menyembunyikan etalase promo dari mata pembeli
-    }
-    
-    return;
-}
-
+            ['timer-hour', 'timer-min', 'timer-sec'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = '00';
+            });
+            clearInterval(intervalMainTimer);
+            intervalMainTimer = null;
+            renderCardsProduk();
+            return;
+        }
 
         const h = Math.floor(selisih / (1000 * 60 * 60));
         const m = Math.floor((selisih / (1000 * 60)) % 60);
         const s = Math.floor((selisih / 1000) % 60);
 
-        document.getElementById('timer-hour').innerText = h < 10 ? '0' + h : h;
-        document.getElementById('timer-min').innerText = m < 10 ? '0' + m : m;
-        document.getElementById('timer-sec').innerText = s < 10 ? '0' + s : s;
+        const timerEls = [
+            ['timer-hour', h],
+            ['timer-min', m],
+            ['timer-sec', s]
+        ];
+        timerEls.forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = value < 10 ? `0${value}` : String(value);
+        });
     }, 1000);
 }
 

@@ -178,15 +178,20 @@ function gantiGame(val) {
             (namaGameUpper === 'MOBILE LEGENDS' || namaGameUpper === 'MOBILE LEGEND' ? 'MLBB' : gameDipilih));
         const listProduk = dbGame[kunciGame] || [];
         let adaFlashSaleActive = false;
-        let waktuTargetFlashSaleGlobal = "";
+        let waktuTargetFlashSaleGlobal = null;
+        const sekarang = new Date();
 
         listProduk.forEach(item => {
             const warnaIcon = gameUpper === 'FF' ? 'text-orange-500' : (gameUpper === 'MLBB' ? 'text-blue-500' : 'text-green-500');
+            const targetAkhirFlash = item.endTimer ? parseWaktuAkhirFlashSale(item.endTimer) : null;
+            const flashSaleAktif = item.priceFlash > 0 && targetAkhirFlash && targetAkhirFlash > sekarang;
 
             // 1. KONDISI JIKA ITEM MEMILIKI HARGA FLASH SALE (KOLOM E)
-            if (item.priceFlash > 0) {
+            if (flashSaleAktif) {
                 adaFlashSaleActive = true;
-                if (item.endTimer) waktuTargetFlashSaleGlobal = item.endTimer; // Ambil target waktu dari sheet
+                if (!waktuTargetFlashSaleGlobal || targetAkhirFlash < waktuTargetFlashSaleGlobal) {
+                    waktuTargetFlashSaleGlobal = targetAkhirFlash;
+                }
 
                 // Hitung persen penurunan Flash Sale dari Harga Normal (Kolom C ke E)
                 const persenPotongan = Math.round(((item.priceNormal - item.priceFlash) / item.priceNormal) * 100);
@@ -242,6 +247,8 @@ function gantiGame(val) {
             mulaiHitungMundurDinamis(waktuTargetFlashSaleGlobal);
         } else {
             sectionFlash.classList.add('hidden');
+            if (intervalTimerGlobal) clearInterval(intervalTimerGlobal);
+            intervalTimerGlobal = null;
         }
 
         if (gridRegular.innerHTML === '') {
@@ -256,24 +263,21 @@ function gantiGame(val) {
 function mulaiHitungMundurDinamis(targetString) {
     if (intervalTimerGlobal) clearInterval(intervalTimerGlobal);
 
-    // Jika di kolom F spreadsheet kosong, sistem otomatis pakai fallback default jam 23:59:59 hari ini
-    let targetWaktu = null;
-    if (targetString) {
-        targetWaktu = new Date(targetString.replace(/-/g, "/")); // Mengatasi kompatibilitas parsing safari/chrome
-    } else {
-        const skr = new Date();
-        targetWaktu = new Date(skr.getFullYear(), skr.getMonth(), skr.getDate(), 23, 59, 59);
-    }
+    const targetWaktu = targetString instanceof Date ? targetString : parseWaktuAkhirFlashSale(targetString);
+    if (!targetWaktu) return;
 
     intervalTimerGlobal = setInterval(() => {
         const sekarang = new Date();
         const selisihWaktu = targetWaktu - sekarang;
         
         if (selisihWaktu <= 0) {
-            document.getElementById('timer-hour').innerText = "00";
-            document.getElementById('timer-min').innerText = "00";
-            document.getElementById('timer-sec').innerText = "00";
+            ['timer-hour', 'timer-min', 'timer-sec'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = '00';
+            });
             clearInterval(intervalTimerGlobal);
+            intervalTimerGlobal = null;
+            gantiGame(gameDipilih);
             return;
         }
 
@@ -281,9 +285,15 @@ function mulaiHitungMundurDinamis(targetString) {
         const menit = Math.floor((selisihWaktu / (1000 * 60)) % 60);
         const detik = Math.floor((selisihWaktu / 1000) % 60);
 
-        document.getElementById('timer-hour').innerText = jam < 10 ? '0' + jam : jam;
-        document.getElementById('timer-min').innerText = menit < 10 ? '0' + menit : menit;
-        document.getElementById('timer-sec').innerText = detik < 10 ? '0' + detik : detik;
+        const timerEls = [
+            ['timer-hour', jam],
+            ['timer-min', menit],
+            ['timer-sec', detik]
+        ];
+        timerEls.forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = value < 10 ? `0${value}` : String(value);
+        });
     }, 1000);
 }
 
