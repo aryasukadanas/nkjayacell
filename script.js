@@ -1059,9 +1059,17 @@ function bukaModalRiwayatLangsung() {
 
     if (!modal) return;
 
+    const refreshStatus = muatStatusArsipTerbaru()
+        .then(statusDiperbarui => {
+            if (statusDiperbarui && !historySection?.classList.contains('hidden')) {
+                filterRiwayatStatus(filterRiwayatAktif);
+            }
+        })
+        .catch(error => console.warn("Gagal memperbarui status riwayat:", error));
+
     if (!modal.classList.contains('hidden')) {
         tutupModalKeranjang();
-        return;
+        return refreshStatus;
     }
 
     // Switch View Section
@@ -1091,13 +1099,7 @@ function bukaModalRiwayatLangsung() {
 
     // Jalankan render list dengan filter default 'SEMUA'
     filterRiwayatStatus('SEMUA');
-    muatStatusArsipTerbaru()
-        .then(statusDiperbarui => {
-            if (statusDiperbarui && !historySection?.classList.contains('hidden')) {
-                filterRiwayatStatus(filterRiwayatAktif);
-            }
-        })
-        .catch(error => console.warn("Gagal memperbarui status riwayat:", error));
+    return refreshStatus;
 }
 
 function normalisasiIdTransaksi(value) {
