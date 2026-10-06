@@ -176,14 +176,21 @@ function pecahBarisCSV(row) {
 }
 
 function parseWaktuAkhirFlashSale(value) {
-    const teks = String(value ?? '').trim().replace(/\b(WITA|WIB|WIT)\b/gi, '').trim();
+    const teksAsli = String(value ?? '').trim();
+    const zonaEksplisit = teksAsli.match(/\b(WITA|WIB|WIT)\b/i);
+    const teks = teksAsli.replace(/\b(WITA|WIB|WIT)\b/gi, '').trim();
     if (!teks) return null;
+
+    if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(teks)) {
+        const timestamp = Date.parse(teks);
+        return Number.isNaN(timestamp) ? null : new Date(timestamp);
+    }
 
     const cocok = teks.match(/^(\d{1,4})[/. -](\d{1,2})[/. -](\d{1,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i);
     if (cocok) {
         const tahunDiDepan = cocok[1].length === 4;
         const tahun = Number(tahunDiDepan ? cocok[1] : cocok[3]);
-        const bulan = Number(tahunDiDepan ? cocok[2] : cocok[2]);
+        const bulan = Number(cocok[2]);
         const hari = Number(tahunDiDepan ? cocok[3] : cocok[1]);
         let jam = Number(cocok[4] || 23);
         const menit = Number(cocok[5] || (cocok[4] ? 0 : 59));
@@ -195,15 +202,18 @@ function parseWaktuAkhirFlashSale(value) {
             jam = (jam % 12) + (ampm === 'PM' ? 12 : 0);
         }
 
-        const tanggal = new Date(tahun, bulan - 1, hari, jam, menit, detik);
-        if (tanggal.getFullYear() !== tahun || tanggal.getMonth() !== bulan - 1
-            || tanggal.getDate() !== hari || tanggal.getHours() !== jam
-            || tanggal.getMinutes() !== menit || tanggal.getSeconds() !== detik) return null;
-        return tanggal;
+        const waktuUtc = Date.UTC(tahun, bulan - 1, hari, jam, menit, detik);
+        const tanggalValidasi = new Date(waktuUtc);
+        if (tanggalValidasi.getUTCFullYear() !== tahun || tanggalValidasi.getUTCMonth() !== bulan - 1
+            || tanggalValidasi.getUTCDate() !== hari || tanggalValidasi.getUTCHours() !== jam
+            || tanggalValidasi.getUTCMinutes() !== menit || tanggalValidasi.getUTCSeconds() !== detik) return null;
+
+        const zona = zonaEksplisit?.[1].toUpperCase();
+        const offsetJamDariUtc = zona === 'WIB' ? 7 : zona === 'WIT' ? 9 : 8;
+        return new Date(waktuUtc - offsetJamDariUtc * 60 * 60 * 1000);
     }
 
-    const timestamp = Date.parse(teks);
-    return Number.isNaN(timestamp) ? null : new Date(timestamp);
+    return null;
 }
 
 function buatCacheDaftarProduk(teksCSV) {
