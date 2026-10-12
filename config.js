@@ -9,4 +9,4 @@ const SHEET_TRANSFER_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQsI
 // URL untuk mengambil status dari sheet "ARSIP" (Kolom G).
 const SHEET_ARSIP_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQsIlTEnkky4oMCaFZWr7WaL5FVGkGsEgyOUPPxKUlELUVHDCa3XNUxhOsEwTqRKm3WIMz_Sv7q45C7/pub?gid=702573697&single=true&output=csv";
 const SHEET_NAMA_PLN_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQsIlTEnkky4oMCaFZWr7WaL5FVGkGsEgyOUPPxKUlELUVHDCa3XNUxhOsEwTqRKm3WIMz_Sv7q45C7/pub?gid=1486727624&single=true&output=csv";
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby62k0SQ3xnX9F6sthlPogUp54quaNyklA0cD5t7c1VM7tZoXlah2n5O9h1WMKVoY8/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby6OC4Te11TMN1WYlEIi3uiVmBmSfyOtlgsPLL9581X2G5LdH69rjm2-9kcAOvTjoKA/exec";
