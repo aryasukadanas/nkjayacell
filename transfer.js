@@ -326,6 +326,10 @@ function formatRibuan(angka) {
     return split[1] != undefined ? rupiah + ',' + split[1] : rupiah;
 }
 
+function bulatkanNominalTransfer(nominal) {
+    return Math.ceil(nominal / 1000) * 1000;
+}
+
 /**
  * Menghitung biaya admin secara otomatis berdasarkan Bank & Nominal
  */
@@ -334,7 +338,7 @@ function hitungAdminSpesifik() {
     const inputNominal = document.getElementById('nominal-transfer');
     
     const nominalRaw = inputNominal?.value.replace(/\./g, '') || "0";
-    const nominal = parseInt(nominalRaw) || 0;
+    const nominal = bulatkanNominalTransfer(parseInt(nominalRaw) || 0);
 
     const tarif = databaseAdminBank.find(t => 
         t.bank === bankDipilih && 
@@ -351,7 +355,7 @@ function hitungAdminSpesifik() {
 function hitungTotal() {
     const inputNominal = document.getElementById('nominal-transfer')?.value || "0";
     const nominalRaw = inputNominal.replace(/\./g, '');
-    const nominal = parseInt(nominalRaw) || 0;
+    const nominal = bulatkanNominalTransfer(parseInt(nominalRaw) || 0);
     
     const admin = hitungAdminSpesifik();
     const total = nominal + admin;
@@ -649,7 +653,8 @@ async function prosesTransfer() {
     const norekTanpaSpasi = norekDenganSpasi.replace(/\s+/g, '');
     
     const nominalRaw = nominalEl ? nominalEl.value.replace(/\./g, '') : "0";
-    const nominal = parseInt(nominalRaw) || 0;
+    const nominal = bulatkanNominalTransfer(parseInt(nominalRaw) || 0);
+    if (nominalEl) nominalEl.value = formatRibuan(nominal.toString());
     const admin = hitungAdminSpesifik();
     const total = nominal + admin;
 
@@ -1118,7 +1123,7 @@ async function simpanKeSpreadsheet(idTransaksi, namaFinalDariForm) {
     const nominalRaw = nominalEl ? nominalEl.value.replace(/\./g, '') : "0";
 
     const norekBersih = norekMentah.replace(/\s+/g, ''); 
-    const nominal = parseInt(nominalRaw) || 0;
+    const nominal = bulatkanNominalTransfer(parseInt(nominalRaw) || 0);
     const admin = hitungAdminSpesifik();
     const totalBayar = nominal + admin;
     
@@ -1315,6 +1320,12 @@ document.addEventListener('DOMContentLoaded', () => {
             this.value = formatRibuan(this.value);
             hitungTotal();
         });
+
+        elNominal.addEventListener('blur', function() {
+            const nominal = parseInt(this.value.replace(/\./g, ''), 10) || 0;
+            this.value = formatRibuan(bulatkanNominalTransfer(nominal).toString());
+            hitungTotal();
+        });
     }
 
     // Tambahkan baris ini di dalam window.addEventListener('load') pada transfer.js Anda
@@ -1393,7 +1404,7 @@ function mulaiInputSuara(tipe) {
                 
                 if (angkaNominal > 0) {
                     // Format angka mentah menjadi berpemisah titik (ribuan)
-                    elNominal.value = formatRibuan(angkaNominal.toString());
+                    elNominal.value = formatRibuan(bulatkanNominalTransfer(angkaNominal).toString());
                     // Trigger fungsi bawaan NK Jaya Cell untuk kalkulasi total + admin
                     hitungTotal();
                 } else {
