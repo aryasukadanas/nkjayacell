@@ -447,12 +447,14 @@ function renderRows() {
     elements.rows.innerHTML = filtered.map(record => {
         const edited = Boolean(readOverrides()[record.key]);
         const detail = record.customer ? `${record.product || '-'} · ${record.customer}` : (record.product || '-');
+        const note = getField(record, ['CATATAN PESAN PENERIMA', 'CATATAN', 'PESAN PENERIMA']);
         return `<tr>
             <td>${escapeHtml(formatDate(record.date || record.dateText))}</td>
             <td><div class="copy-cell"><span class="mono">${escapeHtml(record.id || '-')}</span><button class="icon-button copy-button" type="button" data-action="copy" data-copy="${escapeHtml(record.id || '')}" title="Salin ID TRX" aria-label="Salin ID TRX"><i class="far fa-copy"></i></button></div></td>
             <td><span class="source-badge ${record.source === 'TRANSFER' ? 'transfer' : ''}">${record.source}</span>${edited ? '<span class="local-badge">LOKAL</span>' : ''}</td>
             <td><div class="cell-title" title="${escapeHtml(detail)}">${escapeHtml(detail)}</div></td>
             <td><div class="copy-cell"><span class="mono">${escapeHtml(record.contact || '-')}</span><button class="icon-button copy-button" type="button" data-action="copy" data-copy="${escapeHtml(record.contact || '')}" title="Salin nomor" aria-label="Salin nomor"><i class="far fa-copy"></i></button></div></td>
+            <td><div class="copy-cell"><div class="cell-title" title="${escapeHtml(note)}">${escapeHtml(note || '-')}</div>${note ? `<button class="icon-button copy-button" type="button" data-action="copy" data-copy="${escapeHtml(note)}" title="Salin catatan" aria-label="Salin catatan"><i class="far fa-copy"></i></button>` : ''}${record.source === 'TRANSFER' ? `<button class="icon-button copy-button" type="button" data-action="edit" data-key="${escapeHtml(record.key)}" title="Edit catatan" aria-label="Edit catatan"><i class="fas fa-pen"></i></button>` : ''}</div></td>
             <td class="mono">${escapeHtml(formatMoney(record.amount))}</td>
             <td class="mono">${escapeHtml(formatMoney(record.profit))}</td>
             <td><span class="status-badge ${statusClass(record.status)}">${escapeHtml(record.status || 'PROSES')}</span></td>
@@ -739,6 +741,8 @@ function receiptLayout(record) {
         field('Bank Tujuan', record.product);
         field('No. Rekening', record.contact);
         field('Nama', record.customer);
+        const note = getField(record, ['CATATAN PESAN PENERIMA', 'CATATAN', 'PESAN PENERIMA']).trim();
+        if (note) field('Catatan', note);
         separator();
         field('Nominal Transfer', formatMoney(parseAmount(getField(record, ['TRANSFER', 'NOMINAL', 'NOMINAL TRANSFER']))));
         field('Biaya Admin', formatMoney(parseAmount(getField(record, ['BIAYA', 'BIAYA ADMIN', 'ADMIN']))));

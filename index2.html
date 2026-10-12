@@ -248,12 +248,25 @@
         </button>
     </div>
 
+    <div class="relative flex items-center bg-transparent rounded-2xl border-2 border-gray-300 focus-within:border-blue-500 transition-all h-[58px] px-4">
+        <label for="catatan-transfer" class="absolute left-4 -top-3 px-2 bg-white text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 pointer-events-none">
+            <i class="fas fa-comment-alt text-blue-500 text-[10px]"></i> Catatan Pesan Penerima (Opsional)
+        </label>
+        <input type="text" id="catatan-transfer" maxlength="35" placeholder="Catatan untuk penerima (opsional)"
+               class="w-full h-full bg-transparent text-base font-black text-gray-700 placeholder:text-gray-200 tracking-wide border-0 outline-none ring-0 focus:ring-0">
+    </div>
+
                 <div id="rincian-pembayaran-container" class="bg-gray-50 p-5 rounded-[2rem] border border-gray-100 space-y-3 hidden">
                     <span class="block text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-1">Rincian Pembayaran</span>
                     
                     <div class="flex justify-between items-center text-sm font-bold text-gray-600">
                         <span>Tujuan Transfer</span>
                         <span id="rincian-tujuan" class="font-black text-gray-700">-</span>
+                    </div>
+
+                    <div id="rincian-catatan-container" class="hidden justify-between items-center text-sm font-bold text-gray-600">
+                        <span>Catatan Pesan Penerima</span>
+                        <span id="rincian-catatan" class="font-black text-gray-700 text-right"></span>
                     </div>
                     
                     <div class="flex justify-between items-center text-sm font-bold text-gray-600">
@@ -361,6 +374,10 @@
                                 <span class="text-gray-500 font-medium">Nama</span>
                                 <span id="struk-nama-penerima" class="font-bold text-gray-800 text-right uppercase"></span>
                             </div>
+                            <div id="struk-catatan-container" class="hidden justify-between gap-3">
+                                <span class="text-gray-500 font-medium">Catatan Pesan Penerima</span>
+                                <span id="struk-catatan" class="font-bold text-gray-800 text-right"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -460,9 +477,9 @@
         })();
     </script>
     <!-- [REFACTOR] Pastikan config.js dimuat SEBELUM transfer.js -->
-    <script src="config.js"></script>
+    <script src="config.js?v=20261012-catatan-struk"></script>
     <!-- [STANDALONE] Hapus script.js karena transfer.js sudah mandiri -->
-    <script src="transfer.js"></script>
+    <script src="transfer.js?v=20261012-catatan-struk"></script>
 
 </body>
 </html>
