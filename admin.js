@@ -454,11 +454,11 @@ function renderRows() {
             <td><span class="source-badge ${record.source === 'TRANSFER' ? 'transfer' : ''}">${record.source}</span>${edited ? '<span class="local-badge">LOKAL</span>' : ''}</td>
             <td><div class="cell-title" title="${escapeHtml(detail)}">${escapeHtml(detail)}</div></td>
             <td><div class="copy-cell"><span class="mono">${escapeHtml(record.contact || '-')}</span><button class="icon-button copy-button" type="button" data-action="copy" data-copy="${escapeHtml(record.contact || '')}" title="Salin nomor" aria-label="Salin nomor"><i class="far fa-copy"></i></button></div></td>
-            <td><div class="copy-cell"><div class="cell-title" title="${escapeHtml(note)}">${escapeHtml(note || '-')}</div>${note ? `<button class="icon-button copy-button" type="button" data-action="copy" data-copy="${escapeHtml(note)}" title="Salin catatan" aria-label="Salin catatan"><i class="far fa-copy"></i></button>` : ''}${record.source === 'TRANSFER' ? `<button class="icon-button copy-button" type="button" data-action="edit" data-key="${escapeHtml(record.key)}" title="Edit catatan" aria-label="Edit catatan"><i class="fas fa-pen"></i></button>` : ''}</div></td>
+            <td><div class="copy-cell"><div class="cell-title" title="${escapeHtml(note)}">${escapeHtml(note || '-')}</div>${note ? `<button class="icon-button copy-button" type="button" data-action="copy" data-copy="${escapeHtml(note)}" title="Salin catatan" aria-label="Salin catatan"><i class="far fa-copy"></i></button>` : ''}</div></td>
             <td class="mono">${escapeHtml(formatMoney(record.amount))}</td>
             <td class="mono">${escapeHtml(formatMoney(record.profit))}</td>
             <td><span class="status-badge ${statusClass(record.status)}">${escapeHtml(record.status || 'PROSES')}</span></td>
-            <td><div class="row-actions">${record.isToken ? `<button class="icon-button" type="button" data-action="edit-token" data-key="${escapeHtml(record.key)}" title="Edit struk token" aria-label="Edit struk token"><i class="fas fa-bolt"></i></button>` : `<button class="icon-button" type="button" data-action="edit" data-key="${escapeHtml(record.key)}" title="Edit lokal" aria-label="Edit lokal"><i class="fas fa-pen"></i></button>`}<button class="icon-button print-button" type="button" data-action="print" data-key="${escapeHtml(record.key)}" title="Cetak struk 58 mm" aria-label="Cetak struk"><i class="fas fa-print"></i></button></div></td>
+            <td><div class="row-actions">${record.isToken ? `<button class="icon-button" type="button" data-action="edit-token" data-key="${escapeHtml(record.key)}" title="Edit struk token" aria-label="Edit struk token"><i class="fas fa-bolt"></i></button>` : `<button class="icon-button" type="button" data-action="edit" data-key="${escapeHtml(record.key)}" title="Edit struk" aria-label="Edit struk"><i class="fas fa-pen"></i></button>`}<button class="icon-button print-button" type="button" data-action="print" data-key="${escapeHtml(record.key)}" title="Cetak struk 58 mm" aria-label="Cetak struk"><i class="fas fa-print"></i></button></div></td>
         </tr>`;
     }).join('');
     elements.emptyState.hidden = filtered.length > 0;
@@ -582,6 +582,15 @@ function updateEditProfitPreview() {
     });
     const profit = calculateFinancials({ ...activeEdit, fields }).profit;
     document.getElementById('edit-profit-preview').textContent = formatMoney(profit);
+}
+
+function printEditedRecord() {
+    if (!activeEdit) return;
+    const fields = activeEdit.fields.map(field => {
+        const input = elements.editForm.elements.namedItem(field.key);
+        return input ? { ...field, value: input.value } : field;
+    });
+    printRecord({ ...activeEdit, fields });
 }
 
 function updateEditCalculations(event) {
@@ -1033,6 +1042,7 @@ function bindEvents() {
     document.querySelectorAll('.period-button').forEach(button => button.addEventListener('click', () => selectPeriod(button.dataset.period)));
     document.getElementById('apply-report-range').addEventListener('click', applyCustomReportRange);
     document.getElementById('export-button').addEventListener('click', exportExcelWorkbook);
+    document.getElementById('print-edit-thermal').addEventListener('click', printEditedRecord);
     elements.rows.addEventListener('click', event => {
         const button = event.target.closest('button[data-action]');
         if (!button) return;
