@@ -131,13 +131,18 @@
                 return `${align}${bold}${size}${row.text}`;
             }).join('\n') + '\n\n\n';
             const bytes = new TextEncoder().encode(`${esc}@${escpos}`);
-            for (let offset = 0; offset < bytes.length; offset += 180) {
-                const chunk = bytes.slice(offset, offset + 180);
-                if (printerCharacteristic.properties.writeWithoutResponse) {
-                    await printerCharacteristic.writeValueWithoutResponse(chunk);
+            const characteristic = printerCharacteristic;
+            if (!characteristic) throw new Error('Printer belum terhubung.');
+            const writeWithoutResponse = characteristic.properties.writeWithoutResponse && !characteristic.properties.write;
+            const chunkSize = 20;
+            for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+                const chunk = bytes.slice(offset, offset + chunkSize);
+                if (writeWithoutResponse) {
+                    await characteristic.writeValueWithoutResponse(chunk);
                 } else {
-                    await printerCharacteristic.writeValue(chunk);
+                    await characteristic.writeValue(chunk);
                 }
+                if (writeWithoutResponse) await new Promise(resolve => window.setTimeout(resolve, 15));
             }
         }
 
@@ -159,6 +164,8 @@
             } catch (error) {
                 console.error('Cetak thermal gagal:', error);
                 jobState.textContent = `Cetak gagal: ${error.message}`;
+                printerCharacteristic = null;
+                setPrinterState('Koneksi printer gagal atau terputus. Struk tetap tersedia; sambungkan printer lalu coba cetak lagi.');
                 sendToAdmin({ type: 'NKJC_PRINT_RESULT', requestId, ok: false, error: error.message }, adminOrigin);
             } finally {
                 isPrinting = false;
