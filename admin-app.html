@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f7a75">
+    <meta name="description" content="Aplikasi panel admin transaksi NK JAYA CELL.">
+    <link rel="manifest" href="./admin-app.webmanifest">
+    <link rel="icon" href="./icon.png">
+    <title>Admin NK JAYA CELL</title>
+    <style>
+        :root { color-scheme: light; font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; background: #f1f5f9; color: #17211e; }
+        * { box-sizing: border-box; }
+        body { min-height: 100dvh; margin: 0; display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom)); }
+        main { width: min(100%, 420px); padding: 30px 24px; border: 1px solid #dfe5e0; border-radius: 22px; background: #fff; box-shadow: 0 18px 55px #17211e12; }
+        .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; font-size: 13px; font-weight: 800; letter-spacing: .06em; }
+        .mark { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 13px; background: #0f7a75; color: #fff; font-size: 22px; }
+        .brand small { display: block; margin-top: 3px; color: #68736e; font-size: 10px; font-weight: 600; }
+        .eyebrow { margin: 0 0 8px; color: #0f7a75; font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+        h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.2; }
+        .intro, .hint { color: #68736e; font-size: 13px; line-height: 1.6; }
+        .open-button, .install-button { display: flex; min-height: 48px; align-items: center; justify-content: center; gap: 9px; width: 100%; margin-top: 18px; border: 0; border-radius: 12px; background: #0f7a75; color: #fff; font: inherit; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
+        .open-button:active, .install-button:active { transform: translateY(1px); }
+        .install-button { margin-top: 10px; border: 1px solid #dfe5e0; background: #fff; color: #0f7a75; }
+        .hint { margin: 20px 0 0; padding: 12px; border-radius: 10px; background: #f1f7f5; font-size: 11px; }
+        .install-help { margin-top: 14px; color: #68736e; font-size: 11px; line-height: 1.55; }
+        footer { margin-top: 22px; color: #87918b; font-size: 10px; text-align: center; }
+        @media (prefers-reduced-motion: no-preference) { main { animation: appear .3s ease-out both; } @keyframes appear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="brand"><span class="mark" aria-hidden="true">ϟ</span><span>NK JAYA CELL<small>ADMIN · PWA</small></span></div>
+        <p class="eyebrow">PANEL TRANSAKSI</p>
+        <h1>Admin NK JAYA CELL</h1>
+        <p class="intro">Buka panel untuk mengelola transaksi, memperbarui status, dan mencetak struk thermal.</p>
+        <a class="open-button" href="https://script.google.com/macros/s/AKfycbzx7HhGcFktbIGGkRBRpAFTu6g9E4YbSlBVgrVt4QwDtSucSz8BTS5fgk55SqOSzcJ9/exec?page=admin" target="_blank" rel="noopener">Buka panel admin <span aria-hidden="true">↗</span></a>
+        <button id="install-button" class="install-button" type="button" hidden>Instal aplikasi</button>
+        <p id="install-help" class="install-help">Android: menu Chrome ⋮ → Instal aplikasi / Tambahkan ke layar utama. iPhone: Safari → Bagikan → Tambahkan ke Layar Utama.</p>
+        <p class="hint">Panel dan transaksi memerlukan koneksi internet serta login admin. PWA ini hanya menyimpan halaman pembuka di perangkat, bukan data transaksi.</p>
+        <footer>NK JAYA CELL · ADMIN</footer>
+    </main>
+    <script>
+        let installPrompt = null;
+        const installButton = document.getElementById('install-button');
+        window.addEventListener('beforeinstallprompt', event => {
+            event.preventDefault();
+            installPrompt = event;
+            installButton.hidden = false;
+        });
+        installButton.addEventListener('click', async () => {
+            if (!installPrompt) return;
+            installPrompt.prompt();
+            await installPrompt.userChoice;
+            installPrompt = null;
+            installButton.hidden = true;
+        });
+        window.addEventListener('appinstalled', () => {
+            installPrompt = null;
+            installButton.hidden = true;
+            document.getElementById('install-help').textContent = 'Aplikasi admin sudah ditambahkan ke perangkat ini.';
+        });
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(error => {
+                    console.error('PWA admin tidak dapat mengaktifkan cache halaman pembuka:', error);
+                });
+            });
+        }
+    </script>
+</body>
+</html>

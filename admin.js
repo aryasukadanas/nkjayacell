@@ -1,6 +1,7 @@
 const ADMIN_STORAGE_KEY = 'nkjc_admin_local_edits_v1';
-const ADMIN_PASSKEY_KEY = 'nkjc_admin_passkey_v1';
+const ADMIN_SESSION_KEY = 'nkjc_admin_session_v1';
 const TOKEN_EDIT_STORAGE_KEY = 'nk_token_receipt_edits';
+const PRINT_SETTINGS_KEY = 'nkjc_admin_print_settings_v1';
 const statusNormalize = value => String(value || '').trim().toUpperCase();
 const normalizeHeader = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
@@ -8,6 +9,9 @@ const elements = {
     authGate: document.getElementById('auth-gate'),
     authTitle: document.getElementById('auth-title'),
     authDescription: document.getElementById('auth-description'),
+    authForm: document.getElementById('auth-form'),
+    authUsername: document.getElementById('auth-username'),
+    authPassword: document.getElementById('auth-password'),
     authButton: document.getElementById('auth-button'),
     authButtonLabel: document.getElementById('auth-button-label'),
     authMessage: document.getElementById('auth-message'),
@@ -29,6 +33,7 @@ let activeEdit = null;
 let activeTokenEdit = null;
 let reportRange = { from: startOfDay(new Date()), to: endOfDay(new Date()) };
 let bluetoothPrinter = null;
+let bluetoothPrinterName = '';
 let plnCustomerLookup = { byId: {} };
 
 function parseCsv(text) {
@@ -82,6 +87,7 @@ function readOverrides() {
 function applyOverrides(fields, override) {
     if (!override || typeof override !== 'object') return fields;
     return fields.map(field => Object.prototype.hasOwnProperty.call(override, field.key)
+        && !['STATUS', 'STATUSTRANSAKSI'].includes(normalizeHeader(field.label))
         ? { ...field, value: String(override[field.key]) }
         : field);
 }
@@ -103,8 +109,13 @@ function makeTransaction(source, index, fields, originalId) {
     const key = `${source}:${stableId}`;
     const overrides = readOverrides()[key];
     const hasModal = fields.some(field => MODAL_ALIASES.includes(normalizeHeader(field.label)));
-    const fieldsWithModal = hasModal ? fields : [...fields, { label: 'Modal', key: 'MODAL', value: '' }];
-    const editedFields = applyOverrides(fieldsWithModal, overrides);
+    const hasStatus = fields.some(field => ['STATUS', 'STATUSTRANSAKSI'].includes(normalizeHeader(field.label)));
+    const fieldsWithDefaults = [
+        ...fields,
+        ...(!hasModal ? [{ label: 'Modal', key: 'MODAL', value: '' }] : []),
+        ...(!hasStatus ? [{ label: 'Status', key: 'STATUS', value: 'PROSES' }] : [])
+    ];
+    const editedFields = applyOverrides(fieldsWithDefaults, overrides);
     const record = { source, key, fields: editedFields };
     record.id = getField(record, ['ID TRANSAKSI', 'ID TRX', 'ID']);
     record.dateText = getField(record, ['TANGGAL', 'WAKTU', 'DATE']);
@@ -113,7 +124,7 @@ function makeTransaction(source, index, fields, originalId) {
     if (source === 'ARSIP') {
         record.contact = getField(record, ['NOMOR', 'NOMOR HP', 'TARGET', 'ID PLN', 'IDPEL']);
         record.product = getField(record, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']);
-        record.customer = '';
+        record.customer = getField(record, ['NAMA', 'NAMA PELANGGAN', 'PELANGGAN', 'PENERIMA']);
     } else {
         record.contact = getField(record, ['NOMOR REKENING', 'NO REKENING', 'REKENING']);
         record.product = getField(record, ['PRODUK/BANK', 'BANK', 'BANK TUJUAN', 'KATEGORI']);
@@ -124,9 +135,8 @@ function makeTransaction(source, index, fields, originalId) {
 }
 
 async function fetchPlnCustomerLookup() {
-    const response = await fetch(SHEET_NAMA_PLN_URL, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Data PLN: HTTP ${response.status}`);
-    const rows = parseCsv(await response.text());
+    const csv = await callAdminApi('getAdminSheetCsv', getAdminSession(), 'PLN');
+    const rows = parseCsv(csv);
     const headerIndex = rows.findIndex(row => {
         const headers = row.map(normalizeHeader);
         return headers.includes('IDPLN') && headers.includes('NAMA');
@@ -167,6 +177,15 @@ function findRelatedArchive(record, archives) {
 function readTokenReceiptEdits() {
     try { return JSON.parse(localStorage.getItem(TOKEN_EDIT_STORAGE_KEY) || '{}'); }
     catch { return {}; }
+}
+
+function readPrintMode() {
+    try {
+        const settings = JSON.parse(localStorage.getItem(PRINT_SETTINGS_KEY) || '{}');
+        return ['auto', 'bluetooth', 'browser'].includes(settings.mode) ? settings.mode : 'auto';
+    } catch {
+        return 'auto';
+    }
 }
 
 function buildTokenReceiptData(record, archives) {
@@ -258,10 +277,9 @@ function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 }
 
-async function fetchSheet(url, source) {
-    const response = await fetch(url, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`${source}: HTTP ${response.status}`);
-    const data = parseCsv(await response.text());
+async function fetchSheet(source) {
+    const csv = await callAdminApi('getAdminSheetCsv', getAdminSession(), source);
+    const data = parseCsv(csv);
     if (!data.length) return [];
     const headers = data[0];
     return data.slice(1).map((values, index) => {
@@ -278,8 +296,8 @@ async function loadTransactions() {
     state.textContent = 'Menghubungkan ke Google Sheets...';
     try {
         const [arsip, transfer, plnLookup] = await Promise.all([
-            fetchSheet(SHEET_ARSIP_URL, 'ARSIP'),
-            fetchSheet(SHEET_TRANSFER_URL, 'TRANSFER'),
+            fetchSheet('ARSIP'),
+            fetchSheet('TRANSFER'),
             fetchPlnCustomerLookup().catch(error => {
                 console.warn('Data nama/daya PLN tidak dapat dimuat:', error);
                 return { byId: {} };
@@ -298,7 +316,7 @@ async function loadTransactions() {
         renderAll();
     } catch (error) {
         console.error('Gagal memuat data admin:', error);
-        state.textContent = `Data gagal dimuat. Periksa koneksi atau URL CSV: ${error.message}`;
+        state.textContent = `Data gagal dimuat. Periksa koneksi atau akses spreadsheet: ${error.message}`;
         state.classList.add('is-error');
     }
 }
@@ -445,9 +463,16 @@ function renderRows() {
     const filtered = getFilteredTransactions();
     document.getElementById('result-count').textContent = `${filtered.length.toLocaleString('id-ID')} transaksi`;
     elements.rows.innerHTML = filtered.map(record => {
-        const edited = Boolean(readOverrides()[record.key]);
+        const override = readOverrides()[record.key];
+        const edited = Boolean(override && Object.keys(override).some(key => {
+            const field = record.fields.find(item => item.key === key);
+            return field && !['STATUS', 'STATUSTRANSAKSI'].includes(normalizeHeader(field.label));
+        }));
         const detail = record.customer ? `${record.product || '-'} · ${record.customer}` : (record.product || '-');
         const note = getField(record, ['CATATAN PESAN PENERIMA', 'CATATAN', 'PESAN PENERIMA']);
+        const status = statusClass(record.status);
+        const statusValue = status === 'success' ? 'SUKSES' : status === 'failed' ? 'GAGAL' : 'PROSES';
+        const statusField = record.fields.find(field => ['STATUS', 'STATUSTRANSAKSI'].includes(normalizeHeader(field.label)));
         return `<tr>
             <td>${escapeHtml(formatDate(record.date || record.dateText))}</td>
             <td><div class="copy-cell"><span class="mono">${escapeHtml(record.id || '-')}</span><button class="icon-button copy-button" type="button" data-action="copy" data-copy="${escapeHtml(record.id || '')}" title="Salin ID TRX" aria-label="Salin ID TRX"><i class="far fa-copy"></i></button></div></td>
@@ -457,17 +482,34 @@ function renderRows() {
             <td><div class="copy-cell"><div class="cell-title" title="${escapeHtml(note)}">${escapeHtml(note || '-')}</div>${note ? `<button class="icon-button copy-button" type="button" data-action="copy" data-copy="${escapeHtml(note)}" title="Salin catatan" aria-label="Salin catatan"><i class="far fa-copy"></i></button>` : ''}</div></td>
             <td class="mono">${escapeHtml(formatMoney(record.amount))}</td>
             <td class="mono">${escapeHtml(formatMoney(record.profit))}</td>
-            <td><span class="status-badge ${statusClass(record.status)}">${escapeHtml(record.status || 'PROSES')}</span></td>
-            <td><div class="row-actions">${record.isToken ? `<button class="icon-button" type="button" data-action="edit-token" data-key="${escapeHtml(record.key)}" title="Edit struk token" aria-label="Edit struk token"><i class="fas fa-bolt"></i></button>` : `<button class="icon-button" type="button" data-action="edit" data-key="${escapeHtml(record.key)}" title="Edit struk" aria-label="Edit struk"><i class="fas fa-pen"></i></button>`}<button class="icon-button print-button" type="button" data-action="print" data-key="${escapeHtml(record.key)}" title="Cetak struk 58 mm" aria-label="Cetak struk"><i class="fas fa-print"></i></button></div></td>
+            <td><select class="status-select ${status}" data-action="status" data-key="${escapeHtml(record.key)}" data-field="${escapeHtml(statusField.key)}" aria-label="Ubah status ${escapeHtml(record.id || '')}">
+                ${['PROSES', 'SUKSES', 'GAGAL'].map(option => `<option value="${option}"${statusValue === option ? ' selected' : ''}>${option}</option>`).join('')}
+            </select></td>
+            <td><div class="row-actions"><button class="icon-button" type="button" data-action="edit" data-key="${escapeHtml(record.key)}" title="Edit transaksi dan catatan" aria-label="Edit transaksi dan catatan"><i class="fas fa-pen"></i></button>${record.isToken ? `<button class="icon-button" type="button" data-action="edit-token" data-key="${escapeHtml(record.key)}" title="Edit data struk token" aria-label="Edit data struk token"><i class="fas fa-bolt"></i></button>` : ''}<button class="icon-button print-button" type="button" data-action="print" data-key="${escapeHtml(record.key)}" title="Cetak struk thermal 58 mm" aria-label="Cetak struk thermal"><i class="fas fa-print"></i></button></div></td>
         </tr>`;
     }).join('');
     elements.emptyState.hidden = filtered.length > 0;
+}
+
+async function saveTransactionStatus(record, select) {
+    const status = select.value;
+    select.disabled = true;
+    try {
+        await callAdminApi('updateAdminTransactionStatus', getAdminSession(), record.source, record.id, status);
+        await loadTransactions();
+    } catch (error) {
+        console.error('Gagal memperbarui status transaksi di Google Sheets:', error);
+        window.alert(`Status tidak berhasil diperbarui di Google Sheets: ${error.message}`);
+        select.disabled = false;
+        renderRows();
+    }
 }
 
 function renderReport() {
     const reportRows = transactions.filter(record => isBetween(record.date, reportRange.from, reportRange.to));
     const profit = reportRows.reduce((sum, record) => sum + record.profit, 0);
     const volume = reportRows.reduce((sum, record) => sum + record.amount, 0);
+    const modal = reportRows.reduce((sum, record) => sum + parseAmount(getField(record, MODAL_ALIASES)), 0);
     const statusTotals = {
         success: { count: 0, profit: 0, volume: 0 },
         process: { count: 0, profit: 0, volume: 0 },
@@ -482,6 +524,7 @@ function renderReport() {
     });
     document.getElementById('metric-profit').textContent = formatMoney(profit);
     document.getElementById('metric-count').textContent = reportRows.length.toLocaleString('id-ID');
+    document.getElementById('metric-modal').textContent = formatMoney(modal);
     document.getElementById('metric-volume').textContent = formatMoney(volume);
     Object.entries(statusTotals).forEach(([key, totals]) => {
         document.getElementById(`report-${key}-count`).textContent = `${totals.count.toLocaleString('id-ID')} transaksi`;
@@ -533,9 +576,10 @@ function openEdit(record) {
     elements.editFields.replaceChildren();
     const fields = record.fields.filter(field => {
         const fieldName = normalizeHeader(field.label);
+        const isStatus = ['STATUS', 'STATUSTRANSAKSI'].includes(fieldName);
         const isTokenField = ['TOKEN', 'SN', 'SERIALNUMBER', 'ANGKATOKEN', 'NOMORTOKEN'].includes(fieldName);
         const isPowerField = ['JUMLAH DAYA', 'JUMLAH DAYA TERBARU', 'DAYA TERISI', 'DAYA'].some(name => normalizeHeader(name) === fieldName);
-        return record.isToken || (!isTokenField && !isPowerField);
+        return !isStatus && (record.isToken || (!isTokenField && !isPowerField));
     });
     fields.forEach(field => {
         const label = document.createElement('label');
@@ -543,27 +587,15 @@ function openEdit(record) {
         const caption = document.createElement('span');
         caption.textContent = field.label;
         const normalizedName = normalizeHeader(field.label);
-        const isStatus = ['STATUS', 'STATUSTRANSAKSI'].includes(normalizedName);
         const isNumeric = NUMERIC_FIELD_NAMES.some(name => normalizeHeader(name) === normalizedName);
-        const input = document.createElement(isStatus ? 'select' : 'input');
-        if (isStatus) {
-            const currentStatus = normalizeTransferStatus(field.value);
-            ['SUKSES', 'PROSES', 'GAGAL'].forEach(status => {
-                const option = document.createElement('option');
-                option.value = status === currentStatus ? field.value : status;
-                option.textContent = status;
-                input.append(option);
-            });
-            input.value = field.value;
+        const input = document.createElement('input');
+        input.type = isNumeric ? 'number' : 'text';
+        if (isNumeric) {
+            input.step = '1';
+            input.inputMode = 'numeric';
+            input.value = field.value ? String(parseAmount(field.value)) : '';
         } else {
-            input.type = isNumeric ? 'number' : 'text';
-            if (isNumeric) {
-                input.step = '1';
-                input.inputMode = 'numeric';
-                input.value = field.value ? String(parseAmount(field.value)) : '';
-            } else {
-                input.value = field.value;
-            }
+            input.value = field.value;
         }
         input.name = field.key;
         input.autocomplete = 'off';
@@ -809,50 +841,103 @@ function renderReceiptHtml(rows) {
     </style></head><body><main class="receipt">${content}</main><script>window.onload=()=>{window.focus();window.print();window.close()}<\/script></body></html>`;
 }
 
-async function printRecord(record) {
-    const rows = receiptLayout(record);
-    if ('bluetooth' in navigator) {
+async function connectBluetoothPrinter() {
+    if (!navigator.bluetooth) throw new Error('Web Bluetooth tidak didukung browser ini. Gunakan dialog cetak browser.');
+    const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb', '0000ff00-0000-1000-8000-00805f9b34fb', '000018f0-0000-1000-8000-00805f9b34fb']
+    });
+    if (!device.gatt) throw new Error('Perangkat yang dipilih tidak mendukung koneksi printer Bluetooth.');
+    const server = await device.gatt.connect();
+    for (const service of await server.getPrimaryServices()) {
+        const characteristics = await service.getCharacteristics();
+        bluetoothPrinter = characteristics.find(item => item.properties.write || item.properties.writeWithoutResponse);
+        if (bluetoothPrinter) break;
+    }
+    if (!bluetoothPrinter) throw new Error('Printer tidak menyediakan kanal tulis ESC/POS.');
+    bluetoothPrinterName = device.name || 'Printer Bluetooth';
+    device.addEventListener('gattserverdisconnected', () => {
+        bluetoothPrinter = null;
+        updatePrinterConnectionState();
+    });
+    updatePrinterConnectionState();
+}
+
+function updatePrinterConnectionState() {
+    const state = document.getElementById('printer-connection-state');
+    if (!state) return;
+    state.textContent = bluetoothPrinter
+        ? `Terhubung: ${bluetoothPrinterName} (sesi ini).`
+        : 'Printer Bluetooth belum dipilih pada sesi ini.';
+}
+
+async function printBluetoothRows(rows) {
+    if (!bluetoothPrinter) await connectBluetoothPrinter();
+    const esc = '\x1B';
+    const gs = '\x1D';
+    const escpos = rows.map(row => {
+        const alignment = row.align === 'center' ? `${esc}a\x01` : `${esc}a\x00`;
+        const emphasis = row.emphasis === 'bold' || row.emphasis === 'large' ? `${esc}E\x01` : `${esc}E\x00`;
+        const size = row.emphasis === 'large' ? `${gs}!\x11` : `${gs}!\x00`;
+        return `${alignment}${emphasis}${size}${row.text}`;
+    }).join('\n') + `\n\n\n`;
+    const bytes = new TextEncoder().encode(`${esc}@${escpos}`);
+    for (let offset = 0; offset < bytes.length; offset += 180) {
+        const chunk = bytes.slice(offset, offset + 180);
+        if (bluetoothPrinter.properties.writeWithoutResponse) await bluetoothPrinter.writeValueWithoutResponse(chunk);
+        else await bluetoothPrinter.writeValue(chunk);
+    }
+}
+
+async function printReceiptRows(rows) {
+    const mode = readPrintMode();
+    let printWindow = null;
+    if (mode !== 'bluetooth') {
+        printWindow = window.open('', '_blank', 'width=420,height=720');
+        if (!printWindow && mode === 'browser') {
+            window.alert('Pop-up cetak diblokir. Izinkan pop-up, lalu coba lagi.');
+            return;
+        }
+    }
+    if (mode !== 'browser') {
         try {
-            if (!bluetoothPrinter) {
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb', '0000ff00-0000-1000-8000-00805f9b34fb', '000018f0-0000-1000-8000-00805f9b34fb']
-                });
-                const server = await device.gatt.connect();
-                for (const service of await server.getPrimaryServices()) {
-                    const characteristics = await service.getCharacteristics();
-                    bluetoothPrinter = characteristics.find(item => item.properties.write || item.properties.writeWithoutResponse);
-                    if (bluetoothPrinter) break;
-                }
-            }
-            if (!bluetoothPrinter) throw new Error('Printer tidak menyediakan kanal tulis.');
-            const esc = '\x1B';
-            const gs = '\x1D';
-            const escpos = rows.map(row => {
-                const alignment = row.align === 'center' ? `${esc}a\x01` : `${esc}a\x00`;
-                const emphasis = row.emphasis === 'bold' || row.emphasis === 'large' ? `${esc}E\x01` : `${esc}E\x00`;
-                const size = row.emphasis === 'large' ? `${gs}!\x11` : `${gs}!\x00`;
-                return `${alignment}${emphasis}${size}${row.text}`;
-            }).join('\n') + `\n\n\n`;
-            const bytes = new TextEncoder().encode(`${esc}@${escpos}`);
-            for (let offset = 0; offset < bytes.length; offset += 180) {
-                const chunk = bytes.slice(offset, offset + 180);
-                if (bluetoothPrinter.properties.writeWithoutResponse) await bluetoothPrinter.writeValueWithoutResponse(chunk);
-                else await bluetoothPrinter.writeValue(chunk);
-            }
+            await printBluetoothRows(rows);
+            if (printWindow) printWindow.close();
             return;
         } catch (error) {
             bluetoothPrinter = null;
-            console.warn('Cetak Bluetooth gagal, membuka dialog cetak:', error);
+            updatePrinterConnectionState();
+            console.warn('Cetak Bluetooth gagal:', error);
+            if (mode === 'bluetooth') {
+                if (printWindow) printWindow.close();
+                window.alert(`Tidak dapat mencetak ke printer Bluetooth: ${error.message}`);
+                return;
+            }
         }
     }
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
     if (!printWindow) {
         window.alert('Pop-up cetak diblokir. Izinkan pop-up, lalu coba lagi.');
         return;
     }
     printWindow.document.write(renderReceiptHtml(rows));
     printWindow.document.close();
+}
+
+function printRecord(record) {
+    return printReceiptRows(receiptLayout(record));
+}
+
+async function testPrinter() {
+    await printReceiptRows([
+        { text: 'NK JAYA CELL', align: 'center', emphasis: 'bold' },
+        { text: 'TES PRINTER THERMAL 58 MM', align: 'center' },
+        { text: '--------------------------------' },
+        { text: 'Printer thermal siap digunakan.' },
+        { text: new Date().toLocaleString('id-ID') },
+        { text: '--------------------------------' },
+        { text: 'Lebar cetak: 58 mm', align: 'center' },
+        { text: 'Terima kasih', align: 'center' }
+    ]);
 }
 
 async function copyTableValue(button) {
@@ -887,26 +972,20 @@ async function copyTableValue(button) {
     }
 }
 
-function toBase64Url(bytes) {
-    let binary = '';
-    new Uint8Array(bytes).forEach(byte => { binary += String.fromCharCode(byte); });
-    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+function callAdminApi(method, ...args) {
+    if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        return Promise.reject(new Error('Panel harus dibuka dari deployment Google Apps Script.'));
+    }
+    return new Promise((resolve, reject) => {
+        const runner = google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(error => reject(new Error(error.message || 'Permintaan ke server gagal.')));
+        runner[method](...args);
+    });
 }
 
-function fromBase64Url(value) {
-    const base64 = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4);
-    return Uint8Array.from(atob(base64), character => character.charCodeAt(0));
-}
-
-function randomChallenge() {
-    const challenge = new Uint8Array(32);
-    crypto.getRandomValues(challenge);
-    return challenge;
-}
-
-function passkeyConfig() {
-    try { return JSON.parse(localStorage.getItem(ADMIN_PASSKEY_KEY) || 'null'); }
-    catch { return null; }
+function getAdminSession() {
+    return localStorage.getItem(ADMIN_SESSION_KEY) || '';
 }
 
 function setAuthMessage(message) {
@@ -914,122 +993,107 @@ function setAuthMessage(message) {
 }
 
 function showAuthMode() {
-    const registered = Boolean(passkeyConfig());
-    elements.authTitle.textContent = registered ? 'Buka panel transaksi' : 'Daftarkan biometrik admin';
-    elements.authDescription.textContent = registered
-        ? 'Gunakan biometrik atau passkey yang terdaftar pada perangkat ini.'
-        : 'Daftarkan passkey perangkat ini. Autentikasi dilakukan dengan verifikasi tanda tangan passkey.';
-    elements.authButtonLabel.textContent = registered ? 'Masuk dengan biometrik' : 'Daftarkan passkey perangkat';
+    elements.authTitle.textContent = 'Masuk ke panel transaksi';
+    elements.authDescription.textContent = 'Masukkan username dan password admin.';
+    elements.authButtonLabel.textContent = 'Masuk';
 }
 
-function toDerRaw(signature) {
-    const bytes = new Uint8Array(signature);
-    let offset = 2;
-    if (bytes[1] & 0x80) offset += (bytes[1] & 0x7f);
-    if (bytes[offset] !== 0x02) throw new Error('Format tanda tangan passkey tidak dikenali.');
-    const rLength = bytes[offset + 1];
-    let r = bytes.slice(offset + 2, offset + 2 + rLength);
-    offset += 2 + rLength;
-    if (bytes[offset] !== 0x02) throw new Error('Format tanda tangan passkey tidak dikenali.');
-    const sLength = bytes[offset + 1];
-    let s = bytes.slice(offset + 2, offset + 2 + sLength);
-    while (r.length > 32 && r[0] === 0) r = r.slice(1);
-    while (s.length > 32 && s[0] === 0) s = s.slice(1);
-    const raw = new Uint8Array(64);
-    raw.set(r, 32 - r.length);
-    raw.set(s, 64 - s.length);
-    return raw;
-}
-
-async function registerPasskey() {
-    if (!window.isSecureContext || !navigator.credentials || !window.PublicKeyCredential) {
-        throw new Error('Passkey perlu HTTPS/localhost dan browser yang mendukung WebAuthn.');
-    }
-    const challenge = randomChallenge();
-    const userId = randomChallenge().slice(0, 16);
-    const credential = await navigator.credentials.create({ publicKey: {
-        challenge,
-        rp: { name: 'NK JAYA CELL Admin', id: location.hostname },
-        user: { id: userId, name: 'admin@nkjayacell.local', displayName: 'Admin NK JAYA CELL' },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
-        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
-        timeout: 60000,
-        attestation: 'none'
-    } });
-    const publicKey = credential.response.getPublicKey?.();
-    if (!publicKey) throw new Error('Browser tidak dapat membaca kunci publik passkey. Coba browser terbaru.');
-    const config = { id: toBase64Url(credential.rawId), publicKey: toBase64Url(publicKey), createdAt: new Date().toISOString() };
-    localStorage.setItem(ADMIN_PASSKEY_KEY, JSON.stringify(config));
-    setAuthMessage('Passkey terdaftar pada perangkat ini.');
-    unlockAdmin();
-}
-
-async function authenticatePasskey() {
-    const config = passkeyConfig();
-    if (!config) return registerPasskey();
-    if (!window.isSecureContext || !navigator.credentials || !window.PublicKeyCredential) {
-        throw new Error('Passkey perlu HTTPS/localhost dan browser yang mendukung WebAuthn.');
-    }
-    const challenge = randomChallenge();
-    const assertion = await navigator.credentials.get({ publicKey: {
-        challenge,
-        rpId: location.hostname,
-        allowCredentials: [{ type: 'public-key', id: fromBase64Url(config.id) }],
-        userVerification: 'required',
-        timeout: 60000
-    } });
-    const clientDataBytes = new Uint8Array(assertion.response.clientDataJSON);
-    const clientData = JSON.parse(new TextDecoder().decode(clientDataBytes));
-    if (clientData.type !== 'webauthn.get' || clientData.challenge !== toBase64Url(challenge) || clientData.origin !== location.origin) {
-        throw new Error('Tantangan autentikasi passkey tidak valid.');
-    }
-    const authenticatorData = new Uint8Array(assertion.response.authenticatorData);
-    const expectedRpIdHash = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(location.hostname)));
-    if (authenticatorData.length < 37 || expectedRpIdHash.some((byte, index) => authenticatorData[index] !== byte)) {
-        throw new Error('Passkey berasal dari domain yang berbeda.');
-    }
-    if (!(authenticatorData[32] & 0x01) || !(authenticatorData[32] & 0x04)) {
-        throw new Error('Perangkat belum memverifikasi kehadiran dan biometrik pengguna.');
-    }
-    const clientDataHash = new Uint8Array(await crypto.subtle.digest('SHA-256', clientDataBytes));
-    const signedData = new Uint8Array(authenticatorData.length + clientDataHash.length);
-    signedData.set(authenticatorData);
-    signedData.set(clientDataHash, authenticatorData.length);
-    const key = await crypto.subtle.importKey('spki', fromBase64Url(config.publicKey), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
-    const signature = toDerRaw(assertion.response.signature);
-    const valid = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, signature, signedData);
-    if (!valid) throw new Error('Verifikasi tanda tangan passkey gagal.');
-    unlockAdmin();
-}
-
-function unlockAdmin() {
+function unlockAdmin(token) {
+    localStorage.setItem(ADMIN_SESSION_KEY, token);
     elements.authGate.hidden = true;
     elements.app.hidden = false;
-    sessionStorage.setItem('nkjc_admin_unlocked', '1');
+    elements.authPassword.value = '';
     loadTransactions();
 }
 
-function lockAdmin() {
-    sessionStorage.removeItem('nkjc_admin_unlocked');
+async function logoutAdmin() {
+    const token = getAdminSession();
+    localStorage.removeItem(ADMIN_SESSION_KEY);
     elements.app.hidden = true;
     elements.authGate.hidden = false;
     showAuthMode();
     setAuthMessage('');
+    if (!token) return;
+    try {
+        await callAdminApi('logoutAdmin', token);
+        setAuthMessage('Anda berhasil logout.');
+    } catch (error) {
+        console.error('Gagal mengakhiri sesi admin di server:', error);
+        setAuthMessage('Logout lokal berhasil, tetapi sesi server tidak dapat dihapus. Sesi akan kedaluwarsa otomatis.');
+    }
+}
+
+async function restoreAdminSession() {
+    const token = getAdminSession();
+    if (!token) return;
+    try {
+        if (await callAdminApi('validateAdminSession', token)) {
+            unlockAdmin(token);
+        } else {
+            localStorage.removeItem(ADMIN_SESSION_KEY);
+            setAuthMessage('Sesi telah kedaluwarsa. Silakan login kembali.');
+        }
+    } catch (error) {
+        console.error('Gagal memeriksa sesi admin:', error);
+        setAuthMessage(`Sesi tidak dapat diperiksa: ${error.message}`);
+    }
 }
 
 function bindEvents() {
-    elements.authButton.addEventListener('click', async () => {
+    elements.authForm.addEventListener('submit', async event => {
+        event.preventDefault();
         elements.authButton.disabled = true;
-        setAuthMessage('Ikuti verifikasi pada perangkat...');
-        try { await authenticatePasskey(); }
+        setAuthMessage('Memeriksa akun...');
+        try {
+            const result = await callAdminApi('loginAdmin', elements.authUsername.value.trim(), elements.authPassword.value);
+            if (!result || !result.token) throw new Error('Server tidak mengembalikan sesi login.');
+            unlockAdmin(result.token);
+            setAuthMessage('');
+        }
         catch (error) {
-            console.error('Autentikasi passkey gagal:', error);
-            setAuthMessage(error.name === 'NotAllowedError' ? 'Verifikasi dibatalkan atau tidak diizinkan.' : error.message || 'Autentikasi gagal.');
+            console.error('Login admin gagal:', error);
+            setAuthMessage(error.message || 'Login gagal. Periksa username dan password.');
         } finally { elements.authButton.disabled = false; }
     });
-    document.getElementById('lock-button').addEventListener('click', lockAdmin);
+    document.getElementById('logout-button').addEventListener('click', logoutAdmin);
     document.getElementById('refresh-button').addEventListener('click', loadTransactions);
     document.getElementById('clear-edits-button').addEventListener('click', clearLocalEdits);
+    const printSettingsDialog = document.getElementById('print-settings-dialog');
+    const printModeSelect = document.getElementById('print-mode');
+    document.getElementById('print-settings-button').addEventListener('click', () => {
+        printModeSelect.value = readPrintMode();
+        updatePrinterConnectionState();
+        printSettingsDialog.showModal();
+    });
+    printModeSelect.addEventListener('change', () => {
+        try {
+            localStorage.setItem(PRINT_SETTINGS_KEY, JSON.stringify({ mode: printModeSelect.value }));
+        } catch (error) {
+            console.error('Gagal menyimpan pengaturan cetak:', error);
+            window.alert(`Pengaturan cetak tidak dapat disimpan: ${error.message}`);
+            printModeSelect.value = readPrintMode();
+        }
+    });
+    document.getElementById('connect-printer-button').addEventListener('click', async event => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+            await connectBluetoothPrinter();
+        } catch (error) {
+            bluetoothPrinter = null;
+            updatePrinterConnectionState();
+            console.error('Gagal menghubungkan printer Bluetooth:', error);
+            window.alert(`Printer Bluetooth tidak dapat dihubungkan: ${error.message}`);
+        } finally {
+            button.disabled = false;
+        }
+    });
+    document.getElementById('test-print-button').addEventListener('click', testPrinter);
+    document.getElementById('close-print-settings').addEventListener('click', () => printSettingsDialog.close());
+    document.getElementById('close-print-settings-footer').addEventListener('click', () => printSettingsDialog.close());
+    printSettingsDialog.addEventListener('click', event => {
+        if (event.target === printSettingsDialog) printSettingsDialog.close();
+    });
     document.getElementById('reset-filters').addEventListener('click', () => {
         ['filter-id', 'filter-contact', 'filter-from', 'filter-to'].forEach(id => { document.getElementById(id).value = ''; });
         document.getElementById('filter-source').value = 'all';
@@ -1057,6 +1121,12 @@ function bindEvents() {
         if (button.dataset.action === 'edit') openEdit(record);
         if (button.dataset.action === 'print') printRecord(record);
     });
+    elements.rows.addEventListener('change', event => {
+        const select = event.target.closest('select[data-action="status"]');
+        if (!select) return;
+        const record = transactions.find(item => item.key === select.dataset.key);
+        if (record) saveTransactionStatus(record, select);
+    });
     elements.editForm.addEventListener('submit', saveLocalEdit);
     elements.tokenEditForm.addEventListener('submit', saveTokenReceiptEdit);
     elements.editFields.addEventListener('input', updateEditCalculations);
@@ -1071,3 +1141,4 @@ function bindEvents() {
 
 bindEvents();
 showAuthMode();
+restoreAdminSession();

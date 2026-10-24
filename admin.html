@@ -6,21 +6,29 @@
     <meta name="theme-color" content="#f4f5f2">
     <title>Admin Transaksi | NK JAYA CELL</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="admin.css">
+    <?!= includeAdminAsset_('admin-css'); ?>
 </head>
 <body>
     <section id="auth-gate" class="auth-screen">
         <div class="auth-brand"><span class="brand-mark"><i class="fas fa-bolt"></i></span><span>NK JAYA CELL <small>OPERATIONS</small></span></div>
         <main class="auth-panel">
-            <div class="auth-icon"><i class="fas fa-fingerprint"></i></div>
+            <div class="auth-icon"><i class="fas fa-user-shield"></i></div>
             <p class="eyebrow">ADMINISTRATOR</p>
-            <h1 id="auth-title">Buka panel transaksi</h1>
-            <p id="auth-description" class="auth-copy">Gunakan biometrik atau passkey yang terdaftar pada perangkat ini.</p>
-            <button id="auth-button" class="button button-dark button-wide" type="button">
-                <i class="fas fa-fingerprint"></i><span id="auth-button-label">Masuk dengan biometrik</span>
-            </button>
+            <h1 id="auth-title">Masuk ke panel transaksi</h1>
+            <p id="auth-description" class="auth-copy">Masukkan username dan password admin.</p>
+            <form id="auth-form" class="auth-form">
+                <label class="auth-field">Username
+                    <input id="auth-username" name="username" type="text" autocomplete="username" required>
+                </label>
+                <label class="auth-field">Password
+                    <input id="auth-password" name="password" type="password" autocomplete="current-password" required>
+                </label>
+                <button id="auth-button" class="button button-dark button-wide" type="submit">
+                    <i class="fas fa-right-to-bracket"></i><span id="auth-button-label">Masuk</span>
+                </button>
+            </form>
             <p id="auth-message" class="auth-message" role="status" aria-live="polite"></p>
-            <p class="auth-note"><i class="fas fa-lock"></i> Daftarkan passkey pertama hanya pada perangkat admin. Memerlukan HTTPS/localhost dan dukungan passkey.</p>
+            <p class="auth-note"><i class="fas fa-lock"></i> Sesi tetap aktif pada perangkat ini sampai Anda logout atau sesi kedaluwarsa.</p>
         </main>
         <a class="back-link" href="index.html"><i class="fas fa-arrow-left"></i> Kembali ke aplikasi</a>
     </section>
@@ -30,14 +38,15 @@
             <a class="app-brand" href="index.html"><span class="brand-mark"><i class="fas fa-bolt"></i></span><span>NK JAYA CELL <small>ADMIN</small></span></a>
             <div class="topbar-actions">
                 <span class="live-label"><i class="fas fa-circle"></i> DATA SHEET</span>
+                <button id="print-settings-button" class="icon-button" type="button" title="Pengaturan printer thermal" aria-label="Pengaturan printer thermal"><i class="fas fa-print"></i></button>
                 <button id="refresh-button" class="icon-button" type="button" title="Muat ulang data" aria-label="Muat ulang data"><i class="fas fa-rotate"></i></button>
-                <button id="lock-button" class="icon-button" type="button" title="Kunci panel" aria-label="Kunci panel"><i class="fas fa-lock"></i></button>
+                <button id="logout-button" class="icon-button" type="button" title="Logout" aria-label="Logout"><i class="fas fa-right-from-bracket"></i></button>
             </div>
         </header>
 
         <main class="dashboard">
             <section class="page-heading">
-                <div><p class="eyebrow">PENGELOLAAN TRANSAKSI</p><h1>Ringkasan operasional</h1><p id="last-sync" class="muted">Memuat transaksi...</p></div>
+                <div><p class="eyebrow">PENGELOLAAN TRANSAKSI</p><h1>Rekap Transaksi</h1><p id="last-sync" class="muted">Memuat transaksi...</p></div>
                 <button id="clear-edits-button" class="button button-outline" type="button"><i class="fas fa-rotate-left"></i> Hapus edit lokal</button>
             </section>
 
@@ -60,6 +69,7 @@
                 <div class="metrics-grid">
                     <article class="metric-card metric-profit"><div class="metric-label"><span>Keuntungan</span><i class="fas fa-arrow-trend-up"></i></div><strong id="metric-profit">Rp 0</strong><small>Jika modal diisi: total - modal; jika kosong: rumus dasar per sumber.</small></article>
                     <article class="metric-card"><div class="metric-label"><span>Transaksi</span><i class="fas fa-receipt"></i></div><strong id="metric-count">0</strong><small>Dalam periode terpilih</small></article>
+                    <article class="metric-card"><div class="metric-label"><span>Total modal</span><i class="fas fa-box"></i></div><strong id="metric-modal">Rp 0</strong><small>Modal yang tercatat dalam periode</small></article>
                     <article class="metric-card"><div class="metric-label"><span>Total dibayar</span><i class="fas fa-wallet"></i></div><strong id="metric-volume">Rp 0</strong><small>Nilai transaksi dalam periode</small></article>
                 </div>
                 <div class="status-breakdown-heading"><h3>Rincian berdasarkan status</h3><span>Dalam periode terpilih</span></div>
@@ -80,19 +90,39 @@
                     <label class="source-filter">Sumber<select id="filter-source"><option value="all">Semua data</option><option value="ARSIP">ARSIP</option><option value="TRANSFER">Transfer</option></select></label>
                     <button id="reset-filters" class="button button-outline filter-reset" type="button"><i class="fas fa-filter-circle-xmark"></i> Reset</button>
                 </div>
-                <p id="local-edit-notice" class="local-notice"><i class="fas fa-hard-drive"></i> Perubahan disimpan di perangkat ini saja, tidak mengubah Google Sheet.</p>
+                <p id="local-edit-notice" class="local-notice"><i class="fas fa-hard-drive"></i> Edit detail transaksi tersimpan di perangkat ini; perubahan status tersimpan ke Google Sheets.</p>
                 <div id="data-state" class="data-state" role="status">Menghubungkan ke Google Sheets...</div>
                 <div class="table-wrap">
                     <table>
-                        <thead><tr><th>Tanggal</th><th>ID TRX</th><th>Sumber</th><th>Produk / penerima</th><th>Nomor / rekening</th><th>Catatan</th><th>Total</th><th>Untung</th><th>Status</th><th>Aksi</th></tr></thead>
+                        <thead><tr><th>Tanggal</th><th>ID TRX</th><th>Sumber</th><th>Produk / penerima</th><th>Nomor / rekening</th><th>Catatan</th><th>Total</th><th>Untung</th><th>Status (ubah)</th><th>Aksi</th></tr></thead>
                         <tbody id="transaction-rows"></tbody>
                     </table>
                 </div>
                 <div id="empty-state" class="empty-state" hidden><i class="fas fa-magnifying-glass"></i><strong>Transaksi tidak ditemukan</strong><span>Ubah kata pencarian atau rentang tanggal.</span></div>
             </section>
-            <footer class="page-footer">NK JAYA CELL <span>Data transaksi dibaca dari Google Sheets</span></footer>
+            <footer class="page-footer">NK JAYA CELL <span>Status transaksi diperbarui ke Google Sheets</span></footer>
         </main>
     </div>
+
+    <dialog id="print-settings-dialog" class="edit-dialog print-settings-dialog">
+        <form id="print-settings-form">
+            <header class="dialog-heading"><div><p class="eyebrow">PENGATURAN CETAK</p><h2>Printer thermal 58 mm</h2></div><button id="close-print-settings" class="icon-button" type="button" aria-label="Tutup"><i class="fas fa-xmark"></i></button></header>
+            <p class="dialog-note">Pilih koneksi printer. Mode otomatis akan mencoba Bluetooth terlebih dahulu, lalu membuka dialog cetak browser sebagai cadangan.</p>
+            <label class="edit-field print-setting-field">Metode cetak
+                <select id="print-mode">
+                    <option value="auto">Otomatis (Bluetooth, lalu browser)</option>
+                    <option value="bluetooth">Bluetooth saja</option>
+                    <option value="browser">Dialog cetak browser</option>
+                </select>
+            </label>
+            <div class="printer-connection">
+                <span id="printer-connection-state" role="status">Printer Bluetooth belum dipilih pada sesi ini.</span>
+                <button id="connect-printer-button" class="button button-outline" type="button"><i class="fab fa-bluetooth-b"></i> Hubungkan printer</button>
+            </div>
+            <p class="printer-help">Bluetooth memerlukan browser/perangkat yang mendukung Web Bluetooth. Untuk koneksi USB atau printer sistem, gunakan dialog cetak browser dan pilih kertas 58 mm.</p>
+            <div class="dialog-actions"><button id="close-print-settings-footer" class="button button-outline" type="button">Tutup</button><button id="test-print-button" class="button button-dark" type="button"><i class="fas fa-print"></i> Tes cetak</button></div>
+        </form>
+    </dialog>
 
     <dialog id="edit-dialog" class="edit-dialog">
         <form id="edit-form">
@@ -114,7 +144,6 @@
     </dialog>
 
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-    <script src="config.js"></script>
-    <script src="admin.js?v=20261012-edit-thermal"></script>
+    <?!= includeAdminAsset_('admin-js'); ?>
 </body>
 </html>
