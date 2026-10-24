@@ -19,6 +19,7 @@
         .actions { display: grid; gap: 9px; margin-top: 14px; }
         button { min-height: 46px; padding: 10px 14px; border: 1px solid #dfe5e0; border-radius: 10px; background: #fff; color: #0f7a75; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
         button.primary { border-color: #0f7a75; background: #0f7a75; color: #fff; }
+        .back-button { display: flex; min-height: 46px; align-items: center; justify-content: center; padding: 10px 14px; border: 1px solid #dfe5e0; border-radius: 10px; color: #0f7a75; font-size: 13px; font-weight: 700; text-align: center; text-decoration: none; }
         button:disabled { cursor: not-allowed; opacity: .55; }
         #receipt-preview { max-height: 45dvh; margin: 16px 0 0; padding: 12px; overflow: auto; border: 1px dashed #cbd5cf; border-radius: 8px; background: #fbfcfb; color: #17211e; font: 12px/1.5 monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
         #receipt-preview:empty { display: none; }
@@ -35,9 +36,9 @@
             <div id="job-state">Menunggu ID transaksi dari panel admin...</div>
         </section>
         <div class="actions">
+            <a class="back-button" href="https://script.google.com/macros/s/AKfycbxoV0lSjwD2TVamt36z0I8uUSOEt3ud1Fkauua2NcUzJwXjdxUDY6kpdvqTjYNAG3E/exec?page=admin">Kembali ke panel admin</a>
             <button id="connect-button" class="primary" type="button">Hubungkan printer Bluetooth</button>
             <button id="print-button" type="button" disabled>Cetak struk transaksi</button>
-            <button id="test-button" type="button">Tes cetak 58 mm</button>
         </div>
         <pre id="receipt-preview" aria-label="Pratinjau isi struk"></pre>
         <p class="note">Halaman mencari transaksi berdasarkan ID pada spreadsheet. Tinjau pratinjau lalu tekan cetak; jika browser meminta, pilih printer Bluetooth.</p>
@@ -205,20 +206,6 @@
             const params = new URLSearchParams(window.location.search);
             const requestedId = params.get('id')?.trim() || '';
             const source = params.get('source') === 'TRANSFER' ? 'TRANSFER' : 'ARSIP';
-            if (params.get('test') === '1') {
-                pendingRows = [
-                    { text: 'NK JAYA CELL', align: 'center', emphasis: 'bold' },
-                    { text: 'TES PRINTER THERMAL 58 MM', align: 'center', emphasis: 'normal' },
-                    { text: 'Printer thermal siap digunakan.', align: 'left', emphasis: 'normal' },
-                    { text: new Date().toLocaleString('id-ID'), align: 'left', emphasis: 'normal' },
-                    { text: 'Terima kasih', align: 'center', emphasis: 'normal' }
-                ];
-                preview.textContent = pendingRows.map(row => row.text).join('\n');
-                printButton.disabled = false;
-                printButton.textContent = 'Cetak tes ke printer';
-                jobState.textContent = 'Tes cetak siap. Tekan tombol cetak untuk mengirimkan ke printer.';
-                return;
-            }
             if (!requestedId) {
                 jobState.textContent = 'ID transaksi tidak tersedia. Buka halaman ini dari ikon cetak pada panel admin.';
                 return;
@@ -356,11 +343,6 @@
         });
         printButton.addEventListener('click', () => {
             if (pendingRows) printRows(pendingRows, true);
-        });
-        document.getElementById('test-button').addEventListener('click', () => {
-            const testUrl = new URL(window.location.href);
-            testUrl.searchParams.set('test', '1');
-            window.location.href = testUrl.href;
         });
 
         if (navigator.bluetooth) {
