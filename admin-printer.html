@@ -58,6 +58,8 @@
         let pendingRequestId = '';
         let isPrinting = false;
         let adminOrigin = '';
+        let connectedDevice = null;
+        const receivedRequestIds = new Set();
 
         function setPrinterState(message) {
             printerState.textContent = message;
@@ -74,12 +76,7 @@
             TRUSTED_ADMIN_ORIGINS.forEach(origin => sendToAdmin({ type: 'NKJC_PRINTER_READY' }, origin));
         }
 
-        async function connectPrinter() {
-            if (!navigator.bluetooth) throw new Error('Browser ini tidak mendukung Web Bluetooth. Gunakan Chrome pada Android melalui HTTPS.');
-            const device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
-                optionalServices
-            });
+        async function attachPrinter(device) {
             if (!device.gatt) throw new Error('Perangkat yang dipilih tidak mendukung koneksi Bluetooth printer.');
             const server = await device.gatt.connect();
             let characteristic = null;
@@ -90,11 +87,38 @@
             }
             if (!characteristic) throw new Error('Printer tidak menyediakan kanal tulis ESC/POS.');
             printerCharacteristic = characteristic;
-            device.addEventListener('gattserverdisconnected', () => {
-                printerCharacteristic = null;
-                setPrinterState('Printer terputus. Hubungkan kembali sebelum mencetak.');
-            });
+            if (connectedDevice !== device) {
+                device.addEventListener('gattserverdisconnected', () => {
+                    printerCharacteristic = null;
+                    connectedDevice = null;
+                    setPrinterState('Printer terputus. Hubungkan kembali sebelum mencetak.');
+                });
+                connectedDevice = device;
+            }
             setPrinterState(`Terhubung ke ${device.name || 'printer Bluetooth'}.`);
+        }
+
+        async function connectPrinter() {
+            if (!navigator.bluetooth) throw new Error('Browser ini tidak mendukung Web Bluetooth. Gunakan Chrome pada Android melalui HTTPS.');
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices
+            });
+            await attachPrinter(device);
+        }
+
+        async function restorePrinterConnection() {
+            if (!navigator.bluetooth?.getDevices) return;
+            const devices = await navigator.bluetooth.getDevices();
+            for (const device of devices) {
+                try {
+                    await attachPrinter(device);
+                    if (pendingRows) await printRows(pendingRows, pendingRequestId, false);
+                    return;
+                } catch (error) {
+                    console.warn(`Tidak dapat menyambungkan ulang ${device.name || 'printer Bluetooth'}:`, error);
+                }
+            }
         }
 
         async function writeRows(rows) {
@@ -174,24 +198,37 @@
             if (event.source !== window.opener || !TRUSTED_ADMIN_ORIGINS.includes(event.origin)) return;
             if (event.data?.type !== 'NKJC_PRINT_JOB' || !Array.isArray(event.data.rows)) return;
             adminOrigin = event.origin;
+            const requestId = String(event.data.requestId || '');
+            if (!requestId) return;
+            if (receivedRequestIds.has(requestId)) {
+                sendToAdmin({ type: 'NKJC_PRINT_ACK', requestId }, adminOrigin);
+                return;
+            }
             const rows = event.data.rows.filter(row => row && typeof row.text === 'string').slice(0, 200).map(row => ({
                 text: row.text.slice(0, 500),
                 align: row.align === 'center' ? 'center' : 'left',
                 emphasis: ['bold', 'large'].includes(row.emphasis) ? row.emphasis : 'normal'
             }));
             if (!rows.length) return;
+            receivedRequestIds.add(requestId);
+            if (receivedRequestIds.size > 20) receivedRequestIds.delete(receivedRequestIds.values().next().value);
             pendingRows = rows;
-            pendingRequestId = String(event.data.requestId || '');
+            pendingRequestId = requestId;
             preview.textContent = rows.map(row => row.text).join('\n');
             printButton.disabled = false;
             jobState.textContent = printerCharacteristic
                 ? 'Struk diterima. Mencetak ke printer yang sudah terhubung...'
-                : 'Struk diterima. Hubungkan printer, atau tekan cetak untuk memilih perangkat.';
+                : 'Struk diterima. Tekan Cetak struk yang diterima untuk mengirim data ini ke printer.';
+            sendToAdmin({ type: 'NKJC_PRINT_ACK', requestId }, adminOrigin);
             if (printerCharacteristic) printRows(rows, pendingRequestId, false);
         });
 
         if (navigator.bluetooth) {
             setPrinterState('Web Bluetooth tersedia. Hubungkan printer untuk mulai.');
+            restorePrinterConnection().catch(error => {
+                console.error('Tidak dapat memulihkan koneksi Bluetooth tersimpan:', error);
+                setPrinterState(`Pemulihan printer gagal: ${error.message}`);
+            });
         } else {
             setPrinterState('Web Bluetooth tidak didukung browser ini. Gunakan Chrome pada Android melalui HTTPS.');
             document.getElementById('connect-button').disabled = true;
