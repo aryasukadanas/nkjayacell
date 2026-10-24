@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f7a75">
+    <meta name="description" content="Cetak struk NK JAYA CELL langsung ke printer thermal Bluetooth.">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'">
+    <title>Web Printer Thermal | NK JAYA CELL</title>
+    <style>
+        :root { color-scheme: light; font-family: "Segoe UI", sans-serif; background: #f1f5f9; color: #17211e; }
+        * { box-sizing: border-box; }
+        body { min-height: 100dvh; margin: 0; padding: max(18px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); }
+        main { width: min(100%, 480px); margin: 0 auto; padding: 22px; border: 1px solid #dfe5e0; border-radius: 18px; background: #fff; box-shadow: 0 12px 35px #17211e12; }
+        .eyebrow { margin: 0 0 7px; color: #0f7a75; font-size: 10px; font-weight: 800; letter-spacing: .12em; }
+        h1 { margin: 0; font-size: 22px; }
+        .intro, #printer-state, #job-state { color: #68736e; font-size: 13px; line-height: 1.55; }
+        .status { margin-top: 18px; padding: 12px; border-radius: 10px; background: #f1f7f5; }
+        .actions { display: grid; gap: 9px; margin-top: 14px; }
+        button { min-height: 46px; padding: 10px 14px; border: 1px solid #dfe5e0; border-radius: 10px; background: #fff; color: #0f7a75; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+        button.primary { border-color: #0f7a75; background: #0f7a75; color: #fff; }
+        button:disabled { cursor: not-allowed; opacity: .55; }
+        #receipt-preview { max-height: 45dvh; margin: 16px 0 0; padding: 12px; overflow: auto; border: 1px dashed #cbd5cf; border-radius: 8px; background: #fbfcfb; color: #17211e; font: 12px/1.5 monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+        #receipt-preview:empty { display: none; }
+        .note { margin: 16px 0 0; color: #68736e; font-size: 11px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <main>
+        <p class="eyebrow">NK JAYA CELL · CETAK MANDIRI</p>
+        <h1>Web Printer Thermal 58 mm</h1>
+        <p class="intro">Halaman HTTPS ini menghubungkan printer Bluetooth di luar iframe Google Apps Script.</p>
+        <section class="status" aria-live="polite">
+            <div id="printer-state">Memeriksa dukungan Bluetooth...</div>
+            <div id="job-state">Belum ada struk yang diterima dari panel admin.</div>
+        </section>
+        <div class="actions">
+            <button id="connect-button" class="primary" type="button">Hubungkan printer Bluetooth</button>
+            <button id="print-button" type="button" disabled>Cetak struk yang diterima</button>
+            <button id="test-button" type="button">Tes cetak 58 mm</button>
+        </div>
+        <pre id="receipt-preview" aria-label="Pratinjau isi struk"></pre>
+        <p class="note">Biarkan tab ini terbuka saat mencetak dari panel admin. Jika belum terhubung, tekan Hubungkan printer lalu pilih perangkat Bluetooth.</p>
+    </main>
+    <script>
+        const TRUSTED_ADMIN_ORIGINS = ['https://script.google.com', 'https://script.googleusercontent.com'];
+        const optionalServices = [
+            '0000ffe0-0000-1000-8000-00805f9b34fb',
+            '0000ff00-0000-1000-8000-00805f9b34fb',
+            '000018f0-0000-1000-8000-00805f9b34fb'
+        ];
+        const printerState = document.getElementById('printer-state');
+        const jobState = document.getElementById('job-state');
+        const preview = document.getElementById('receipt-preview');
+        const printButton = document.getElementById('print-button');
+        let printerCharacteristic = null;
+        let pendingRows = null;
+        let pendingRequestId = '';
+        let isPrinting = false;
+        let adminOrigin = '';
+
+        function setPrinterState(message) {
+            printerState.textContent = message;
+        }
+
+        function sendToAdmin(message, targetOrigin) {
+            if (window.opener && TRUSTED_ADMIN_ORIGINS.includes(targetOrigin)) {
+                window.opener.postMessage(message, targetOrigin);
+            }
+        }
+
+        function announceReady() {
+            if (!window.opener) return;
+            TRUSTED_ADMIN_ORIGINS.forEach(origin => sendToAdmin({ type: 'NKJC_PRINTER_READY' }, origin));
+        }
+
+        async function connectPrinter() {
+            if (!navigator.bluetooth) throw new Error('Browser ini tidak mendukung Web Bluetooth. Gunakan Chrome pada Android melalui HTTPS.');
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices
+            });
+            if (!device.gatt) throw new Error('Perangkat yang dipilih tidak mendukung koneksi Bluetooth printer.');
+            const server = await device.gatt.connect();
+            let characteristic = null;
+            for (const service of await server.getPrimaryServices()) {
+                const characteristics = await service.getCharacteristics();
+                characteristic = characteristics.find(item => item.properties.write || item.properties.writeWithoutResponse);
+                if (characteristic) break;
+            }
+            if (!characteristic) throw new Error('Printer tidak menyediakan kanal tulis ESC/POS.');
+            printerCharacteristic = characteristic;
+            device.addEventListener('gattserverdisconnected', () => {
+                printerCharacteristic = null;
+                setPrinterState('Printer terputus. Hubungkan kembali sebelum mencetak.');
+            });
+            setPrinterState(`Terhubung ke ${device.name || 'printer Bluetooth'}.`);
+        }
+
+        async function writeRows(rows) {
+            const esc = '\x1B';
+            const gs = '\x1D';
+            const escpos = rows.map(row => {
+                const align = row.align === 'center' ? `${esc}a\x01` : `${esc}a\x00`;
+                const bold = row.emphasis === 'bold' || row.emphasis === 'large' ? `${esc}E\x01` : `${esc}E\x00`;
+                const size = row.emphasis === 'large' ? `${gs}!\x11` : `${gs}!\x00`;
+                return `${align}${bold}${size}${row.text}`;
+            }).join('\n') + '\n\n\n';
+            const bytes = new TextEncoder().encode(`${esc}@${escpos}`);
+            for (let offset = 0; offset < bytes.length; offset += 180) {
+                const chunk = bytes.slice(offset, offset + 180);
+                if (printerCharacteristic.properties.writeWithoutResponse) {
+                    await printerCharacteristic.writeValueWithoutResponse(chunk);
+                } else {
+                    await printerCharacteristic.writeValue(chunk);
+                }
+            }
+        }
+
+        async function printRows(rows, requestId, allowConnect) {
+            if (isPrinting) return;
+            isPrinting = true;
+            printButton.disabled = true;
+            try {
+                if (!printerCharacteristic && allowConnect) await connectPrinter();
+                if (!printerCharacteristic) throw new Error('Hubungkan printer Bluetooth terlebih dahulu.');
+                await writeRows(rows);
+                jobState.textContent = 'Struk berhasil dikirim ke printer thermal.';
+                sendToAdmin({ type: 'NKJC_PRINT_RESULT', requestId, ok: true }, adminOrigin);
+                if (requestId === pendingRequestId) {
+                    pendingRows = null;
+                    pendingRequestId = '';
+                    preview.textContent = '';
+                }
+            } catch (error) {
+                console.error('Cetak thermal gagal:', error);
+                jobState.textContent = `Cetak gagal: ${error.message}`;
+                sendToAdmin({ type: 'NKJC_PRINT_RESULT', requestId, ok: false, error: error.message }, adminOrigin);
+            } finally {
+                isPrinting = false;
+                printButton.disabled = !pendingRows;
+            }
+        }
+
+        document.getElementById('connect-button').addEventListener('click', async event => {
+            event.currentTarget.disabled = true;
+            try {
+                await connectPrinter();
+                if (pendingRows) await printRows(pendingRows, pendingRequestId, false);
+            } catch (error) {
+                console.error('Koneksi printer Bluetooth gagal:', error);
+                setPrinterState(`Tidak dapat menghubungkan printer: ${error.message}`);
+            } finally {
+                event.currentTarget.disabled = false;
+            }
+        });
+        printButton.addEventListener('click', () => {
+            if (pendingRows) printRows(pendingRows, pendingRequestId, true);
+        });
+        document.getElementById('test-button').addEventListener('click', () => {
+            const rows = [
+                { text: 'NK JAYA CELL', align: 'center', emphasis: 'bold' },
+                { text: 'TES PRINTER THERMAL 58 MM', align: 'center', emphasis: 'normal' },
+                { text: '--------------------------------', align: 'left', emphasis: 'normal' },
+                { text: 'Printer thermal siap digunakan.', align: 'left', emphasis: 'normal' },
+                { text: new Date().toLocaleString('id-ID'), align: 'left', emphasis: 'normal' },
+                { text: '--------------------------------', align: 'left', emphasis: 'normal' },
+                { text: 'Lebar cetak: 58 mm', align: 'center', emphasis: 'normal' },
+                { text: 'Terima kasih', align: 'center', emphasis: 'normal' }
+            ];
+            printRows(rows, '', true);
+        });
+        window.addEventListener('message', event => {
+            if (event.source !== window.opener || !TRUSTED_ADMIN_ORIGINS.includes(event.origin)) return;
+            if (event.data?.type !== 'NKJC_PRINT_JOB' || !Array.isArray(event.data.rows)) return;
+            adminOrigin = event.origin;
+            const rows = event.data.rows.filter(row => row && typeof row.text === 'string').slice(0, 200).map(row => ({
+                text: row.text.slice(0, 500),
+                align: row.align === 'center' ? 'center' : 'left',
+                emphasis: ['bold', 'large'].includes(row.emphasis) ? row.emphasis : 'normal'
+            }));
+            if (!rows.length) return;
+            pendingRows = rows;
+            pendingRequestId = String(event.data.requestId || '');
+            preview.textContent = rows.map(row => row.text).join('\n');
+            printButton.disabled = false;
+            jobState.textContent = printerCharacteristic
+                ? 'Struk diterima. Mencetak ke printer yang sudah terhubung...'
+                : 'Struk diterima. Hubungkan printer, atau tekan cetak untuk memilih perangkat.';
+            if (printerCharacteristic) printRows(rows, pendingRequestId, false);
+        });
+
+        if (navigator.bluetooth) {
+            setPrinterState('Web Bluetooth tersedia. Hubungkan printer untuk mulai.');
+        } else {
+            setPrinterState('Web Bluetooth tidak didukung browser ini. Gunakan Chrome pada Android melalui HTTPS.');
+            document.getElementById('connect-button').disabled = true;
+        }
+        announceReady();
+        let readyAttempts = 0;
+        const readyInterval = window.setInterval(() => {
+            if (!window.opener || pendingRows || readyAttempts >= 12) {
+                window.clearInterval(readyInterval);
+                return;
+            }
+            readyAttempts += 1;
+            announceReady();
+        }, 400);
+    </script>
+</body>
+</html>

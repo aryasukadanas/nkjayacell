@@ -107,20 +107,17 @@
     <dialog id="print-settings-dialog" class="edit-dialog print-settings-dialog">
         <form id="print-settings-form">
             <header class="dialog-heading"><div><p class="eyebrow">PENGATURAN CETAK</p><h2>Printer thermal 58 mm</h2></div><button id="close-print-settings" class="icon-button" type="button" aria-label="Tutup"><i class="fas fa-xmark"></i></button></header>
-            <p class="dialog-note">Pilih koneksi printer. Mode otomatis akan mencoba Bluetooth terlebih dahulu, lalu membuka dialog cetak browser sebagai cadangan.</p>
-            <label class="edit-field print-setting-field">Metode cetak
-                <select id="print-mode">
-                    <option value="auto">Otomatis (Bluetooth, lalu browser)</option>
-                    <option value="bluetooth">Bluetooth saja</option>
-                    <option value="browser">Dialog cetak browser</option>
-                </select>
+            <p class="dialog-note">Bluetooth harus dijalankan dari halaman web HTTPS mandiri, bukan dari iframe Google Apps Script.</p>
+            <label class="printer-url-field">URL halaman web printer
+                <input id="printer-web-url" type="url" inputmode="url" placeholder="https://website-anda/admin-printer.html" autocomplete="url">
             </label>
+            <button id="save-printer-web-url" class="button button-outline printer-save-url" type="button">Simpan URL web printer</button>
             <div class="printer-connection">
-                <span id="printer-connection-state" role="status">Printer Bluetooth belum dipilih pada sesi ini.</span>
-                <button id="connect-printer-button" class="button button-outline" type="button"><i class="fab fa-bluetooth-b"></i> Hubungkan printer</button>
+                <span id="printer-connection-state" role="status">Simpan URL HTTPS halaman printer, lalu buka tab web printer.</span>
+                <button id="connect-printer-button" class="button button-outline" type="button"><i class="fas fa-arrow-up-right-from-square"></i> Buka web printer</button>
             </div>
-            <p class="printer-help">Bluetooth memerlukan browser/perangkat yang mendukung Web Bluetooth. Untuk koneksi USB atau printer sistem, gunakan dialog cetak browser dan pilih kertas 58 mm.</p>
-            <div class="dialog-actions"><button id="close-print-settings-footer" class="button button-outline" type="button">Tutup</button><button id="test-print-button" class="button button-dark" type="button"><i class="fas fa-print"></i> Tes cetak</button></div>
+            <p class="printer-help">Pastikan URL mengarah ke file admin-printer.html yang Anda unggah sendiri. Data struk dikirim ke domain tersebut. Hubungkan Bluetooth dan cetak dari tab web printer.</p>
+            <div class="dialog-actions"><button id="close-print-settings-footer" class="button button-outline" type="button">Tutup</button><button id="test-print-button" class="button button-dark" type="button"><i class="fas fa-print"></i> Tes cetak di web printer</button></div>
         </form>
     </dialog>
 

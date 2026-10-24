@@ -1,7 +1,7 @@
 const ADMIN_STORAGE_KEY = 'nkjc_admin_local_edits_v1';
 const ADMIN_SESSION_KEY = 'nkjc_admin_session_v1';
+const ADMIN_PRINTER_URL_KEY = 'nkjc_admin_printer_web_url_v1';
 const TOKEN_EDIT_STORAGE_KEY = 'nk_token_receipt_edits';
-const PRINT_SETTINGS_KEY = 'nkjc_admin_print_settings_v1';
 const statusNormalize = value => String(value || '').trim().toUpperCase();
 const normalizeHeader = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
@@ -32,8 +32,11 @@ let transactions = [];
 let activeEdit = null;
 let activeTokenEdit = null;
 let reportRange = { from: startOfDay(new Date()), to: endOfDay(new Date()) };
-let bluetoothPrinter = null;
-let bluetoothPrinterName = '';
+let standalonePrinterWindow = null;
+let standalonePrinterOrigin = '';
+let standalonePrinterUrl = '';
+let standalonePrinterReady = false;
+let pendingPrinterRows = null;
 let plnCustomerLookup = { byId: {} };
 
 function parseCsv(text) {
@@ -177,15 +180,6 @@ function findRelatedArchive(record, archives) {
 function readTokenReceiptEdits() {
     try { return JSON.parse(localStorage.getItem(TOKEN_EDIT_STORAGE_KEY) || '{}'); }
     catch { return {}; }
-}
-
-function readPrintMode() {
-    try {
-        const settings = JSON.parse(localStorage.getItem(PRINT_SETTINGS_KEY) || '{}');
-        return ['auto', 'bluetooth', 'browser'].includes(settings.mode) ? settings.mode : 'auto';
-    } catch {
-        return 'auto';
-    }
 }
 
 function buildTokenReceiptData(record, archives) {
@@ -831,96 +825,102 @@ function normalizeTransferStatus(value) {
     return 'PROSES';
 }
 
-function renderReceiptHtml(rows) {
-    const content = rows.map(row => {
-        const classes = [row.align, row.emphasis].filter(Boolean).join(' ');
-        return `<div class="${classes}">${escapeHtml(row.text) || '&nbsp;'}</div>`;
-    }).join('');
-    return `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Struk NK JAYA CELL</title><style>
-        @page{size:58mm auto;margin:0}*{box-sizing:border-box}body{width:58mm;margin:0;padding:3mm;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:9px;line-height:1.35}.receipt{width:100%}.receipt div{min-height:12px;overflow-wrap:anywhere;white-space:pre-wrap}.receipt .center{text-align:center}.receipt .bold{font-weight:700}.receipt .large{font-size:14px;font-weight:700;line-height:1.5}.receipt .blank{height:5px;min-height:5px} 
-    </style></head><body><main class="receipt">${content}</main><script>window.onload=()=>{window.focus();window.print();window.close()}<\/script></body></html>`;
-}
-
-async function connectBluetoothPrinter() {
-    if (!navigator.bluetooth) throw new Error('Web Bluetooth tidak didukung browser ini. Gunakan dialog cetak browser.');
-    const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb', '0000ff00-0000-1000-8000-00805f9b34fb', '000018f0-0000-1000-8000-00805f9b34fb']
-    });
-    if (!device.gatt) throw new Error('Perangkat yang dipilih tidak mendukung koneksi printer Bluetooth.');
-    const server = await device.gatt.connect();
-    for (const service of await server.getPrimaryServices()) {
-        const characteristics = await service.getCharacteristics();
-        bluetoothPrinter = characteristics.find(item => item.properties.write || item.properties.writeWithoutResponse);
-        if (bluetoothPrinter) break;
+function getStandalonePrinterUrl() {
+    const input = document.getElementById('printer-web-url');
+    const value = input ? input.value.trim() : localStorage.getItem(ADMIN_PRINTER_URL_KEY) || '';
+    if (!value) throw new Error('Isi dan simpan URL halaman web printer HTTPS terlebih dahulu.');
+    let url;
+    try {
+        url = new URL(value);
+    } catch {
+        throw new Error('URL halaman web printer tidak valid.');
     }
-    if (!bluetoothPrinter) throw new Error('Printer tidak menyediakan kanal tulis ESC/POS.');
-    bluetoothPrinterName = device.name || 'Printer Bluetooth';
-    device.addEventListener('gattserverdisconnected', () => {
-        bluetoothPrinter = null;
-        updatePrinterConnectionState();
-    });
-    updatePrinterConnectionState();
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !url.pathname.endsWith('/admin-printer.html')) {
+        throw new Error('Masukkan URL HTTPS langsung ke file admin-printer.html milik website Anda.');
+    }
+    return url;
 }
 
-function updatePrinterConnectionState() {
+function sendPendingPrinterRows() {
+    if (!standalonePrinterReady || !standalonePrinterWindow || standalonePrinterWindow.closed || !pendingPrinterRows) return;
+    standalonePrinterWindow.postMessage({
+        type: 'NKJC_PRINT_JOB',
+        requestId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        rows: pendingPrinterRows
+    }, standalonePrinterOrigin);
+    pendingPrinterRows = null;
     const state = document.getElementById('printer-connection-state');
-    if (!state) return;
-    state.textContent = bluetoothPrinter
-        ? `Terhubung: ${bluetoothPrinterName} (sesi ini).`
-        : 'Printer Bluetooth belum dipilih pada sesi ini.';
+    if (state) state.textContent = 'Struk dikirim ke tab web printer. Ikuti instruksi di tab tersebut.';
 }
 
-async function printBluetoothRows(rows) {
-    if (!bluetoothPrinter) await connectBluetoothPrinter();
-    const esc = '\x1B';
-    const gs = '\x1D';
-    const escpos = rows.map(row => {
-        const alignment = row.align === 'center' ? `${esc}a\x01` : `${esc}a\x00`;
-        const emphasis = row.emphasis === 'bold' || row.emphasis === 'large' ? `${esc}E\x01` : `${esc}E\x00`;
-        const size = row.emphasis === 'large' ? `${gs}!\x11` : `${gs}!\x00`;
-        return `${alignment}${emphasis}${size}${row.text}`;
-    }).join('\n') + `\n\n\n`;
-    const bytes = new TextEncoder().encode(`${esc}@${escpos}`);
-    for (let offset = 0; offset < bytes.length; offset += 180) {
-        const chunk = bytes.slice(offset, offset + 180);
-        if (bluetoothPrinter.properties.writeWithoutResponse) await bluetoothPrinter.writeValueWithoutResponse(chunk);
-        else await bluetoothPrinter.writeValue(chunk);
+function handleStandalonePrinterMessage(event) {
+    if (event.source !== standalonePrinterWindow || event.origin !== standalonePrinterOrigin) return;
+    if (event.data?.type === 'NKJC_PRINTER_READY') {
+        standalonePrinterReady = true;
+        if (!pendingPrinterRows) {
+            const state = document.getElementById('printer-connection-state');
+            if (state) state.textContent = 'Web printer siap. Pilih Hubungkan printer Bluetooth pada tab web printer.';
+        }
+        sendPendingPrinterRows();
+    }
+    if (event.data?.type === 'NKJC_PRINT_RESULT') {
+        const state = document.getElementById('printer-connection-state');
+        if (state) state.textContent = event.data.ok ? 'Struk berhasil dikirim ke printer thermal.' : `Cetak gagal: ${event.data.error || 'Kesalahan tidak diketahui.'}`;
     }
 }
 
-async function printReceiptRows(rows) {
-    const mode = readPrintMode();
-    let printWindow = null;
-    if (mode !== 'bluetooth') {
-        printWindow = window.open('', '_blank', 'width=420,height=720');
-        if (!printWindow && mode === 'browser') {
-            window.alert('Pop-up cetak diblokir. Izinkan pop-up, lalu coba lagi.');
-            return;
-        }
-    }
-    if (mode !== 'browser') {
-        try {
-            await printBluetoothRows(rows);
-            if (printWindow) printWindow.close();
-            return;
-        } catch (error) {
-            bluetoothPrinter = null;
-            updatePrinterConnectionState();
-            console.warn('Cetak Bluetooth gagal:', error);
-            if (mode === 'bluetooth') {
-                if (printWindow) printWindow.close();
-                window.alert(`Tidak dapat mencetak ke printer Bluetooth: ${error.message}`);
-                return;
-            }
-        }
-    }
-    if (!printWindow) {
-        window.alert('Pop-up cetak diblokir. Izinkan pop-up, lalu coba lagi.');
+function openStandalonePrinter(rows) {
+    let url;
+    try {
+        url = getStandalonePrinterUrl();
+    } catch (error) {
+        window.alert(`${error.message} Buka Pengaturan printer thermal untuk mengaturnya.`);
         return;
     }
-    printWindow.document.write(renderReceiptHtml(rows));
-    printWindow.document.close();
+    pendingPrinterRows = Array.isArray(rows) ? rows.map(row => ({
+        text: String(row.text ?? '').slice(0, 500),
+        align: row.align === 'center' ? 'center' : 'left',
+        emphasis: ['bold', 'large'].includes(row.emphasis) ? row.emphasis : 'normal'
+    })) : null;
+    if (standalonePrinterWindow && !standalonePrinterWindow.closed && standalonePrinterUrl === url.href) {
+        standalonePrinterWindow.focus();
+        sendPendingPrinterRows();
+        return;
+    }
+
+    standalonePrinterReady = false;
+    standalonePrinterOrigin = url.origin;
+    standalonePrinterUrl = url.href;
+    standalonePrinterWindow = window.open(url.href, 'nkjc-thermal-printer');
+    if (!standalonePrinterWindow) {
+        pendingPrinterRows = null;
+        window.alert('Tab web printer diblokir browser. Izinkan pop-up untuk panel admin lalu coba lagi.');
+        return;
+    }
+    window.addEventListener('message', handleStandalonePrinterMessage);
+    window.setTimeout(() => {
+        if (pendingPrinterRows && standalonePrinterWindow && !standalonePrinterWindow.closed) {
+            pendingPrinterRows = null;
+            const state = document.getElementById('printer-connection-state');
+            if (state) state.textContent = 'Halaman printer tidak merespons. Periksa URL hosting dan pastikan admin-printer.html sudah diunggah.';
+        }
+    }, 20000);
+}
+
+function saveStandalonePrinterUrl() {
+    const input = document.getElementById('printer-web-url');
+    try {
+        const url = getStandalonePrinterUrl();
+        localStorage.setItem(ADMIN_PRINTER_URL_KEY, url.href);
+        input.value = url.href;
+        document.getElementById('printer-connection-state').textContent = `Halaman printer tersimpan: ${url.origin}`;
+    } catch (error) {
+        window.alert(error.message);
+    }
+}
+
+function printReceiptRows(rows) {
+    openStandalonePrinter(rows);
 }
 
 function printRecord(record) {
@@ -928,7 +928,7 @@ function printRecord(record) {
 }
 
 async function testPrinter() {
-    await printReceiptRows([
+    printReceiptRows([
         { text: 'NK JAYA CELL', align: 'center', emphasis: 'bold' },
         { text: 'TES PRINTER THERMAL 58 MM', align: 'center' },
         { text: '--------------------------------' },
@@ -1059,35 +1059,15 @@ function bindEvents() {
     document.getElementById('refresh-button').addEventListener('click', loadTransactions);
     document.getElementById('clear-edits-button').addEventListener('click', clearLocalEdits);
     const printSettingsDialog = document.getElementById('print-settings-dialog');
-    const printModeSelect = document.getElementById('print-mode');
     document.getElementById('print-settings-button').addEventListener('click', () => {
-        printModeSelect.value = readPrintMode();
-        updatePrinterConnectionState();
         printSettingsDialog.showModal();
     });
-    printModeSelect.addEventListener('change', () => {
-        try {
-            localStorage.setItem(PRINT_SETTINGS_KEY, JSON.stringify({ mode: printModeSelect.value }));
-        } catch (error) {
-            console.error('Gagal menyimpan pengaturan cetak:', error);
-            window.alert(`Pengaturan cetak tidak dapat disimpan: ${error.message}`);
-            printModeSelect.value = readPrintMode();
-        }
+    const printerUrlInput = document.getElementById('printer-web-url');
+    printerUrlInput.value = localStorage.getItem(ADMIN_PRINTER_URL_KEY) || '';
+    document.getElementById('connect-printer-button').addEventListener('click', () => {
+        openStandalonePrinter(null);
     });
-    document.getElementById('connect-printer-button').addEventListener('click', async event => {
-        const button = event.currentTarget;
-        button.disabled = true;
-        try {
-            await connectBluetoothPrinter();
-        } catch (error) {
-            bluetoothPrinter = null;
-            updatePrinterConnectionState();
-            console.error('Gagal menghubungkan printer Bluetooth:', error);
-            window.alert(`Printer Bluetooth tidak dapat dihubungkan: ${error.message}`);
-        } finally {
-            button.disabled = false;
-        }
-    });
+    document.getElementById('save-printer-web-url').addEventListener('click', saveStandalonePrinterUrl);
     document.getElementById('test-print-button').addEventListener('click', testPrinter);
     document.getElementById('close-print-settings').addEventListener('click', () => printSettingsDialog.close());
     document.getElementById('close-print-settings-footer').addEventListener('click', () => printSettingsDialog.close());

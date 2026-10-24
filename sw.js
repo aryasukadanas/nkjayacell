@@ -1,8 +1,9 @@
-const CACHE_NAME = 'kuotakilat-v4';
+const CACHE_NAME = 'kuotakilat-v5';
 const assets = [
   './',
   './index.html',
   './admin-app.html',
+  './admin-printer.html',
   './admin-app.webmanifest',
   './admin-app-192.png',
   './admin-app-512.png',

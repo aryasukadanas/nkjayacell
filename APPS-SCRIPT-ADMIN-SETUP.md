@@ -5,18 +5,22 @@
 - `admin.html`, `admin.css`, dan `admin.js` berisi tampilan login username/password, logout, sesi persisten 30 hari yang diperpanjang saat dipakai, serta pembacaan data admin lewat `google.script.run`.
 - `apps-script-admin-auth.gs` berisi fungsi server untuk login, validasi/logout sesi, pembatasan percobaan login, pembacaan sheet admin, dan pembaruan status transaksi setelah sesi diverifikasi.
 - Panel rekap menampilkan ringkasan transaksi, kartu transaksi responsif, salin ID/nomor, ubah status, edit catatan, dan cetak struk thermal 58 mm. Perubahan status ditulis ke Google Sheets; edit detail lainnya tetap tersimpan lokal di browser/perangkat.
-- Pengaturan cetak tersedia dari ikon printer: mode otomatis (Bluetooth lalu browser), Bluetooth saja, atau dialog cetak browser; termasuk koneksi dan tes printer. Pilihan mode disimpan lokal pada perangkat admin.
+- Cetak Bluetooth dijalankan pada halaman HTTPS mandiri `admin-printer.html`, bukan di iframe Google Apps Script. Panel mengirim isi struk ke tab web printer; printer perlu dihubungkan dari tab tersebut menggunakan browser yang mendukung Web Bluetooth.
 
 Panel HTML ini harus dibuka dari deployment Apps Script, bukan dari file statis/Live Server. Source Apps Script yang ada di akun Google Anda tidak otomatis berubah ketika file lokal diedit.
 
 ## Instal panel admin seperti aplikasi (PWA)
 
-PWA admin adalah halaman pembuka `admin-app.html` yang di-host bersama website statis; halaman ini membuka panel Apps Script di tab/jendela terpisah. PWA menyimpan launcher saja, bukan data transaksi atau login offline.
+PWA admin adalah halaman pembuka `admin-app.html` yang di-host bersama website statis; halaman ini membuka panel Apps Script dan halaman printer mandiri. PWA menyimpan launcher saja, bukan data transaksi atau login offline.
 
-1. Upload `admin-app.html`, `admin-app.webmanifest`, `admin-app-192.png`, `admin-app-512.png`, `icon.png`, dan `sw.js` versi terbaru ke root hosting website yang sudah menggunakan HTTPS.
-2. Buka URL `https://alamat-website-anda/admin-app.html` di Android Chrome atau iPhone Safari.
-3. Android: pilih **Instal aplikasi** bila tombol tersedia, atau menu Chrome → **Tambahkan ke layar utama**. iPhone: menu **Bagikan** Safari → **Tambahkan ke Layar Utama**.
-4. Buka aplikasi terpasang, pilih **Buka panel admin**, lalu login. Panel dan semua perubahan transaksi tetap memerlukan internet.
+1. Upload `admin-app.html`, `admin-printer.html`, `admin-app.webmanifest`, `admin-app-192.png`, `admin-app-512.png`, `icon.png`, dan `sw.js` versi terbaru ke root hosting website yang sama dan menggunakan HTTPS. Jangan buka PWA dari URL Google Apps Script atau `file://`.
+2. Buka URL `https://alamat-website-anda/admin-app.html` di Android Chrome atau iPhone Safari. Pastikan halaman menampilkan status service worker berhasil.
+3. Android: tekan **Instal aplikasi** jika browser menawarkannya. Jika tombol menampilkan petunjuk, gunakan menu Chrome → **Instal aplikasi** atau **Tambahkan ke layar utama**. iPhone: menu **Bagikan** Safari → **Tambahkan ke Layar Utama**.
+4. Buka `https://alamat-website-anda/admin-printer.html` di Chrome Android untuk memastikan halaman printer bisa dibuka. Hubungkan printer di halaman itu untuk menguji Web Bluetooth.
+5. Login di panel admin, buka **Pengaturan printer thermal**, isi URL HTTPS halaman printer (contoh `https://alamat-website-anda/admin-printer.html`), lalu tekan **Simpan URL web printer**.
+6. Cetak struk dari panel. Browser membuka tab web printer; bila printer belum terhubung, tekan **Hubungkan printer Bluetooth** atau **Cetak struk yang diterima** di tab tersebut. Biarkan tab printer terbuka untuk cetak berikutnya.
+
+Gunakan hanya URL halaman printer milik website yang Anda percaya, karena data transaksi pada struk dikirim ke domain itu. Tidak semua printer Bluetooth kompatibel: perangkat harus menyediakan koneksi Bluetooth GATT yang dapat ditulis ESC/POS. Panel dan transaksi tetap memerlukan internet.
 
 ## Memasang ke project Apps Script
 

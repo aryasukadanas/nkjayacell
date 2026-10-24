@@ -21,6 +21,7 @@
         h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.2; }
         .intro, .hint { color: #68736e; font-size: 13px; line-height: 1.6; }
         .open-button, .install-button { display: flex; min-height: 48px; align-items: center; justify-content: center; gap: 9px; width: 100%; margin-top: 18px; border: 0; border-radius: 12px; background: #0f7a75; color: #fff; font: inherit; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
+        .printer-button { margin-top: 10px; border: 1px solid #dfe5e0; background: #fff; color: #0f7a75; }
         .open-button:active, .install-button:active { transform: translateY(1px); }
         .install-button { margin-top: 10px; border: 1px solid #dfe5e0; background: #fff; color: #0f7a75; }
         .hint { margin: 20px 0 0; padding: 12px; border-radius: 10px; background: #f1f7f5; font-size: 11px; }
@@ -38,6 +39,7 @@
         <h1>Admin NK JAYA CELL</h1>
         <p class="intro">Buka panel untuk mengelola transaksi, memperbarui status, dan mencetak struk thermal.</p>
         <a class="open-button" href="https://script.google.com/macros/s/AKfycbzx7HhGcFktbIGGkRBRpAFTu6g9E4YbSlBVgrVt4QwDtSucSz8BTS5fgk55SqOSzcJ9/exec?page=admin" target="_blank" rel="noopener">Buka panel admin <span aria-hidden="true">↗</span></a>
+        <a class="open-button printer-button" href="./admin-printer.html" target="_blank" rel="noopener">Buka web printer thermal <span aria-hidden="true">↗</span></a>
         <button id="install-button" class="install-button" type="button">Cara instal aplikasi</button>
         <p id="install-help" class="install-help" aria-live="polite">Android: buka halaman ini di Chrome. iPhone: buka di Safari. Jika tombol instal otomatis tidak muncul, tombol ini menampilkan langkah manual.</p>
         <p id="pwa-status" class="pwa-status" role="status" aria-live="polite">Memeriksa kesiapan instalasi...</p>

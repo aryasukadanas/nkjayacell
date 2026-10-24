@@ -167,10 +167,12 @@ tbody tr:hover { background: #fbfcfb; }
 .edit-field input:focus, .edit-field select:focus { border-color: var(--green); outline: 2px solid #087f5b20; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .print-settings-dialog { width: min(460px, calc(100vw - 24px)); }
-.print-setting-field { margin: 16px 0; }
-.print-setting-field select { width: 100%; min-height: 42px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); font-size: 12px; }
+.printer-url-field { display: grid; gap: 6px; margin: 12px 0 8px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.printer-url-field input { width: 100%; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); font-size: 12px; }
+.printer-save-url { margin-bottom: 12px; }
 .printer-connection { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #f8faf8; }
 .printer-connection span { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.printer-connection button:disabled { cursor: not-allowed; opacity: .55; }
 .printer-help { margin: 12px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 
 @keyframes rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
