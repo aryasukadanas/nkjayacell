@@ -7,6 +7,7 @@
     <meta name="description" content="Aplikasi panel admin transaksi NK JAYA CELL.">
     <link rel="manifest" href="./admin-app.webmanifest">
     <link rel="icon" href="./icon.png">
+    <link rel="apple-touch-icon" href="./admin-app-192.png">
     <title>Admin NK JAYA CELL</title>
     <style>
         :root { color-scheme: light; font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; background: #f1f5f9; color: #17211e; }
@@ -24,6 +25,8 @@
         .install-button { margin-top: 10px; border: 1px solid #dfe5e0; background: #fff; color: #0f7a75; }
         .hint { margin: 20px 0 0; padding: 12px; border-radius: 10px; background: #f1f7f5; font-size: 11px; }
         .install-help { margin-top: 14px; color: #68736e; font-size: 11px; line-height: 1.55; }
+        .pwa-status { margin: 12px 0 0; color: #0f7a75; font-size: 10px; line-height: 1.5; }
+        .install-button:disabled { cursor: default; opacity: .75; }
         footer { margin-top: 22px; color: #87918b; font-size: 10px; text-align: center; }
         @media (prefers-reduced-motion: no-preference) { main { animation: appear .3s ease-out both; } @keyframes appear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } }
     </style>
@@ -35,37 +38,87 @@
         <h1>Admin NK JAYA CELL</h1>
         <p class="intro">Buka panel untuk mengelola transaksi, memperbarui status, dan mencetak struk thermal.</p>
         <a class="open-button" href="https://script.google.com/macros/s/AKfycbzx7HhGcFktbIGGkRBRpAFTu6g9E4YbSlBVgrVt4QwDtSucSz8BTS5fgk55SqOSzcJ9/exec?page=admin" target="_blank" rel="noopener">Buka panel admin <span aria-hidden="true">↗</span></a>
-        <button id="install-button" class="install-button" type="button" hidden>Instal aplikasi</button>
-        <p id="install-help" class="install-help">Android: menu Chrome ⋮ → Instal aplikasi / Tambahkan ke layar utama. iPhone: Safari → Bagikan → Tambahkan ke Layar Utama.</p>
+        <button id="install-button" class="install-button" type="button">Cara instal aplikasi</button>
+        <p id="install-help" class="install-help" aria-live="polite">Android: buka halaman ini di Chrome. iPhone: buka di Safari. Jika tombol instal otomatis tidak muncul, tombol ini menampilkan langkah manual.</p>
+        <p id="pwa-status" class="pwa-status" role="status" aria-live="polite">Memeriksa kesiapan instalasi...</p>
         <p class="hint">Panel dan transaksi memerlukan koneksi internet serta login admin. PWA ini hanya menyimpan halaman pembuka di perangkat, bukan data transaksi.</p>
         <footer>NK JAYA CELL · ADMIN</footer>
     </main>
     <script>
         let installPrompt = null;
         const installButton = document.getElementById('install-button');
+        const installHelp = document.getElementById('install-help');
+        const pwaStatus = document.getElementById('pwa-status');
+        const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        const isAndroid = /android/i.test(navigator.userAgent);
+        const isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
         window.addEventListener('beforeinstallprompt', event => {
             event.preventDefault();
             installPrompt = event;
-            installButton.hidden = false;
+            installButton.textContent = 'Instal aplikasi';
+            installHelp.textContent = 'Browser siap memasang aplikasi. Tekan tombol Instal aplikasi.';
         });
+
         installButton.addEventListener('click', async () => {
-            if (!installPrompt) return;
-            installPrompt.prompt();
-            await installPrompt.userChoice;
-            installPrompt = null;
-            installButton.hidden = true;
+            if (!installPrompt) {
+                if (isIos) {
+                    installHelp.textContent = 'Di Safari: tekan Bagikan, pilih Tambahkan ke Layar Utama, lalu tekan Tambahkan.';
+                } else if (isAndroid) {
+                    installHelp.textContent = 'Di Chrome: tekan menu ⋮, pilih Instal aplikasi atau Tambahkan ke layar utama, lalu konfirmasi.';
+                } else {
+                    installHelp.textContent = 'Buka halaman ini di Chrome atau Edge melalui HTTPS. Gunakan menu browser lalu pilih Instal aplikasi atau Tambahkan ke layar utama.';
+                }
+                return;
+            }
+            installButton.disabled = true;
+            try {
+                await installPrompt.prompt();
+                const choice = await installPrompt.userChoice;
+                installHelp.textContent = choice.outcome === 'accepted'
+                    ? 'Permintaan instalasi diterima. Ikuti konfirmasi dari browser.'
+                    : 'Instalasi dibatalkan. Anda masih bisa memasang melalui menu browser.';
+                installPrompt = null;
+                installButton.textContent = 'Cara instal aplikasi';
+            } catch (error) {
+                console.error('Prompt instalasi PWA gagal:', error);
+                installHelp.textContent = `Browser gagal memulai instalasi: ${error.message}. Gunakan menu browser untuk menambahkan ke layar utama.`;
+            } finally {
+                installButton.disabled = false;
+            }
         });
+
         window.addEventListener('appinstalled', () => {
             installPrompt = null;
-            installButton.hidden = true;
-            document.getElementById('install-help').textContent = 'Aplikasi admin sudah ditambahkan ke perangkat ini.';
+            installButton.textContent = 'Aplikasi sudah terinstal';
+            installButton.disabled = true;
+            installHelp.textContent = 'Aplikasi admin sudah ditambahkan ke perangkat ini.';
+            pwaStatus.textContent = 'PWA aktif di perangkat ini.';
         });
+
+        if (isInstalled) {
+            installButton.textContent = 'Aplikasi sudah terinstal';
+            installButton.disabled = true;
+            installHelp.textContent = 'Aplikasi admin sudah terpasang di perangkat ini.';
+        }
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(error => {
-                    console.error('PWA admin tidak dapat mengaktifkan cache halaman pembuka:', error);
+                if (!window.isSecureContext) {
+                    pwaStatus.textContent = 'Instalasi PWA membutuhkan HTTPS (atau localhost untuk pengujian).';
+                    return;
+                }
+                navigator.serviceWorker.register('./sw.js').then(() => {
+                    pwaStatus.textContent = isInstalled
+                        ? 'PWA aktif di perangkat ini.'
+                        : 'Halaman siap. Jika tombol instal otomatis tidak tersedia, gunakan petunjuk instal manual.';
+                }).catch(error => {
+                    console.error('PWA admin tidak dapat mendaftarkan service worker:', error);
+                    pwaStatus.textContent = `Service worker gagal dipasang: ${error.message}. Pastikan sw.js dapat dibuka dari hosting HTTPS.`;
                 });
             });
+        } else {
+            pwaStatus.textContent = 'Browser tidak mendukung service worker. Gunakan Chrome atau Safari terbaru.';
         }
     </script>
 </body>
