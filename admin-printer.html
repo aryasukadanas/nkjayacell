@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0f7a75">
     <meta name="description" content="Cetak struk NK JAYA CELL langsung ke printer thermal Bluetooth.">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://docs.google.com https://*.googleusercontent.com; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'">
     <title>Web Printer Thermal | NK JAYA CELL</title>
     <style>
         :root { color-scheme: light; font-family: "Segoe UI", sans-serif; background: #f1f5f9; color: #17211e; }
@@ -32,18 +32,21 @@
         <p class="intro">Halaman HTTPS ini menghubungkan printer Bluetooth di luar iframe Google Apps Script.</p>
         <section class="status" aria-live="polite">
             <div id="printer-state">Memeriksa dukungan Bluetooth...</div>
-            <div id="job-state">Belum ada struk yang diterima dari panel admin.</div>
+            <div id="job-state">Menunggu ID transaksi dari panel admin...</div>
         </section>
         <div class="actions">
             <button id="connect-button" class="primary" type="button">Hubungkan printer Bluetooth</button>
-            <button id="print-button" type="button" disabled>Cetak struk yang diterima</button>
+            <button id="print-button" type="button" disabled>Cetak struk transaksi</button>
             <button id="test-button" type="button">Tes cetak 58 mm</button>
         </div>
         <pre id="receipt-preview" aria-label="Pratinjau isi struk"></pre>
-        <p class="note">Biarkan tab ini terbuka saat mencetak dari panel admin. Jika belum terhubung, tekan Hubungkan printer lalu pilih perangkat Bluetooth.</p>
+        <p class="note">Halaman mencari transaksi berdasarkan ID pada spreadsheet. Tinjau pratinjau lalu tekan cetak; jika browser meminta, pilih printer Bluetooth.</p>
     </main>
     <script>
-        const TRUSTED_ADMIN_ORIGINS = ['https://script.google.com', 'https://script.googleusercontent.com'];
+        const SHEET_CSV_URLS = {
+            ARSIP: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQsIlTEnkky4oMCaFZWr7WaL5FVGkGsEgyOUPPxKUlELUVHDCa3XNUxhOsEwTqRKm3WIMz_Sv7q45C7/pub?gid=702573697&single=true&output=csv',
+            TRANSFER: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQsIlTEnkky4oMCaFZWr7WaL5FVGkGsEgyOUPPxKUlELUVHDCa3XNUxhOsEwTqRKm3WIMz_Sv7q45C7/pub?gid=53248706&single=true&output=csv'
+        };
         const optionalServices = [
             '0000ffe0-0000-1000-8000-00805f9b34fb',
             '0000ff00-0000-1000-8000-00805f9b34fb',
@@ -55,25 +58,197 @@
         const printButton = document.getElementById('print-button');
         let printerCharacteristic = null;
         let pendingRows = null;
-        let pendingRequestId = '';
         let isPrinting = false;
-        let adminOrigin = '';
         let connectedDevice = null;
-        const receivedRequestIds = new Set();
 
         function setPrinterState(message) {
             printerState.textContent = message;
         }
 
-        function sendToAdmin(message, targetOrigin) {
-            if (window.opener && TRUSTED_ADMIN_ORIGINS.includes(targetOrigin)) {
-                window.opener.postMessage(message, targetOrigin);
-            }
+        function normalizeHeader(value) {
+            return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
         }
 
-        function announceReady() {
-            if (!window.opener) return;
-            TRUSTED_ADMIN_ORIGINS.forEach(origin => sendToAdmin({ type: 'NKJC_PRINTER_READY' }, origin));
+        function normalizedId(value) {
+            return normalizeHeader(value);
+        }
+
+        function parseCsv(text) {
+            const rows = [];
+            let row = [];
+            let field = '';
+            let quoted = false;
+            for (let index = 0; index < text.length; index += 1) {
+                const character = text[index];
+                if (character === '"') {
+                    if (quoted && text[index + 1] === '"') {
+                        field += '"';
+                        index += 1;
+                    } else {
+                        quoted = !quoted;
+                    }
+                } else if (character === ',' && !quoted) {
+                    row.push(field.trim());
+                    field = '';
+                } else if ((character === '\n' || character === '\r') && !quoted) {
+                    if (character === '\r' && text[index + 1] === '\n') index += 1;
+                    row.push(field.trim());
+                    if (row.some(value => value !== '')) rows.push(row);
+                    row = [];
+                    field = '';
+                } else {
+                    field += character;
+                }
+            }
+            row.push(field.trim());
+            if (row.some(value => value !== '')) rows.push(row);
+            return rows;
+        }
+
+        function columnIndex(headers, aliases) {
+            const wanted = aliases.map(normalizeHeader);
+            return headers.findIndex(header => wanted.includes(normalizeHeader(header)));
+        }
+
+        function fieldValue(headers, values, aliases) {
+            const index = columnIndex(headers, aliases);
+            return index >= 0 ? String(values[index] || '').trim() : '';
+        }
+
+        function parseAmount(value) {
+            const text = String(value || '').trim();
+            const amount = Number(text.replace(/[^0-9]/g, '')) || 0;
+            return /^\s*-/.test(text) ? -amount : amount;
+        }
+
+        function formatMoney(value) {
+            return `Rp ${Math.round(value || 0).toLocaleString('id-ID')}`;
+        }
+
+        function receiptField(label, value) {
+            const prefix = `${label.padEnd(16, ' ')}: `;
+            const text = String(value || '-');
+            const width = Math.max(8, 32 - prefix.length);
+            const lines = [];
+            for (let index = 0; index < text.length || !lines.length; index += width) {
+                lines.push(index
+                    ? `${' '.repeat(prefix.length)}${text.slice(index, index + width)}`
+                    : `${prefix}${text.slice(index, index + width)}`);
+            }
+            return lines;
+        }
+
+        function buildReceiptRows(source, headers, values, requestedId) {
+            const add = (text, align = 'left', emphasis = 'normal') => ({ text: String(text || ''), align, emphasis });
+            const field = (label, value) => receiptField(label, value).map(text => add(text));
+            const id = fieldValue(headers, values, ['ID TRANSAKSI', 'ID TRX', 'ID']);
+            const date = fieldValue(headers, values, ['TANGGAL', 'WAKTU', 'DATE']);
+            const status = fieldValue(headers, values, ['STATUS', 'STATUS TRANSAKSI']) || 'PROSES';
+            const product = source === 'TRANSFER'
+                ? fieldValue(headers, values, ['PRODUK/BANK', 'BANK', 'BANK TUJUAN', 'KATEGORI'])
+                : fieldValue(headers, values, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']);
+            const contact = source === 'TRANSFER'
+                ? fieldValue(headers, values, ['NOMOR REKENING', 'NO REKENING', 'REKENING'])
+                : fieldValue(headers, values, ['NOMOR', 'NOMOR HP', 'TARGET', 'ID PLN', 'IDPEL']);
+            const customer = source === 'TRANSFER'
+                ? fieldValue(headers, values, ['NAMA', 'NAMA PEMILIK', 'PELANGGAN'])
+                : fieldValue(headers, values, ['NAMA', 'NAMA PELANGGAN', 'PELANGGAN', 'PENERIMA']);
+            const note = fieldValue(headers, values, ['CATATAN PESAN PENERIMA', 'CATATAN', 'PESAN PENERIMA']);
+            const rows = [
+                add('NK JAYA CELL', 'center', 'bold'),
+                add(source === 'TRANSFER' ? 'BUKTI TRANSFER BANK' : 'STRUK TRANSAKSI', 'center'),
+                add(status, 'center', 'bold'),
+                add(date, 'center'),
+                add('--------------------------------')
+            ];
+            rows.push(...field('ID Transaksi', id || requestedId));
+            if (source === 'TRANSFER') {
+                rows.push(add('DATA PENERIMA', 'left', 'bold'));
+                rows.push(...field('Bank Tujuan', product));
+                rows.push(...field('No. Rekening', contact));
+                rows.push(...field('Nama', customer));
+                if (note) rows.push(...field('Catatan', note));
+                rows.push(add('--------------------------------'));
+                const transfer = parseAmount(fieldValue(headers, values, ['TRANSFER', 'NOMINAL', 'NOMINAL TRANSFER']));
+                const fee = parseAmount(fieldValue(headers, values, ['BIAYA', 'BIAYA ADMIN', 'ADMIN']));
+                const total = parseAmount(fieldValue(headers, values, ['JUMLAH'])) || transfer + fee;
+                rows.push(...field('Nominal Transfer', formatMoney(transfer)));
+                rows.push(...field('Biaya Admin', formatMoney(fee)));
+                rows.push(add('--------------------------------'));
+                rows.push(...field('Total', formatMoney(total)));
+            } else {
+                const category = fieldValue(headers, values, ['KATEGORI']);
+                const isToken = /TOKEN|PLN/i.test(`${product} ${category}`);
+                const total = parseAmount(fieldValue(headers, values, ['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']));
+                rows.push(...field(isToken ? 'ID PLN' : 'ID/No. Target', contact));
+                rows.push(...field('Produk', product));
+                if (customer) rows.push(...field('Nama', customer));
+                if (isToken) {
+                    const token = fieldValue(headers, values, ['TOKEN', 'SERIAL', 'TOKEN SERIAL', 'SN']);
+                    const power = fieldValue(headers, values, ['JUMLAH DAYA', 'DAYA']);
+                    rows.push(...field('Jumlah Daya', power));
+                    rows.push(...field('Harga', formatMoney(total)));
+                    rows.push(add('--------------------------------'));
+                    rows.push(add('NOMOR TOKEN', 'center', 'bold'));
+                    rows.push(add(token || '-', 'center', 'large'));
+                } else {
+                    rows.push(add('--------------------------------'));
+                    rows.push(...field('Total Bayar', formatMoney(total)));
+                }
+            }
+            rows.push(add(''));
+            rows.push(add('Terima kasih', 'center'));
+            return rows;
+        }
+
+        async function loadReceiptByTransactionId() {
+            const params = new URLSearchParams(window.location.search);
+            const requestedId = params.get('id')?.trim() || '';
+            const source = params.get('source') === 'TRANSFER' ? 'TRANSFER' : 'ARSIP';
+            if (params.get('test') === '1') {
+                pendingRows = [
+                    { text: 'NK JAYA CELL', align: 'center', emphasis: 'bold' },
+                    { text: 'TES PRINTER THERMAL 58 MM', align: 'center', emphasis: 'normal' },
+                    { text: 'Printer thermal siap digunakan.', align: 'left', emphasis: 'normal' },
+                    { text: new Date().toLocaleString('id-ID'), align: 'left', emphasis: 'normal' },
+                    { text: 'Terima kasih', align: 'center', emphasis: 'normal' }
+                ];
+                preview.textContent = pendingRows.map(row => row.text).join('\n');
+                printButton.disabled = false;
+                printButton.textContent = 'Cetak tes ke printer';
+                jobState.textContent = 'Tes cetak siap. Tekan tombol cetak untuk mengirimkan ke printer.';
+                return;
+            }
+            if (!requestedId) {
+                jobState.textContent = 'ID transaksi tidak tersedia. Buka halaman ini dari ikon cetak pada panel admin.';
+                return;
+            }
+
+            jobState.textContent = `Mencari transaksi ${requestedId} di spreadsheet ${source}...`;
+            try {
+                const response = await fetch(SHEET_CSV_URLS[source], { cache: 'no-store' });
+                if (!response.ok) throw new Error(`Spreadsheet mengembalikan HTTP ${response.status}.`);
+                const csvRows = parseCsv(await response.text());
+                if (csvRows.length < 2) throw new Error('Spreadsheet tidak memiliki data transaksi.');
+                const headerIndex = csvRows.findIndex(row => columnIndex(row, ['ID TRANSAKSI', 'ID TRX', 'ID']) >= 0);
+                if (headerIndex < 0) throw new Error('Kolom ID transaksi tidak ditemukan di spreadsheet.');
+                const headers = csvRows[headerIndex];
+                const idColumn = columnIndex(headers, ['ID TRANSAKSI', 'ID TRX', 'ID']);
+                const matches = csvRows.slice(headerIndex + 1).filter(row => normalizedId(row[idColumn]) === normalizedId(requestedId));
+                if (!matches.length) throw new Error(`Transaksi ${requestedId} tidak ditemukan pada data ${source}.`);
+                if (matches.length > 1) throw new Error(`ID ${requestedId} muncul lebih dari sekali di spreadsheet ${source}; cetak dibatalkan untuk mencegah struk yang salah.`);
+                pendingRows = buildReceiptRows(source, headers, matches[0], requestedId);
+                preview.textContent = pendingRows.map(row => row.text).join('\n');
+                printButton.disabled = false;
+                printButton.textContent = 'Cetak struk ke printer thermal';
+                jobState.textContent = `Transaksi ${requestedId} ditemukan. Tekan cetak untuk mengirim struk ini ke printer thermal.`;
+                if (printerCharacteristic) await printRows(pendingRows, false);
+            } catch (error) {
+                console.error('Gagal mencari transaksi untuk dicetak:', error);
+                jobState.textContent = `Data struk gagal dimuat: ${error.message}`;
+                pendingRows = null;
+                printButton.disabled = true;
+            }
         }
 
         async function attachPrinter(device) {
@@ -113,7 +288,7 @@
             for (const device of devices) {
                 try {
                     await attachPrinter(device);
-                    if (pendingRows) await printRows(pendingRows, pendingRequestId, false);
+                    if (pendingRows) await printRows(pendingRows, false);
                     return;
                 } catch (error) {
                     console.warn(`Tidak dapat menyambungkan ulang ${device.name || 'printer Bluetooth'}:`, error);
@@ -146,7 +321,7 @@
             }
         }
 
-        async function printRows(rows, requestId, allowConnect) {
+        async function printRows(rows, allowConnect) {
             if (isPrinting) return;
             isPrinting = true;
             printButton.disabled = true;
@@ -155,18 +330,12 @@
                 if (!printerCharacteristic) throw new Error('Hubungkan printer Bluetooth terlebih dahulu.');
                 await writeRows(rows);
                 jobState.textContent = 'Struk berhasil dikirim ke printer thermal.';
-                sendToAdmin({ type: 'NKJC_PRINT_RESULT', requestId, ok: true }, adminOrigin);
-                if (requestId === pendingRequestId) {
-                    pendingRows = null;
-                    pendingRequestId = '';
-                    preview.textContent = '';
-                }
+                pendingRows = null;
             } catch (error) {
                 console.error('Cetak thermal gagal:', error);
                 jobState.textContent = `Cetak gagal: ${error.message}`;
                 printerCharacteristic = null;
                 setPrinterState('Koneksi printer gagal atau terputus. Struk tetap tersedia; sambungkan printer lalu coba cetak lagi.');
-                sendToAdmin({ type: 'NKJC_PRINT_RESULT', requestId, ok: false, error: error.message }, adminOrigin);
             } finally {
                 isPrinting = false;
                 printButton.disabled = !pendingRows;
@@ -177,7 +346,7 @@
             event.currentTarget.disabled = true;
             try {
                 await connectPrinter();
-                if (pendingRows) await printRows(pendingRows, pendingRequestId, false);
+                if (pendingRows) await printRows(pendingRows, false);
             } catch (error) {
                 console.error('Koneksi printer Bluetooth gagal:', error);
                 setPrinterState(`Tidak dapat menghubungkan printer: ${error.message}`);
@@ -186,48 +355,12 @@
             }
         });
         printButton.addEventListener('click', () => {
-            if (pendingRows) printRows(pendingRows, pendingRequestId, true);
+            if (pendingRows) printRows(pendingRows, true);
         });
         document.getElementById('test-button').addEventListener('click', () => {
-            const rows = [
-                { text: 'NK JAYA CELL', align: 'center', emphasis: 'bold' },
-                { text: 'TES PRINTER THERMAL 58 MM', align: 'center', emphasis: 'normal' },
-                { text: '--------------------------------', align: 'left', emphasis: 'normal' },
-                { text: 'Printer thermal siap digunakan.', align: 'left', emphasis: 'normal' },
-                { text: new Date().toLocaleString('id-ID'), align: 'left', emphasis: 'normal' },
-                { text: '--------------------------------', align: 'left', emphasis: 'normal' },
-                { text: 'Lebar cetak: 58 mm', align: 'center', emphasis: 'normal' },
-                { text: 'Terima kasih', align: 'center', emphasis: 'normal' }
-            ];
-            printRows(rows, '', true);
-        });
-        window.addEventListener('message', event => {
-            if (event.source !== window.opener || !TRUSTED_ADMIN_ORIGINS.includes(event.origin)) return;
-            if (event.data?.type !== 'NKJC_PRINT_JOB' || !Array.isArray(event.data.rows)) return;
-            adminOrigin = event.origin;
-            const requestId = String(event.data.requestId || '');
-            if (!requestId) return;
-            if (receivedRequestIds.has(requestId)) {
-                sendToAdmin({ type: 'NKJC_PRINT_ACK', requestId }, adminOrigin);
-                return;
-            }
-            const rows = event.data.rows.filter(row => row && typeof row.text === 'string').slice(0, 200).map(row => ({
-                text: row.text.slice(0, 500),
-                align: row.align === 'center' ? 'center' : 'left',
-                emphasis: ['bold', 'large'].includes(row.emphasis) ? row.emphasis : 'normal'
-            }));
-            if (!rows.length) return;
-            receivedRequestIds.add(requestId);
-            if (receivedRequestIds.size > 20) receivedRequestIds.delete(receivedRequestIds.values().next().value);
-            pendingRows = rows;
-            pendingRequestId = requestId;
-            preview.textContent = rows.map(row => row.text).join('\n');
-            printButton.disabled = false;
-            jobState.textContent = printerCharacteristic
-                ? 'Struk diterima. Mencetak ke printer yang sudah terhubung...'
-                : 'Struk diterima. Tekan Cetak struk yang diterima untuk mengirim data ini ke printer.';
-            sendToAdmin({ type: 'NKJC_PRINT_ACK', requestId }, adminOrigin);
-            if (printerCharacteristic) printRows(rows, pendingRequestId, false);
+            const testUrl = new URL(window.location.href);
+            testUrl.searchParams.set('test', '1');
+            window.location.href = testUrl.href;
         });
 
         if (navigator.bluetooth) {
@@ -240,16 +373,7 @@
             setPrinterState('Web Bluetooth tidak didukung browser ini. Gunakan Chrome pada Android melalui HTTPS.');
             document.getElementById('connect-button').disabled = true;
         }
-        announceReady();
-        let readyAttempts = 0;
-        const readyInterval = window.setInterval(() => {
-            if (!window.opener || pendingRows || readyAttempts >= 12) {
-                window.clearInterval(readyInterval);
-                return;
-            }
-            readyAttempts += 1;
-            announceReady();
-        }, 400);
+        loadReceiptByTransactionId();
     </script>
 </body>
 </html>
