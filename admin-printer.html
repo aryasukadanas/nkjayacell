@@ -126,25 +126,84 @@
             return `Rp ${Math.round(value || 0).toLocaleString('id-ID')}`;
         }
 
+        function formatReceiptPrice(value) {
+            const amount = Number(String(value || '').replace(/\D/g, ''));
+            return amount ? `Rp ${amount.toLocaleString('id-ID')}` : (value || '-');
+        }
+
+        function wrapReceiptText(value, width) {
+            const words = String(value || '-').split(/\s+/);
+            const lines = [];
+            let line = '';
+            words.forEach(word => {
+                if ((line + ' ' + word).trim().length <= width) {
+                    line = (line + ' ' + word).trim();
+                } else {
+                    if (line) lines.push(line);
+                    while (word.length > width) {
+                        lines.push(word.slice(0, width));
+                        word = word.slice(width);
+                    }
+                    line = word;
+                }
+            });
+            if (line || !lines.length) lines.push(line || '-');
+            return lines;
+        }
+
         function receiptField(label, value) {
             const prefix = `${label.padEnd(16, ' ')}: `;
+            const values = wrapReceiptText(value, 32 - prefix.length);
+            return [
+                `${prefix}${values[0]}`,
+                ...values.slice(1).map(line => `${' '.repeat(prefix.length)}${line}`)
+            ];
+        }
+
+        function transferReceiptField(label, value) {
+            const labelWidth = 16;
+            const prefix = `${String(label).padEnd(labelWidth, ' ')}: `;
             const text = String(value || '-');
-            const width = Math.max(8, 32 - prefix.length);
+            const valueWidth = 32 - labelWidth - 2;
             const lines = [];
-            for (let index = 0; index < text.length || !lines.length; index += width) {
-                lines.push(index
-                    ? `${' '.repeat(prefix.length)}${text.slice(index, index + width)}`
-                    : `${prefix}${text.slice(index, index + width)}`);
+            for (let offset = 0; offset < text.length || !lines.length; offset += valueWidth) {
+                const part = text.slice(offset, offset + valueWidth) || '-';
+                lines.push(offset
+                    ? `${' '.repeat(labelWidth + 2)}${part}`
+                    : `${prefix}${part.padEnd(valueWidth, ' ')}`);
             }
             return lines;
+        }
+
+        function splitTransferDateTime(value) {
+            const text = String(value || '-').replace(/\s*\n\s*/g, ' ').trim();
+            const timeMatch = text.match(/\b\d{1,2}[.:]\d{2}(?::\d{2})?\s*(?:WIB|WITA|WIT)?\b/i);
+            if (!timeMatch) {
+                return {
+                    date: text.split(/\s+-\s+|,\s*/, 1)[0].trim() || '-',
+                    time: '-'
+                };
+            }
+            return {
+                date: text.slice(0, timeMatch.index).replace(/[,-]\s*$/, '').trim() || '-',
+                time: timeMatch[0].replace(/\./g, ':')
+            };
+        }
+
+        function normalizeTransferStatus(value) {
+            const status = String(value || '').trim().toUpperCase();
+            if (status.includes('LUNAS') || status.includes('SUKSES')) return 'SUKSES';
+            if (status.includes('GAGAL') || status.includes('FAILED')) return 'GAGAL';
+            return 'PROSES';
         }
 
         function buildReceiptRows(source, headers, values, requestedId) {
             const add = (text, align = 'left', emphasis = 'normal') => ({ text: String(text || ''), align, emphasis });
             const field = (label, value) => receiptField(label, value).map(text => add(text));
+            const transferField = (label, value) => transferReceiptField(label, value).map(text => add(text));
             const id = fieldValue(headers, values, ['ID TRANSAKSI', 'ID TRX', 'ID']);
             const date = fieldValue(headers, values, ['TANGGAL', 'WAKTU', 'DATE']);
-            const status = fieldValue(headers, values, ['STATUS', 'STATUS TRANSAKSI']) || 'PROSES';
+            const status = fieldValue(headers, values, ['STATUS', 'STATUS TRANSAKSI']);
             const product = source === 'TRANSFER'
                 ? fieldValue(headers, values, ['PRODUK/BANK', 'BANK', 'BANK TUJUAN', 'KATEGORI'])
                 : fieldValue(headers, values, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']);
@@ -155,50 +214,72 @@
                 ? fieldValue(headers, values, ['NAMA', 'NAMA PEMILIK', 'PELANGGAN'])
                 : fieldValue(headers, values, ['NAMA', 'NAMA PELANGGAN', 'PELANGGAN', 'PENERIMA']);
             const note = fieldValue(headers, values, ['CATATAN PESAN PENERIMA', 'CATATAN', 'PESAN PENERIMA']);
-            const rows = [
-                add('NK JAYA CELL', 'center', 'bold'),
-                add(source === 'TRANSFER' ? 'BUKTI TRANSFER BANK' : 'STRUK TRANSAKSI', 'center'),
-                add(status, 'center', 'bold'),
-                add(date, 'center'),
-                add('--------------------------------')
-            ];
-            rows.push(...field('ID Transaksi', id || requestedId));
+            const rows = [add('NK JAYA CELL', 'center', 'bold')];
             if (source === 'TRANSFER') {
-                rows.push(add('DATA PENERIMA', 'left', 'bold'));
-                rows.push(...field('Bank Tujuan', product));
-                rows.push(...field('No. Rekening', contact));
-                rows.push(...field('Nama', customer));
-                if (note) rows.push(...field('Catatan', note));
+                const dateTime = splitTransferDateTime(date);
+                rows.push(add('BUKTI TRANSFER BANK', 'center'));
+                rows.push(add('Banjar Pasar ,  Desa Melaya  ,  Jembrana, BALI', 'center'));
+                rows.push(add('--------------------------------'));
+                rows.push(...transferField('ID Transaksi', id || requestedId));
+                rows.push(...transferField('Tanggal', dateTime.date));
+                rows.push(...transferField('Waktu', dateTime.time));
+                rows.push(...transferField('Status', normalizeTransferStatus(status)));
+                rows.push(add('--------------------------------'));
+                rows.push(add('DATA PENERIMA'));
+                rows.push(...transferField('Bank Tujuan', product));
+                rows.push(...transferField('No. Rekening', contact));
+                rows.push(...transferField('Nama', customer));
+                if (note) rows.push(...transferField('Catatan', note));
                 rows.push(add('--------------------------------'));
                 const transfer = parseAmount(fieldValue(headers, values, ['TRANSFER', 'NOMINAL', 'NOMINAL TRANSFER']));
                 const fee = parseAmount(fieldValue(headers, values, ['BIAYA', 'BIAYA ADMIN', 'ADMIN']));
                 const total = parseAmount(fieldValue(headers, values, ['JUMLAH'])) || transfer + fee;
-                rows.push(...field('Nominal Transfer', formatMoney(transfer)));
-                rows.push(...field('Biaya Admin', formatMoney(fee)));
+                rows.push(...transferField('Nominal Transfer', formatMoney(transfer)));
+                rows.push(...transferField('Biaya Admin', formatMoney(fee)));
                 rows.push(add('--------------------------------'));
-                rows.push(...field('Total', formatMoney(total)));
+                rows.push(...transferField('Total', formatMoney(total)));
+                rows.push(add(''));
+                rows.push(add('Simpan resi  ini  sebagai bukti transaksi yang sah.', 'center'));
             } else {
                 const category = fieldValue(headers, values, ['KATEGORI']);
                 const isToken = /TOKEN|PLN/i.test(`${product} ${category}`);
                 const total = parseAmount(fieldValue(headers, values, ['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']));
-                rows.push(...field(isToken ? 'ID PLN' : 'ID/No. Target', contact));
-                rows.push(...field('Produk', product));
-                if (customer) rows.push(...field('Nama', customer));
+                rows.push(add(isToken ? 'STRUK TOKEN LISTRIK' : 'STRUK TRANSAKSI', 'center'));
+                rows.push(add(status || 'DIPROSES', 'center'));
+                rows.push(add(date, 'center'));
+                rows.push(add('--------------------------------'));
                 if (isToken) {
-                    const token = fieldValue(headers, values, ['TOKEN', 'SERIAL', 'TOKEN SERIAL', 'SN']);
-                    const power = fieldValue(headers, values, ['JUMLAH DAYA', 'DAYA']);
-                    rows.push(...field('Jumlah Daya', power));
-                    rows.push(...field('Harga', formatMoney(total)));
+                    const orderNominal = fieldValue(headers, values, ['NOMINAL TOKEN', 'JUMLAH NOMINAL', 'NOMINAL'])
+                        || product.match(/(?:RP\.?\s*)?([\d.]+)/i)?.[1]
+                        || String(total);
+                    const tokenProduct = orderNominal
+                        ? `TOKEN PLN - ${formatReceiptPrice(orderNominal)}`
+                        : 'TOKEN PLN';
+                    const price = fieldValue(headers, values, ['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']) || String(total);
+                    rows.push(...field('ID TRX', id || requestedId));
+                    rows.push(...field('ID PLN', contact));
+                    rows.push(...field('PRODUK', tokenProduct));
+                    rows.push(...field('NAMA', customer));
+                    rows.push(...field('TARIF/DAYA', fieldValue(headers, values, ['TARIF/DAYA', 'TARIF DAYA']) || '-'));
+                    rows.push(...field('JUMLAH DAYA', fieldValue(headers, values, ['JUMLAH DAYA', 'DAYA TERISI', 'DAYA']) || '-'));
+                    rows.push(...field('HARGA', formatReceiptPrice(price)));
                     rows.push(add('--------------------------------'));
-                    rows.push(add('NOMOR TOKEN', 'center', 'bold'));
-                    rows.push(add(token || '-', 'center', 'large'));
+                    rows.push(add('***Token serial number***', 'center', 'bold'));
+                    rows.push(...wrapReceiptText(fieldValue(headers, values, ['SERIAL NUMBER', 'NOMOR TOKEN', 'ANGKA TOKEN', 'TOKEN', 'SN']) || '-', 16)
+                        .map(line => add(line, 'center', 'large')));
+                    rows.push(add('--------------------------------'));
+                    rows.push(...wrapReceiptText('INPUT TOKEN SERIAL NUMBER PADA MCB PEMILIK METERAN', 32)
+                        .map(line => add(line, 'center')));
                 } else {
+                    rows.push(...field('ID Transaksi', id || requestedId));
+                    rows.push(...field('Produk', product));
+                    rows.push(...field('ID/No. Target', fieldValue(headers, values, ['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR', 'TARGET']) || contact));
                     rows.push(add('--------------------------------'));
                     rows.push(...field('Total Bayar', formatMoney(total)));
                 }
+                rows.push(add(''));
+                rows.push(add('Terima kasih', 'center'));
             }
-            rows.push(add(''));
-            rows.push(add('Terima kasih', 'center'));
             return rows;
         }
 
