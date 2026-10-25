@@ -1179,7 +1179,7 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
 
     // Atur Aktif Tombol Filter Tab UI
     const filterButtons = {
-        'SEMUA': 'btn-fltr-all', 'SUKSES': 'btn-fltr-sukses', 'PROSES': 'btn-fltr-proses', 'GAGAL': 'btn-fltr-gagal'
+        'SEMUA': 'btn-fltr-all', 'SUKSES': 'btn-fltr-sukses', 'PROSES': 'btn-fltr-proses', 'GAGAL': 'btn-fltr-gagal', 'REFUND': 'btn-fltr-refund'
     };
     
     Object.keys(filterButtons).forEach(key => {
@@ -1985,6 +1985,9 @@ function tampilkanStruk(data) {
     } else if (data.status === 'GAGAL') {
         judulEl.innerText = 'TRANSAKSI GAGAL';
         judulEl.className = 'font-black text-red-600 text-lg';
+    } else if (data.status === 'REFUND') {
+        judulEl.innerText = 'TRANSAKSI REFUND';
+        judulEl.className = 'font-black text-violet-600 text-lg';
     } else {
         judulEl.innerText = 'TRANSAKSI DIPROSES';
         judulEl.className = 'font-black text-amber-600 text-lg';

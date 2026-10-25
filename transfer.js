@@ -524,6 +524,9 @@ function renderRiwayatUI() {
         } else if (statusFinal === "GAGAL") {
             badgeClass = "bg-rose-50 text-rose-700 border-rose-100";
             iconClass = "fa-times-circle";
+        } else if (statusFinal === "REFUND") {
+            badgeClass = "bg-violet-50 text-violet-700 border-violet-100";
+            iconClass = "fa-undo-alt";
         }
 
         // [FIX] Siapkan tombol struk agar selalu tampil, apa pun statusnya
@@ -777,6 +780,9 @@ function tampilkanStruk(data) {
     } else if (data.status === 'GAGAL') {
         judulEl.innerText = 'TRANSFER GAGAL';
         judulEl.className = 'font-black text-red-600 text-lg';
+    } else if (data.status === 'REFUND') {
+        judulEl.innerText = 'TRANSFER REFUND';
+        judulEl.className = 'font-black text-violet-600 text-lg';
     } else {
         judulEl.innerText = 'TRANSFER DIPROSES';
         judulEl.className = 'font-black text-amber-600 text-lg';
@@ -1052,6 +1058,7 @@ function dataStrukTransferAktif() {
 
 function normalisasiStatusTransfer(value) {
     const status = String(value || '').trim().toUpperCase();
+    if (status.includes('REFUND') || status.includes('PENGEMBALIAN')) return 'REFUND';
     if (status.includes('LUNAS') || status.includes('SUKSES')) return 'SUKSES';
     if (status.includes('GAGAL') || status.includes('FAILED')) return 'GAGAL';
     return 'PROSES';

@@ -192,6 +192,7 @@
 
         function normalizeTransferStatus(value) {
             const status = String(value || '').trim().toUpperCase();
+            if (status.includes('REFUND') || status.includes('PENGEMBALIAN')) return 'REFUND';
             if (status.includes('LUNAS') || status.includes('SUKSES')) return 'SUKSES';
             if (status.includes('GAGAL') || status.includes('FAILED')) return 'GAGAL';
             return 'PROSES';
@@ -245,7 +246,7 @@
                 const isToken = /TOKEN|PLN/i.test(`${product} ${category}`);
                 const total = parseAmount(fieldValue(headers, values, ['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']));
                 rows.push(add(isToken ? 'STRUK TOKEN LISTRIK' : 'STRUK TRANSAKSI', 'center'));
-                rows.push(add(status || 'DIPROSES', 'center'));
+                rows.push(add(source === 'ARSIP' ? normalizeTransferStatus(status) : (status || 'DIPROSES'), 'center'));
                 rows.push(add(date, 'center'));
                 rows.push(add('--------------------------------'));
                 if (isToken) {
