@@ -1082,7 +1082,7 @@ function barisThermalTransfer(label, value) {
     for (let posisi = 0; posisi < teks.length || !hasil.length; posisi += lebarNilai) {
         const bagian = teks.slice(posisi, posisi + lebarNilai) || '-';
         const awalan = posisi ? ' '.repeat(lebarLabel + 2) : `${labelRapi}: `;
-        hasil.push(awalan + bagian);
+        hasil.push(posisi ? awalan + bagian : awalan + bagian.padEnd(lebarNilai, ' '));
         if (!bagian) break;
     }
     return hasil;
