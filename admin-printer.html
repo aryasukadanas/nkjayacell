@@ -206,7 +206,7 @@
             const date = fieldValue(headers, values, ['TANGGAL', 'WAKTU', 'DATE']);
             const status = fieldValue(headers, values, ['STATUS', 'STATUS TRANSAKSI']);
             const product = source === 'TRANSFER'
-                ? fieldValue(headers, values, ['PRODUK/BANK', 'BANK', 'BANK TUJUAN', 'KATEGORI'])
+                ? fieldValue(headers, values, ['PRODUK/BANK', 'BANK', 'BANK TUJUAN'])
                 : fieldValue(headers, values, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']);
             const contact = source === 'TRANSFER'
                 ? fieldValue(headers, values, ['NOMOR REKENING', 'NO REKENING', 'REKENING'])
