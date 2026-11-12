@@ -68,6 +68,50 @@ function getAdminSheetCsv(token, source) {
   return sheet.getDataRange().getDisplayValues().map(row => row.map(csvEscape_).join(',')).join('\r\n');
 }
 
+function saveProductOrder(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Data order tidak valid.');
+  }
+
+  const idTransaksi = String(data.id_transaksi || '').trim();
+  const tanggal = String(data.tanggal || '').trim();
+  const nomor = String(data.nomor || '').trim();
+  const produk = String(data.produk || '').trim();
+  if (!idTransaksi || !nomor || !produk) {
+    throw new Error('ID transaksi, nomor/ID game, dan produk wajib diisi.');
+  }
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ARSIP');
+  if (!sheet) throw new Error('Sheet "ARSIP" tidak ditemukan.');
+
+  const hargaAsli = Number(data.harga_asli);
+  const totalTransfer = Number(data.total_transfer);
+  if (!Number.isFinite(hargaAsli) || !Number.isFinite(totalTransfer)) {
+    throw new Error('Nominal order tidak valid.');
+  }
+
+  const rowData = [
+    idTransaksi,
+    tanggal || new Date().toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }),
+    nomor,
+    produk,
+    hargaAsli,
+    totalTransfer,
+    'proses'
+  ];
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) throw new Error('Sheet sedang menerima transaksi lain. Coba lagi sebentar.');
+  try {
+    sheet.appendRow(rowData);
+    SpreadsheetApp.flush();
+    console.log(`Order tersimpan di ARSIP: ${idTransaksi}`);
+    return { status: 'sukses', id_transaksi: idTransaksi };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function updateAdminTransactionStatus(token, source, transactionId, status) {
   if (!readAdminSession_(token)) throw new Error('Sesi admin tidak valid atau telah kedaluwarsa.');
 
@@ -77,7 +121,13 @@ function updateAdminTransactionStatus(token, source, transactionId, status) {
   }
 
   const normalizedStatus = String(status || '').trim().toUpperCase();
-  if (!['PROSES', 'SUKSES', 'GAGAL'].includes(normalizedStatus)) {
+  const sheetStatus = {
+    PROSES: 'pending',
+    SUKSES: 'sukses',
+    GAGAL: 'gagal',
+    REFUND: 'refund'
+  }[normalizedStatus];
+  if (!sheetStatus) {
     throw new Error('Status transaksi tidak valid.');
   }
 
@@ -111,7 +161,7 @@ function updateAdminTransactionStatus(token, source, transactionId, status) {
     if (!matchingRows.length) throw new Error(`Transaksi ${transactionId} tidak ditemukan di sheet "${sheetName}". Muat ulang data.`);
     if (matchingRows.length > 1) throw new Error(`ID ${transactionId} muncul lebih dari sekali di sheet "${sheetName}"; status tidak diubah untuk menghindari salah transaksi.`);
 
-    sheet.getRange(matchingRows[0], statusColumn + 1).setValue(normalizedStatus);
+    sheet.getRange(matchingRows[0], statusColumn + 1).setValue(sheetStatus);
     SpreadsheetApp.flush();
     return { source: requestedSource, id: String(transactionId), status: normalizedStatus };
   } finally {

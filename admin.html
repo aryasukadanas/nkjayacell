@@ -77,6 +77,7 @@
                     <article class="status-report-card success-report"><div class="status-report-heading"><h4>SUKSES</h4><span id="report-success-count">0 transaksi</span></div><div class="status-report-value"><span>Keuntungan</span><strong id="report-success-profit">Rp 0</strong></div><div class="status-report-value"><span>Jumlah bayar</span><strong id="report-success-volume">Rp 0</strong></div></article>
                     <article class="status-report-card process-report"><div class="status-report-heading"><h4>PROSES</h4><span id="report-process-count">0 transaksi</span></div><div class="status-report-value"><span>Keuntungan</span><strong id="report-process-profit">Rp 0</strong></div><div class="status-report-value"><span>Jumlah bayar</span><strong id="report-process-volume">Rp 0</strong></div></article>
                     <article class="status-report-card failed-report"><div class="status-report-heading"><h4>GAGAL</h4><span id="report-failed-count">0 transaksi</span></div><div class="status-report-value"><span>Keuntungan</span><strong id="report-failed-profit">Rp 0</strong></div><div class="status-report-value"><span>Jumlah bayar</span><strong id="report-failed-volume">Rp 0</strong></div></article>
+                    <article class="status-report-card refund-report"><div class="status-report-heading"><h4>REFUND</h4><span id="report-refund-count">0 transaksi</span></div><div class="status-report-value"><span>Keuntungan</span><strong id="report-refund-profit">Rp 0</strong></div><div class="status-report-value"><span>Jumlah bayar</span><strong id="report-refund-volume">Rp 0</strong></div></article>
                 </div>
             </section>
 
@@ -107,16 +108,12 @@
     <dialog id="print-settings-dialog" class="edit-dialog print-settings-dialog">
         <form id="print-settings-form">
             <header class="dialog-heading"><div><p class="eyebrow">PENGATURAN CETAK</p><h2>Printer thermal 58 mm</h2></div><button id="close-print-settings" class="icon-button" type="button" aria-label="Tutup"><i class="fas fa-xmark"></i></button></header>
-            <p class="dialog-note">Bluetooth harus dijalankan dari halaman web HTTPS mandiri, bukan dari iframe Google Apps Script.</p>
-            <label class="printer-url-field">URL halaman web printer
-                <input id="printer-web-url" type="url" inputmode="url" placeholder="https://website-anda/admin-printer.html" autocomplete="url">
-            </label>
-            <button id="save-printer-web-url" class="button button-outline printer-save-url" type="button">Simpan URL web printer</button>
+            <p class="dialog-note">Printer Bluetooth dijalankan dari halaman web HTTPS mandiri, bukan dari iframe Google Apps Script.</p>
             <div class="printer-connection">
-                <span id="printer-connection-state" role="status">Simpan URL HTTPS halaman printer, lalu buka tab web printer.</span>
+                <span id="printer-connection-state" role="status">Tombol cetak transaksi membuka web printer secara langsung.</span>
                 <button id="connect-printer-button" class="button button-outline" type="button"><i class="fas fa-arrow-up-right-from-square"></i> Buka web printer</button>
             </div>
-            <p class="printer-help">Pastikan URL mengarah ke file admin-printer.html yang Anda unggah sendiri. Data struk dikirim ke domain tersebut. Hubungkan Bluetooth dan cetak dari tab web printer.</p>
+            <p class="printer-help">Ikon cetak membuka tab baru di luar iframe panel admin, dengan ID dan sumber transaksi. Halaman mencari data langsung di spreadsheet, menampilkan pratinjau, lalu mengirim struk ke printer thermal.</p>
             <div class="dialog-actions"><button id="close-print-settings-footer" class="button button-outline" type="button">Tutup</button><button id="test-print-button" class="button button-dark" type="button"><i class="fas fa-print"></i> Tes cetak di web printer</button></div>
         </form>
     </dialog>

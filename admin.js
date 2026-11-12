@@ -1,6 +1,6 @@
 const ADMIN_STORAGE_KEY = 'nkjc_admin_local_edits_v1';
 const ADMIN_SESSION_KEY = 'nkjc_admin_session_v1';
-const ADMIN_PRINTER_URL_KEY = 'nkjc_admin_printer_web_url_v1';
+const ADMIN_PRINTER_URL = 'https://aryasukadanas.github.io/nkjayacell/admin-printer.html';
 const TOKEN_EDIT_STORAGE_KEY = 'nk_token_receipt_edits';
 const statusNormalize = value => String(value || '').trim().toUpperCase();
 const normalizeHeader = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -32,11 +32,6 @@ let transactions = [];
 let activeEdit = null;
 let activeTokenEdit = null;
 let reportRange = { from: startOfDay(new Date()), to: endOfDay(new Date()) };
-let standalonePrinterWindow = null;
-let standalonePrinterOrigin = '';
-let standalonePrinterUrl = '';
-let standalonePrinterReady = false;
-let pendingPrinterRows = null;
 let plnCustomerLookup = { byId: {} };
 
 function parseCsv(text) {
@@ -346,11 +341,12 @@ function getReportStatusTotals(records) {
     const totals = {
         success: { label: 'SUKSES', count: 0, profit: 0, amount: 0 },
         process: { label: 'PROSES', count: 0, profit: 0, amount: 0 },
-        failed: { label: 'GAGAL', count: 0, profit: 0, amount: 0 }
+        failed: { label: 'GAGAL', count: 0, profit: 0, amount: 0 },
+        refund: { label: 'REFUND', count: 0, profit: 0, amount: 0 }
     };
     records.forEach(record => {
         const className = statusClass(record.status);
-        const key = className === 'success' ? 'success' : className === 'failed' ? 'failed' : 'process';
+        const key = className === 'success' ? 'success' : className === 'failed' ? 'failed' : className === 'refund' ? 'refund' : 'process';
         totals[key].count += 1;
         totals[key].profit += record.profit;
         totals[key].amount += record.amount;
@@ -448,9 +444,18 @@ function exportExcelWorkbook() {
 
 function statusClass(status) {
     const normalized = statusNormalize(status);
+    if (normalized.includes('REFUND') || normalized.includes('PENGEMBALIAN')) return 'refund';
     if (normalized.includes('SUKSES') || normalized.includes('LUNAS') || normalized.includes('BERHASIL')) return 'success';
     if (normalized.includes('GAGAL') || normalized.includes('FAILED')) return 'failed';
     return 'pending';
+}
+
+function normalizedAdminStatus(status) {
+    const className = statusClass(status);
+    if (className === 'refund') return 'REFUND';
+    if (className === 'success') return 'SUKSES';
+    if (className === 'failed') return 'GAGAL';
+    return 'PROSES';
 }
 
 function renderRows() {
@@ -465,7 +470,7 @@ function renderRows() {
         const detail = record.customer ? `${record.product || '-'} · ${record.customer}` : (record.product || '-');
         const note = getField(record, ['CATATAN PESAN PENERIMA', 'CATATAN', 'PESAN PENERIMA']);
         const status = statusClass(record.status);
-        const statusValue = status === 'success' ? 'SUKSES' : status === 'failed' ? 'GAGAL' : 'PROSES';
+        const statusValue = normalizedAdminStatus(record.status);
         const statusField = record.fields.find(field => ['STATUS', 'STATUSTRANSAKSI'].includes(normalizeHeader(field.label)));
         return `<tr>
             <td>${escapeHtml(formatDate(record.date || record.dateText))}</td>
@@ -477,7 +482,7 @@ function renderRows() {
             <td class="mono">${escapeHtml(formatMoney(record.amount))}</td>
             <td class="mono">${escapeHtml(formatMoney(record.profit))}</td>
             <td><select class="status-select ${status}" data-action="status" data-key="${escapeHtml(record.key)}" data-field="${escapeHtml(statusField.key)}" aria-label="Ubah status ${escapeHtml(record.id || '')}">
-                ${['PROSES', 'SUKSES', 'GAGAL'].map(option => `<option value="${option}"${statusValue === option ? ' selected' : ''}>${option}</option>`).join('')}
+                ${['PROSES', 'SUKSES', 'GAGAL', 'REFUND'].map(option => `<option value="${option}"${statusValue === option ? ' selected' : ''}>${option}</option>`).join('')}
             </select></td>
             <td><div class="row-actions"><button class="icon-button" type="button" data-action="edit" data-key="${escapeHtml(record.key)}" title="Edit transaksi dan catatan" aria-label="Edit transaksi dan catatan"><i class="fas fa-pen"></i></button>${record.isToken ? `<button class="icon-button" type="button" data-action="edit-token" data-key="${escapeHtml(record.key)}" title="Edit data struk token" aria-label="Edit data struk token"><i class="fas fa-bolt"></i></button>` : ''}<button class="icon-button print-button" type="button" data-action="print" data-key="${escapeHtml(record.key)}" title="Cetak struk thermal 58 mm" aria-label="Cetak struk thermal"><i class="fas fa-print"></i></button></div></td>
         </tr>`;
@@ -507,11 +512,12 @@ function renderReport() {
     const statusTotals = {
         success: { count: 0, profit: 0, volume: 0 },
         process: { count: 0, profit: 0, volume: 0 },
-        failed: { count: 0, profit: 0, volume: 0 }
+        failed: { count: 0, profit: 0, volume: 0 },
+        refund: { count: 0, profit: 0, volume: 0 }
     };
     reportRows.forEach(record => {
         const className = statusClass(record.status);
-        const key = className === 'success' ? 'success' : className === 'failed' ? 'failed' : 'process';
+        const key = className === 'success' ? 'success' : className === 'failed' ? 'failed' : className === 'refund' ? 'refund' : 'process';
         statusTotals[key].count += 1;
         statusTotals[key].profit += record.profit;
         statusTotals[key].volume += record.amount;
@@ -820,124 +826,50 @@ function receiptLayout(record) {
 
 function normalizeTransferStatus(value) {
     const status = statusNormalize(value);
+    if (status.includes('REFUND') || status.includes('PENGEMBALIAN')) return 'REFUND';
     if (status.includes('LUNAS') || status.includes('SUKSES')) return 'SUKSES';
     if (status.includes('GAGAL') || status.includes('FAILED')) return 'GAGAL';
     return 'PROSES';
 }
 
 function getStandalonePrinterUrl() {
-    const input = document.getElementById('printer-web-url');
-    const value = input ? input.value.trim() : localStorage.getItem(ADMIN_PRINTER_URL_KEY) || '';
-    if (!value) throw new Error('Isi dan simpan URL halaman web printer HTTPS terlebih dahulu.');
-    let url;
-    try {
-        url = new URL(value);
-    } catch {
-        throw new Error('URL halaman web printer tidak valid.');
-    }
-    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !url.pathname.endsWith('/admin-printer.html')) {
-        throw new Error('Masukkan URL HTTPS langsung ke file admin-printer.html milik website Anda.');
+    const url = new URL(ADMIN_PRINTER_URL);
+    if (url.protocol !== 'https:' || url.pathname !== '/nkjayacell/admin-printer.html') {
+        throw new Error('URL web printer tidak valid.');
     }
     return url;
 }
 
-function sendPendingPrinterRows() {
-    if (!standalonePrinterReady || !standalonePrinterWindow || standalonePrinterWindow.closed || !pendingPrinterRows) return;
-    standalonePrinterWindow.postMessage({
-        type: 'NKJC_PRINT_JOB',
-        requestId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        rows: pendingPrinterRows
-    }, standalonePrinterOrigin);
-    pendingPrinterRows = null;
-    const state = document.getElementById('printer-connection-state');
-    if (state) state.textContent = 'Struk dikirim ke tab web printer. Ikuti instruksi di tab tersebut.';
-}
-
-function handleStandalonePrinterMessage(event) {
-    if (event.source !== standalonePrinterWindow || event.origin !== standalonePrinterOrigin) return;
-    if (event.data?.type === 'NKJC_PRINTER_READY') {
-        standalonePrinterReady = true;
-        if (!pendingPrinterRows) {
-            const state = document.getElementById('printer-connection-state');
-            if (state) state.textContent = 'Web printer siap. Pilih Hubungkan printer Bluetooth pada tab web printer.';
-        }
-        sendPendingPrinterRows();
-    }
-    if (event.data?.type === 'NKJC_PRINT_RESULT') {
-        const state = document.getElementById('printer-connection-state');
-        if (state) state.textContent = event.data.ok ? 'Struk berhasil dikirim ke printer thermal.' : `Cetak gagal: ${event.data.error || 'Kesalahan tidak diketahui.'}`;
-    }
-}
-
-function openStandalonePrinter(rows) {
+function openStandalonePrinter(record = null, test = false) {
     let url;
     try {
         url = getStandalonePrinterUrl();
     } catch (error) {
-        window.alert(`${error.message} Buka Pengaturan printer thermal untuk mengaturnya.`);
-        return;
-    }
-    pendingPrinterRows = Array.isArray(rows) ? rows.map(row => ({
-        text: String(row.text ?? '').slice(0, 500),
-        align: row.align === 'center' ? 'center' : 'left',
-        emphasis: ['bold', 'large'].includes(row.emphasis) ? row.emphasis : 'normal'
-    })) : null;
-    if (standalonePrinterWindow && !standalonePrinterWindow.closed && standalonePrinterUrl === url.href) {
-        standalonePrinterWindow.focus();
-        sendPendingPrinterRows();
-        return;
-    }
-
-    standalonePrinterReady = false;
-    standalonePrinterOrigin = url.origin;
-    standalonePrinterUrl = url.href;
-    standalonePrinterWindow = window.open(url.href, 'nkjc-thermal-printer');
-    if (!standalonePrinterWindow) {
-        pendingPrinterRows = null;
-        window.alert('Tab web printer diblokir browser. Izinkan pop-up untuk panel admin lalu coba lagi.');
-        return;
-    }
-    window.addEventListener('message', handleStandalonePrinterMessage);
-    window.setTimeout(() => {
-        if (pendingPrinterRows && standalonePrinterWindow && !standalonePrinterWindow.closed) {
-            pendingPrinterRows = null;
-            const state = document.getElementById('printer-connection-state');
-            if (state) state.textContent = 'Halaman printer tidak merespons. Periksa URL hosting dan pastikan admin-printer.html sudah diunggah.';
-        }
-    }, 20000);
-}
-
-function saveStandalonePrinterUrl() {
-    const input = document.getElementById('printer-web-url');
-    try {
-        const url = getStandalonePrinterUrl();
-        localStorage.setItem(ADMIN_PRINTER_URL_KEY, url.href);
-        input.value = url.href;
-        document.getElementById('printer-connection-state').textContent = `Halaman printer tersimpan: ${url.origin}`;
-    } catch (error) {
         window.alert(error.message);
+        return;
     }
-}
-
-function printReceiptRows(rows) {
-    openStandalonePrinter(rows);
+    if (record?.id) {
+        url.searchParams.set('id', String(record.id));
+        url.searchParams.set('source', record.source === 'TRANSFER' ? 'TRANSFER' : 'ARSIP');
+    } else if (test) {
+        url.searchParams.set('test', '1');
+    } else {
+        url.searchParams.delete('id');
+        url.searchParams.delete('source');
+        url.searchParams.delete('test');
+    }
+    const printerWindow = window.open(url.href, '_blank');
+    if (!printerWindow) {
+        window.alert('Tab web printer diblokir browser. Izinkan pop-up untuk panel admin lalu coba lagi.');
+    }
 }
 
 function printRecord(record) {
-    return printReceiptRows(receiptLayout(record));
+    openStandalonePrinter(record);
 }
 
 async function testPrinter() {
-    printReceiptRows([
-        { text: 'NK JAYA CELL', align: 'center', emphasis: 'bold' },
-        { text: 'TES PRINTER THERMAL 58 MM', align: 'center' },
-        { text: '--------------------------------' },
-        { text: 'Printer thermal siap digunakan.' },
-        { text: new Date().toLocaleString('id-ID') },
-        { text: '--------------------------------' },
-        { text: 'Lebar cetak: 58 mm', align: 'center' },
-        { text: 'Terima kasih', align: 'center' }
-    ]);
+    openStandalonePrinter(null, true);
 }
 
 async function copyTableValue(button) {
@@ -1062,12 +994,9 @@ function bindEvents() {
     document.getElementById('print-settings-button').addEventListener('click', () => {
         printSettingsDialog.showModal();
     });
-    const printerUrlInput = document.getElementById('printer-web-url');
-    printerUrlInput.value = localStorage.getItem(ADMIN_PRINTER_URL_KEY) || '';
     document.getElementById('connect-printer-button').addEventListener('click', () => {
-        openStandalonePrinter(null);
+        openStandalonePrinter();
     });
-    document.getElementById('save-printer-web-url').addEventListener('click', saveStandalonePrinterUrl);
     document.getElementById('test-print-button').addEventListener('click', testPrinter);
     document.getElementById('close-print-settings').addEventListener('click', () => printSettingsDialog.close());
     document.getElementById('close-print-settings-footer').addEventListener('click', () => printSettingsDialog.close());

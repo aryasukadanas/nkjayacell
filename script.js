@@ -1597,6 +1597,42 @@ function prosesCheckoutAkhir() {
     }
 }
 
+function simpanOrderKeSpreadsheet(dataSimpan) {
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+        return new Promise((resolve, reject) => {
+            google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(reject)
+                .saveProductOrder(dataSimpan);
+        });
+    }
+
+    const formData = new FormData();
+    Object.entries(dataSimpan).forEach(([key, value]) => {
+        formData.append(key, value == null ? '' : String(value));
+    });
+
+    return fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: formData
+    }).then(async response => {
+        const responseText = (await response.text()).trim();
+        let result = responseText;
+        try {
+            result = JSON.parse(responseText);
+        } catch {
+            // doPost produk/game saat ini mengembalikan teks "Sukses".
+        }
+        if (!response.ok) {
+            const message = result && typeof result === 'object'
+                ? result.message || JSON.stringify(result)
+                : result;
+            throw new Error(`HTTP ${response.status}: ${message || 'Gagal menyimpan order.'}`);
+        }
+        return result;
+    });
+}
+
 async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
     const btn = document.getElementById('btn-checkout');
     const txtAsli = btn ? btn.innerHTML : "";
@@ -1620,13 +1656,15 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
     const dataSimpan = {
         id_transaksi: idTransaksi,
         tanggal: waktuMks,
+        kategori: keranjangBelanja.kategori,
         // [FIX] Hapus tanda kutip. Ini menyebabkan ketidakcocokan saat mengambil status riwayat.
         nomor: noHp,
         produk: fullProdukLabel,
         keterangan: keranjangBelanja.keterangan || "",
         harga_asli: keranjangBelanja.harga,
         total_transfer: hargaFinal,
-        status: statusLabel
+        // Kolom status ARSIP memiliki validasi nilai: proses, sukses, atau gagal.
+        status: 'proses'
     };
 
     // --- 1. SIMPAN KE RIWAYAT LOKAL (SAMA SEPERTI TRANSAKSI TRANSFER) ---
@@ -1650,24 +1688,24 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
     // Buka WhatsApp sebelum await agar popup tetap dianggap berasal dari klik pengguna.
     window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(textWA)}`, '_blank');
 
-    // Kirim ke Google Sheets di latar belakang agar pengguna tidak menunggu respons server.
-    fetch(SCRIPT_URL, {
-            method: 'POST',
-            // Hapus 'mode: no-cors' agar bisa membaca respons
-            headers: {
-              'Content-Type': 'text/plain;charset=utf-8', // Gunakan text/plain untuk menghindari preflight CORS
-            },
-            body: JSON.stringify(dataSimpan),
-            keepalive: true
-        })
-        .then(response => response.text().then(textResponse => {
-            if (textResponse.trim().toLowerCase() === 'sukses') {
-                console.log(`✅ Data produk (ID: ${idTransaksi}) berhasil terekam di Google Sheets.`);
-            } else {
-                throw new Error(`Server merespons dengan pesan tak terduga: ${textResponse}`);
-            }
-        }))
-        .catch(e => console.error(`❌ Gagal mengirim data produk (ID: ${idTransaksi}) ke Google Sheets:`, e));
+    try {
+        const result = await simpanOrderKeSpreadsheet(dataSimpan);
+        const berhasil = result && typeof result === 'object'
+            ? String(result.status || '').toLowerCase() === 'sukses'
+            : String(result || '').trim().toLowerCase() === 'sukses';
+        if (!berhasil) {
+            throw new Error(`Respons server tidak mengonfirmasi penyimpanan: ${String(result || '')}`);
+        }
+        console.log(`✅ Data produk (ID: ${idTransaksi}) berhasil terekam di Google Sheets.`);
+    } catch (error) {
+        console.error(`❌ Gagal mengirim data produk (ID: ${idTransaksi}) ke Google Sheets:`, error);
+        if (btn) {
+            btn.innerHTML = txtAsli;
+            btn.disabled = false;
+        }
+        window.alert(`Order belum berhasil disimpan ke spreadsheet. ID transaksi: ${idTransaksi}. Periksa koneksi lalu coba lagi.`);
+        return;
+    }
 
     // Reset UI segera; penyimpanan lokal sudah dilakukan sebelum request dikirim.
     {
