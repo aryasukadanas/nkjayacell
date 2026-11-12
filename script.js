@@ -1651,47 +1651,22 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
     window.open(`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(textWA)}`, '_blank');
 
     // Kirim ke Google Sheets di latar belakang agar pengguna tidak menunggu respons server.
-    // Gunakan FormData agar Apps Script menerima parameter seperti e.parameter.id_transaksi,
-    // yang konsisten dengan alur transfer bank dan kompatibel dengan doPost() default.
-    const formData = new FormData();
-    formData.append('id_transaksi', idTransaksi);
-    formData.append('tanggal', waktuMks);
-    formData.append('kategori', keranjangBelanja.kategori || 'PRODUK');
-    formData.append('nomor', String(noHp || ''));
-    formData.append('produk', fullProdukLabel);
-    formData.append('keterangan', keranjangBelanja.keterangan || '');
-    formData.append('harga_asli', String(keranjangBelanja.harga || 0));
-    formData.append('total_transfer', String(hargaFinal || 0));
-    formData.append('status', statusLabel || 'PROSES');
-    formData.append('target', String(noHp || ''));
-
     fetch(SCRIPT_URL, {
             method: 'POST',
-            body: formData,
+            // Hapus 'mode: no-cors' agar bisa membaca respons
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8', // Gunakan text/plain untuk menghindari preflight CORS
+            },
+            body: JSON.stringify(dataSimpan),
             keepalive: true
         })
-        .then(async response => {
-            const textResponse = await response.text();
-            const normalized = textResponse.trim();
-            if (!normalized) return;
-
-            try {
-                const parsed = JSON.parse(normalized);
-                if (parsed && (parsed.status === 'sukses' || parsed.message === 'sukses')) {
-                    console.log(`✅ Data produk (ID: ${idTransaksi}) berhasil terekam di Google Sheets.`);
-                    return;
-                }
-            } catch (error) {
-                // Abaikan parsing JSON; server mungkin mengembalikan teks "sukses".
-            }
-
-            if (normalized.toLowerCase() === 'sukses') {
+        .then(response => response.text().then(textResponse => {
+            if (textResponse.trim().toLowerCase() === 'sukses') {
                 console.log(`✅ Data produk (ID: ${idTransaksi}) berhasil terekam di Google Sheets.`);
-                return;
+            } else {
+                throw new Error(`Server merespons dengan pesan tak terduga: ${textResponse}`);
             }
-
-            throw new Error(`Server merespons dengan pesan tak terduga: ${normalized}`);
-        })
+        }))
         .catch(e => console.error(`❌ Gagal mengirim data produk (ID: ${idTransaksi}) ke Google Sheets:`, e));
 
     // Reset UI segera; penyimpanan lokal sudah dilakukan sebelum request dikirim.
