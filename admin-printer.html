@@ -198,13 +198,13 @@
             return 'PROSES';
         }
 
-        function buildReceiptRows(source, headers, values, requestedId) {
+        function buildReceiptRows(source, headers, values, requestedId, statusOverride = '') {
             const add = (text, align = 'left', emphasis = 'normal') => ({ text: String(text || ''), align, emphasis });
             const field = (label, value) => receiptField(label, value).map(text => add(text));
             const transferField = (label, value) => transferReceiptField(label, value).map(text => add(text));
             const id = fieldValue(headers, values, ['ID TRANSAKSI', 'ID TRX', 'ID']);
             const date = fieldValue(headers, values, ['TANGGAL', 'WAKTU', 'DATE']);
-            const status = fieldValue(headers, values, ['STATUS', 'STATUS TRANSAKSI']);
+            const status = String(statusOverride || fieldValue(headers, values, ['STATUS', 'STATUS TRANSAKSI'])).trim();
             const product = source === 'TRANSFER'
                 ? fieldValue(headers, values, ['PRODUK/BANK', 'BANK', 'BANK TUJUAN'])
                 : fieldValue(headers, values, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']);
@@ -290,6 +290,7 @@
             const params = new URLSearchParams(window.location.search);
             const requestedId = params.get('id')?.trim() || '';
             const source = params.get('source') === 'TRANSFER' ? 'TRANSFER' : 'ARSIP';
+            const requestedStatus = params.get('status')?.trim() || '';
             if (!requestedId) {
                 jobState.textContent = 'ID transaksi tidak tersedia. Buka halaman ini dari ikon cetak pada panel admin.';
                 return;
@@ -308,7 +309,7 @@
                 const matches = csvRows.slice(headerIndex + 1).filter(row => normalizedId(row[idColumn]) === normalizedId(requestedId));
                 if (!matches.length) throw new Error(`Transaksi ${requestedId} tidak ditemukan pada data ${source}.`);
                 if (matches.length > 1) throw new Error(`ID ${requestedId} muncul lebih dari sekali di spreadsheet ${source}; cetak dibatalkan untuk mencegah struk yang salah.`);
-                pendingRows = buildReceiptRows(source, headers, matches[0], requestedId);
+                pendingRows = buildReceiptRows(source, headers, matches[0], requestedId, requestedStatus);
                 preview.textContent = pendingRows.map(row => row.text).join('\n');
                 printButton.disabled = false;
                 printButton.textContent = 'Cetak struk ke printer thermal';
