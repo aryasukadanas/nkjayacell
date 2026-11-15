@@ -320,7 +320,7 @@
                     rows.push(...field('PRODUK', tokenProduct));
                     rows.push(...field('NAMA', plnData.name || customer));
                     rows.push(...field('TARIF/DAYA', plnData.tariff || fieldValue(headers, values, ['TARIF/DAYA', 'TARIF DAYA']) || '-'));
-                    rows.push(...field('JUMLAH DAYA', plnData.power || fieldValue(headers, values, ['JUMLAH DAYA', 'DAYA TERISI', 'DAYA']) || '-'));
+                    rows.push(...field('JUMLAH DAYA', fieldValue(headers, values, ['JUMLAH DAYA', 'JUMLAH DAYA SNAPSHOT', 'DAYA TERISI', 'DAYA']) || plnData.power || '-'));
                     rows.push(...field('HARGA', formatReceiptPrice(price)));
                     rows.push(add('--------------------------------'));
                     rows.push(add('***Token serial number***', 'center', 'bold'));

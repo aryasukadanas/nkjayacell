@@ -1235,7 +1235,7 @@ function filterRiwayatStatus(filterType = 'SEMUA') {
                 id_transaksi: idTransaksi,
                 tanggal,
                 target,
-                jumlahDaya: ambilJumlahDayaPLN(target, nominal) || jumlahDaya,
+                jumlahDaya: jumlahDaya || ambilJumlahDayaPLN(target, nominal),
                 produk,
                 produkLengkap: produk,
                 biaya: nominal,
@@ -1663,6 +1663,9 @@ async function kirimTransaksiKeSheetDanWA(noHp, statusLabel) {
         keterangan: keranjangBelanja.keterangan || "",
         harga_asli: keranjangBelanja.harga,
         total_transfer: hargaFinal,
+        jumlah_daya: /PLN/i.test(`${keranjangBelanja.kategori} ${fullProdukLabel}`)
+            ? ambilJumlahDayaPLN(noHp, fullProdukLabel)
+            : '',
         // Kolom status ARSIP memiliki validasi nilai: proses, sukses, atau gagal.
         status: 'proses'
     };
