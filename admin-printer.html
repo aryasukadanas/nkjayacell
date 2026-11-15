@@ -214,7 +214,9 @@
             const customer = source === 'TRANSFER'
                 ? fieldValue(headers, values, ['NAMA', 'NAMA PEMILIK', 'PELANGGAN'])
                 : fieldValue(headers, values, ['NAMA', 'NAMA PELANGGAN', 'PELANGGAN', 'PENERIMA']);
-            const note = fieldValue(headers, values, ['CATATAN PESAN PENERIMA', 'CATATAN', 'PESAN PENERIMA']);
+            const note = source === 'TRANSFER'
+                ? fieldValue(headers, values, ['CATATAN PESAN PENERIMA', 'CATATAN', 'PESAN PENERIMA'])
+                : '';
             const rows = [add('NK JAYA CELL', 'center', 'bold')];
             if (source === 'TRANSFER') {
                 const dateTime = splitTransferDateTime(date);
