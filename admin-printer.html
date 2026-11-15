@@ -46,7 +46,8 @@
     <script>
         const SHEET_CSV_URLS = {
             ARSIP: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQsIlTEnkky4oMCaFZWr7WaL5FVGkGsEgyOUPPxKUlELUVHDCa3XNUxhOsEwTqRKm3WIMz_Sv7q45C7/pub?gid=702573697&single=true&output=csv',
-            TRANSFER: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQsIlTEnkky4oMCaFZWr7WaL5FVGkGsEgyOUPPxKUlELUVHDCa3XNUxhOsEwTqRKm3WIMz_Sv7q45C7/pub?gid=53248706&single=true&output=csv'
+            TRANSFER: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQsIlTEnkky4oMCaFZWr7WaL5FVGkGsEgyOUPPxKUlELUVHDCa3XNUxhOsEwTqRKm3WIMz_Sv7q45C7/pub?gid=53248706&single=true&output=csv',
+            PLN: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQsIlTEnkky4oMCaFZWr7WaL5FVGkGsEgyOUPPxKUlELUVHDCa3XNUxhOsEwTqRKm3WIMz_Sv7q45C7/pub?gid=1486727624&single=true&output=csv'
         };
         const optionalServices = [
             '0000ffe0-0000-1000-8000-00805f9b34fb',
@@ -198,7 +199,62 @@
             return 'PROSES';
         }
 
-        function buildReceiptRows(source, headers, values, requestedId, statusOverride = '') {
+        function normalizePlnNominal(value) {
+            const digits = String(value || '').replace(/\D/g, '');
+            return digits ? String(Number(digits)) : '';
+        }
+
+        async function fetchPlnReceiptData(archiveHeaders, archiveValues) {
+            const target = fieldValue(archiveHeaders, archiveValues, ['NOMOR', 'NOMOR HP', 'TARGET', 'ID PLN', 'IDPEL'])
+                .replace(/\D/g, '');
+            if (!target) return {};
+
+            const response = await fetch(SHEET_CSV_URLS.PLN, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`Sheet PLN mengembalikan HTTP ${response.status}.`);
+            const rows = parseCsv(await response.text());
+            const headerIndex = rows.findIndex(row => {
+                const normalizedHeaders = row.map(normalizeHeader);
+                const hasId = ['IDPLN', 'IDPEL', 'NOMORMETER', 'NOMOR'].some(header => normalizedHeaders.includes(header));
+                const hasName = ['NAMA', 'NAMAPELANGGAN', 'PELANGGAN'].some(header => normalizedHeaders.includes(header));
+                return hasId && hasName;
+            });
+            if (headerIndex < 0) throw new Error('Header ID PLN/Nama tidak ditemukan di sheet PLN.');
+
+            const headers = rows[headerIndex];
+            const idColumn = columnIndex(headers, ['ID PLN', 'IDPEL', 'NOMOR METER', 'NOMOR']);
+            const nameColumn = columnIndex(headers, ['NAMA', 'NAMA PELANGGAN', 'PELANGGAN']);
+            const tariffColumn = columnIndex(headers, ['TARIF/DAYA', 'TARIF DAYA', 'DAYA']);
+            const powerColumn = columnIndex(headers, ['JUMLAH DAYA', 'JUMLAH DAYA TERBARU', 'DAYA TERISI']);
+            if (idColumn < 0) throw new Error('Kolom ID PLN tidak ditemukan di sheet PLN.');
+
+            const product = fieldValue(archiveHeaders, archiveValues, ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']);
+            const total = fieldValue(archiveHeaders, archiveValues, ['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']);
+            const nominal = fieldValue(archiveHeaders, archiveValues, ['NOMINAL TOKEN', 'JUMLAH NOMINAL', 'NOMINAL'])
+                || product.match(/(?:RP\.?\s*)?([\d.]+)/i)?.[1]
+                || total;
+            const nominalKey = normalizePlnNominal(nominal);
+            const nominalColumns = headers.map((header, index) => ({ index, nominal: normalizePlnNominal(header) }))
+                .filter(item => tariffColumn >= 0 && item.index > tariffColumn && item.nominal);
+            const customer = { name: '', tariff: '', power: '', nominalPower: {} };
+
+            rows.slice(headerIndex + 1).forEach(row => {
+                if (String(row[idColumn] || '').replace(/\D/g, '') !== target) return;
+                if (nameColumn >= 0 && row[nameColumn] && !customer.name) customer.name = row[nameColumn];
+                if (tariffColumn >= 0 && row[tariffColumn]) customer.tariff = row[tariffColumn];
+                if (powerColumn >= 0 && row[powerColumn]) customer.power = row[powerColumn];
+                nominalColumns.forEach(({ index, nominal: rowNominal }) => {
+                    if (row[index]) customer.nominalPower[rowNominal] = row[index];
+                });
+            });
+
+            return {
+                name: customer.name,
+                tariff: customer.tariff,
+                power: customer.nominalPower[nominalKey] || customer.power
+            };
+        }
+
+        function buildReceiptRows(source, headers, values, requestedId, statusOverride = '', plnData = {}) {
             const add = (text, align = 'left', emphasis = 'normal') => ({ text: String(text || ''), align, emphasis });
             const field = (label, value) => receiptField(label, value).map(text => add(text));
             const transferField = (label, value) => transferReceiptField(label, value).map(text => add(text));
@@ -262,9 +318,9 @@
                     rows.push(...field('ID TRX', id || requestedId));
                     rows.push(...field('ID PLN', contact));
                     rows.push(...field('PRODUK', tokenProduct));
-                    rows.push(...field('NAMA', customer));
-                    rows.push(...field('TARIF/DAYA', fieldValue(headers, values, ['TARIF/DAYA', 'TARIF DAYA']) || '-'));
-                    rows.push(...field('JUMLAH DAYA', fieldValue(headers, values, ['JUMLAH DAYA', 'DAYA TERISI', 'DAYA']) || '-'));
+                    rows.push(...field('NAMA', plnData.name || customer));
+                    rows.push(...field('TARIF/DAYA', plnData.tariff || fieldValue(headers, values, ['TARIF/DAYA', 'TARIF DAYA']) || '-'));
+                    rows.push(...field('JUMLAH DAYA', plnData.power || fieldValue(headers, values, ['JUMLAH DAYA', 'DAYA TERISI', 'DAYA']) || '-'));
                     rows.push(...field('HARGA', formatReceiptPrice(price)));
                     rows.push(add('--------------------------------'));
                     rows.push(add('***Token serial number***', 'center', 'bold'));
@@ -309,7 +365,12 @@
                 const matches = csvRows.slice(headerIndex + 1).filter(row => normalizedId(row[idColumn]) === normalizedId(requestedId));
                 if (!matches.length) throw new Error(`Transaksi ${requestedId} tidak ditemukan pada data ${source}.`);
                 if (matches.length > 1) throw new Error(`ID ${requestedId} muncul lebih dari sekali di spreadsheet ${source}; cetak dibatalkan untuk mencegah struk yang salah.`);
-                pendingRows = buildReceiptRows(source, headers, matches[0], requestedId, requestedStatus);
+                const category = fieldValue(headers, matches[0], ['KATEGORI']);
+                const product = fieldValue(headers, matches[0], ['PRODUK', 'NAMA PRODUK', 'KETERANGAN']);
+                const plnData = source === 'ARSIP' && /PLN/i.test(`${product} ${category}`)
+                    ? await fetchPlnReceiptData(headers, matches[0])
+                    : {};
+                pendingRows = buildReceiptRows(source, headers, matches[0], requestedId, requestedStatus, plnData);
                 preview.textContent = pendingRows.map(row => row.text).join('\n');
                 printButton.disabled = false;
                 printButton.textContent = 'Cetak struk ke printer thermal';
