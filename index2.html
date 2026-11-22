@@ -526,8 +526,8 @@
             window.addEventListener('beforeinstallprompt', function (event) {
                 event.preventDefault();
                 deferredInstallPrompt = event;
-                installAction.innerHTML = '<i class="fas fa-download mr-2"></i>Instal aplikasi sekarang';
-                installHelp.textContent = 'Browser siap memasang aplikasi. Tekan tombol Instal aplikasi sekarang.';
+                installAction.innerHTML = '<i class="fas fa-download mr-2"></i>Simpan Web sekarang';
+                installHelp.textContent = 'Browser siap menyimpan web. Tekan tombol Simpan Web sekarang.';
             });
 
             installAction.addEventListener('click', async function () {
