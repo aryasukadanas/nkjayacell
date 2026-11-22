@@ -209,6 +209,10 @@
             return 'PROSES';
         }
 
+        function isEWalletDestination(value) {
+            return ['DANA', 'GOPAY', 'LINKAJA', 'OVO', 'SHOPEEPAY'].includes(normalizeHeader(value));
+        }
+
         function normalizePlnNominal(value) {
             const digits = String(value || '').replace(/\D/g, '');
             return digits ? String(Number(digits)) : '';
@@ -307,6 +311,7 @@
             const rows = [add('NK JAYA CELL', 'center', 'bold')];
             if (source === 'TRANSFER') {
                 const dateTime = splitTransferDateTime(date);
+                const isEWallet = isEWalletDestination(product);
                 rows.push(add('BUKTI TRANSFER BANK', 'center'));
                 rows.push(add('Banjar Pasar ,  Desa Melaya  ,  Jembrana, BALI', 'center'));
                 rows.push(add('--------------------------------'));
@@ -316,8 +321,8 @@
                 rows.push(...transferField('Status', normalizeTransferStatus(status)));
                 rows.push(add('--------------------------------'));
                 rows.push(add('DATA PENERIMA'));
-                rows.push(...transferField('Bank Tujuan', product));
-                rows.push(...transferField('No. Rekening', contact));
+                rows.push(...transferField(isEWallet ? 'e-Wallet Tujuan' : 'Bank Tujuan', product));
+                rows.push(...transferField(isEWallet ? 'No. e-Wallet' : 'No. Rekening', contact));
                 rows.push(...transferField('Nama', customer));
                 if (note) rows.push(...transferField('Catatan', note));
                 rows.push(add('--------------------------------'));
