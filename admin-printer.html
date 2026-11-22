@@ -352,14 +352,18 @@
                         : 'TOKEN PLN';
                     const price = value(['TOTAL TRANSFER', 'TOTAL BAYAR', 'TRANSFER', 'JUMLAH', 'HARGA', 'HARGA ASLI']) || String(total);
                     const token = panelData?.token || {};
+                    const addOptionalPlnField = (label, fieldValue) => {
+                        const text = String(fieldValue ?? '').trim();
+                        if (text && text !== '-') rows.push(...field(label, text));
+                    };
                     rows.push(...field('ID TRX', token.idTrx || id || requestedId));
                     rows.push(...field('ID PLN', token.idPln || contact));
                     rows.push(...field('PRODUK', token.produk || tokenProduct));
-                    rows.push(...field('NAMA', token.nama && token.nama !== '-' ? token.nama : plnData.name || customer));
-                    rows.push(...field('TARIF/DAYA', token.tarifDaya && token.tarifDaya !== '-' ? token.tarifDaya : plnData.tariff || value(['TARIF/DAYA', 'TARIF DAYA']) || '-'));
-                    rows.push(...field('JUMLAH DAYA', token.jumlahDaya && token.jumlahDaya !== '-'
+                    addOptionalPlnField('NAMA', token.nama && token.nama !== '-' ? token.nama : plnData.name || customer);
+                    addOptionalPlnField('TARIF/DAYA', token.tarifDaya && token.tarifDaya !== '-' ? token.tarifDaya : plnData.tariff || value(['TARIF/DAYA', 'TARIF DAYA']) || '-');
+                    addOptionalPlnField('JUMLAH DAYA', token.jumlahDaya && token.jumlahDaya !== '-'
                         ? token.jumlahDaya
-                        : value(['JUMLAH DAYA', 'JUMLAH DAYA SNAPSHOT', 'DAYA TERISI', 'DAYA']) || plnData.power || '-'));
+                        : value(['JUMLAH DAYA', 'JUMLAH DAYA SNAPSHOT', 'DAYA TERISI', 'DAYA']) || plnData.power || '-');
                     rows.push(...field('HARGA', formatReceiptPrice(token.harga || price)));
                     rows.push(add('--------------------------------'));
                     rows.push(add('***Token serial number***', 'center', 'bold'));
