@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transfer Dana Kilat - NK JAYA CELL</title>
+    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="index2.css">
@@ -442,11 +443,22 @@
   </div>
 </div>
 
-    <!-- Tombol Instal Aplikasi Melayang -->
-    <button id="btn-install-floating" class="hidden fixed bottom-24 right-4 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-black text-xs px-4 py-3 rounded-full shadow-2xl z-50 flex items-center gap-2 animate-bounce hover:scale-105 active:scale-95 transition-all border-2 border-white">
-        <i class="fas fa-download text-sm"></i>
-        <span>Instal Aplikasi NK JAYA CELL</span>
-    </button>
+    <div id="install-required" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 p-5" role="dialog" aria-modal="true" aria-labelledby="install-required-title">
+        <div class="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+            <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <i class="fas fa-mobile-screen-button text-3xl"></i>
+            </div>
+            <h2 id="install-required-title" class="text-xl font-black text-slate-900">Instal aplikasi untuk melanjutkan</h2>
+            <p class="mt-2 text-sm leading-relaxed text-slate-600">Halaman transfer hanya dapat digunakan melalui aplikasi NK JAYA CELL yang sudah terpasang.</p>
+            <p id="install-required-help" class="mt-4 rounded-xl bg-slate-50 p-3 text-left text-xs leading-relaxed text-slate-600" aria-live="polite">Tekan tombol di bawah untuk memasang aplikasi. Jika tidak ada prompt, petunjuk pemasangan akan ditampilkan.</p>
+            <button id="install-required-action" type="button" class="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg active:scale-95">
+                <i class="fas fa-download mr-2"></i>Instal aplikasi
+            </button>
+            <button id="install-required-check" type="button" class="mt-3 text-xs font-bold text-slate-500 underline">
+                Sudah instal? Periksa kembali
+            </button>
+        </div>
+    </div>
 
     <!-- [FIX] Tambahkan JS Tom-Select sebelum file transfer.js -->
     <!-- [NEW] Tambahkan JS html2canvas untuk fitur download struk -->
@@ -473,6 +485,99 @@
                     localStorage.setItem('nk-theme', nextTheme);
                     applyTheme(nextTheme);
                 });
+            }
+        })();
+    </script>
+    <script>
+        (function () {
+            const installGate = document.getElementById('install-required');
+            const installHelp = document.getElementById('install-required-help');
+            const installAction = document.getElementById('install-required-action');
+            const installCheck = document.getElementById('install-required-check');
+            let deferredInstallPrompt = null;
+
+            function isInstalled() {
+                return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+            }
+
+            function closeInstallGate() {
+                installGate.hidden = true;
+                installGate.style.display = 'none';
+                document.body.classList.remove('overflow-hidden');
+            }
+
+            function showInstallInstructions() {
+                const isIOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+                if (isIOS) {
+                    installHelp.textContent = 'Di Safari, tekan Bagikan lalu pilih “Tambahkan ke Layar Utama”. Setelah terpasang, buka aplikasi dari ikon di layar utama.';
+                } else if (/android/i.test(window.navigator.userAgent)) {
+                    installHelp.textContent = 'Di Chrome, pilih menu ⋮ lalu “Instal aplikasi” atau “Tambahkan ke layar utama”. Setelah terpasang, buka aplikasi dari ikon di layar utama.';
+                } else {
+                    installHelp.textContent = 'Buka menu browser lalu pilih “Instal aplikasi” atau “Tambahkan ke layar utama”. Setelah terpasang, buka aplikasi dari ikon aplikasi.';
+                }
+            }
+
+            if (isInstalled()) {
+                closeInstallGate();
+            } else {
+                document.body.classList.add('overflow-hidden');
+            }
+
+            window.addEventListener('beforeinstallprompt', function (event) {
+                event.preventDefault();
+                deferredInstallPrompt = event;
+                installAction.innerHTML = '<i class="fas fa-download mr-2"></i>Instal aplikasi sekarang';
+                installHelp.textContent = 'Browser siap memasang aplikasi. Tekan tombol Instal aplikasi sekarang.';
+            });
+
+            installAction.addEventListener('click', async function () {
+                if (!deferredInstallPrompt) {
+                    showInstallInstructions();
+                    return;
+                }
+
+                const prompt = deferredInstallPrompt;
+                deferredInstallPrompt = null;
+                try {
+                    await prompt.prompt();
+                    const choice = await prompt.userChoice;
+                    if (choice.outcome === 'dismissed') {
+                        installHelp.textContent = 'Pemasangan belum dilakukan. Instal aplikasi untuk membuka halaman transfer.';
+                    } else {
+                        installHelp.textContent = 'Permintaan pemasangan diterima. Tunggu hingga selesai, lalu buka aplikasi NK JAYA CELL.';
+                    }
+                } catch (error) {
+                    installHelp.textContent = 'Browser gagal memulai pemasangan. Gunakan menu browser untuk memasang aplikasi.';
+                    console.error('Gagal memulai instalasi PWA:', error);
+                }
+            });
+
+            installCheck.addEventListener('click', function () {
+                if (isInstalled()) {
+                    closeInstallGate();
+                    return;
+                }
+                installHelp.textContent = 'Aplikasi belum terbuka dalam mode terpasang. Selesaikan pemasangan, lalu buka dari ikon aplikasi.';
+            });
+
+            window.addEventListener('appinstalled', closeInstallGate);
+            const standaloneMediaQuery = window.matchMedia('(display-mode: standalone)');
+            const handleDisplayModeChange = function (event) {
+                if (event.matches || window.navigator.standalone === true) closeInstallGate();
+            };
+            if (standaloneMediaQuery.addEventListener) {
+                standaloneMediaQuery.addEventListener('change', handleDisplayModeChange);
+            } else if (standaloneMediaQuery.addListener) {
+                standaloneMediaQuery.addListener(handleDisplayModeChange);
+            }
+
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js').catch(function (error) {
+                    installHelp.textContent = 'Pendaftaran aplikasi gagal. Pastikan halaman dibuka melalui HTTPS, lalu coba lagi.';
+                    console.error('Gagal mendaftarkan service worker:', error);
+                });
+            } else {
+                installHelp.textContent = 'Browser ini tidak mendukung instalasi aplikasi. Buka halaman ini di browser yang mendukung PWA.';
             }
         })();
     </script>
